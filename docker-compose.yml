@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_USER: tachira
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tachira123}
+      POSTGRES_DB: tachira_maps
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://tachira:tachira123@db:5432/tachira_maps
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

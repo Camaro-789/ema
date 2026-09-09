@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FiberMap Táchira</title>
+    <!-- MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Estilos locales -->
+    <link rel="stylesheet" href="/static/css/style.css?v=4">
+</head>
+<body>
+    <div id="app">
+        <!-- Topbar premium -->
+        <header id="topbar">
+            <div class="logo">
+                <span class="icon">🗺️</span>
+                <h1>FiberMap Táchira</h1>
+            </div>
+            <div class="search-bar">
+                <input type="text" placeholder="Buscar elemento, cliente, caja...">
+                <button>🔍</button>
+            </div>
+            <div class="user-actions">
+                <button id="btn-export" title="Exportar red">💾 Exportar</button>
+                <input type="file" id="file-import" style="display: none;" accept=".json,.geojson">
+                <button id="btn-import" title="Importar red">📂 Importar</button>
+                <button id="btn-clear" title="Limpiar mapa" class="btn-danger-outline">🗑 Limpiar</button>
+                <div class="avatar">AD</div>
+            </div>
+        </header>
+
+        <div id="main-content">
+            <!-- Sidebar colapsable -->
+            <aside id="sidebar">
+                <div class="sidebar-section">
+                    <h3>Capas Base</h3>
+                    <div class="layer-selector">
+                        <label><input type="radio" name="basemap" value="osm" checked> OpenStreetMap</label>
+                        <label><input type="radio" name="basemap" value="satellite"> Satélite (ESRI)</label>
+                        <label><input type="radio" name="basemap" value="terrain"> Relieve (ESRI)</label>
+                        <label><input type="radio" name="basemap" value="hybrid"> Híbrido</label>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-section-header">
+                        <h3>Agregar elementos</h3>
+                        <button type="button" id="btn-toggle-add-tools" class="sidebar-plus" aria-expanded="false" title="Mostrar herramientas">＋</button>
+                    </div>
+                    <div id="add-tools-content" class="collapsible-content hidden">
+                        <p class="helper-text">Selecciona un elemento y haz clic en el mapa para colocarlo.</p>
+                        <div id="sidebar-tools" class="element-tools">
+                            <button class="element-tool" data-tool="post">🪵 Poste</button>
+                            <button class="element-tool" data-tool="box">📦 Caja</button>
+                            <button class="element-tool" data-tool="duct">🛠️ Ducto</button>
+                            <button class="element-tool" data-tool="splitter">🟠 Splitter</button>
+                            <button class="element-tool" data-tool="client">🔵 Cliente</button>
+                            <button class="element-tool" data-tool="light">💡 Iluminaria</button>
+                            <button class="element-tool" data-tool="olt">🔴 OLT</button>
+                            <button class="element-tool" data-tool="nap">🟡 Caja NAP</button>
+                            <button class="element-tool element-tool-wide" data-tool="cable">➖ Cable</button>
+                        </div>
+                        <div id="post-catalog-picker" class="catalog-picker hidden">
+                            <label for="post-type-select">Tipo de poste</label>
+                            <select id="post-type-select"></select>
+                        </div>
+                        <div id="active-tool-hint" class="active-tool-hint">Modo selección activo</div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Catálogo de postes</h3>
+                    <p class="helper-text">Crea primero los tipos con sus características.</p>
+                    <div id="post-catalog-list" class="catalog-list"></div>
+                    <button type="button" id="btn-new-post-type" class="btn-secondary">＋ Crear tipo de poste</button>
+                    <form id="post-type-form" class="catalog-form hidden">
+                        <input id="post-type-name" type="text" placeholder="Nombre (ej. Poste 12 m)" required>
+                        <input id="post-type-height" type="number" min="0" step="0.1" placeholder="Altura (m)" required>
+                        <input id="post-type-material" type="text" placeholder="Material">
+                        <button type="submit" class="btn-primary">Guardar tipo</button>
+                    </form>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Elementos en el mapa</h3>
+                    <div id="network-layers-list" class="network-layers-list">
+                        <p class="empty-state">Aún no hay elementos agregados.</p>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Resumen de Red</h3>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-value" id="stat-olt">0</span>
+                            <span class="stat-label">OLTs</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-value" id="stat-nap">0</span>
+                            <span class="stat-label">NAPs</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-value" id="stat-client">0</span>
+                            <span class="stat-label">Clientes</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-value" id="stat-cable">0</span>
+                            <span class="stat-label">Cables</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de Propiedades (Aparece al hacer click) -->
+                <div id="properties-panel" class="sidebar-section hidden">
+                    <h3>Propiedades: <span id="prop-type"></span></h3>
+                    <div id="properties-content">
+                        <!-- Llenado dinámicamente -->
+                    </div>
+                    <div class="properties-actions">
+                        <button id="btn-save-prop" class="btn-primary">Guardar</button>
+                        <button id="btn-delete-element" class="btn-danger">Eliminar</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Contenedor del Mapa -->
+            <div id="map-container">
+                <div id="map"></div>
+                <div id="map-quick-controls" class="map-quick-controls" aria-label="Controles rápidos del mapa">
+                    <button type="button" id="btn-map-layers" class="map-quick-button" title="Cambiar capa base">🗺️ Capas</button>
+                    <button type="button" id="btn-map-zoom-out" class="map-quick-button" title="Alejar mapa">− Zoom</button>
+                    <button type="button" id="btn-map-geolocate" class="map-quick-button" title="Usar mi ubicación">📍 Mi ubicación</button>
+                </div>
+                
+                <!-- Toolbar flotante para dibujo -->
+                <div id="draw-toolbar" class="glass-panel">
+                    <button class="tool-btn active" data-tool="select" title="Seleccionar">👆 Select</button>
+                    <div class="divider"></div>
+                    <button class="tool-btn" data-tool="olt" title="Agregar OLT">🔴 OLT</button>
+                    <button class="tool-btn" data-tool="splitter" title="Agregar Splitter">🟠 Split</button>
+                    <button class="tool-btn" data-tool="nap" title="Agregar Caja NAP">🟡 NAP</button>
+                    <button class="tool-btn" data-tool="client" title="Agregar Cliente">🔵 Client</button>
+                    <div class="divider"></div>
+                    <button class="tool-btn" data-tool="cable" title="Trazar Cable">➖ Cable</button>
+                </div>
+                <aside id="folders-panel">
+                    <div class="folders-header">
+                        <h3>Carpetas del proyecto</h3>
+                        <button type="button" id="btn-new-folder" title="Nueva carpeta">＋</button>
+                    </div>
+                    <p class="helper-text">Organiza aquí postes, cajas, ductos y redes.</p>
+                    <div id="folders-tree"></div>
+                    <button type="button" id="btn-save-map" class="btn-primary save-map-button">💾 Guardar mapa</button>
+                    <div id="folder-form" class="catalog-form hidden">
+                        <input id="folder-name" type="text" placeholder="Nombre de carpeta">
+                        <button type="button" id="btn-create-folder" class="btn-secondary">Crear</button>
+                    </div>
+                </aside>
+            </div>
+        </div>
+
+        <div id="element-properties-modal" class="properties-modal hidden">
+            <form id="element-properties-form" class="properties-card">
+                <h3>Propiedades del elemento</h3>
+                <div id="element-properties-fields"></div>
+                <div class="properties-actions">
+                    <button type="submit" class="btn-primary">Guardar cambios</button>
+                    <button type="button" id="btn-close-properties" class="btn-secondary">Cerrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Archivos JS -->
+    <script src="/static/js/tachira-data.js"></script>
+    <script src="/static/js/network.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
