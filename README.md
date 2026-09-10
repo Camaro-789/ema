@@ -5,7 +5,9 @@ Arquitectura escalable con IA integrada, usando librerías gratuitas de código 
 
 ## Tecnologías
 
-- **MapLibre GL JS**: Mapas vectoriales de alta performance (sin clave API)
+- **MapLibre GL JS**: Mapas vectoriales y raster acelerados por WebGL (sin clave API)
+- **OpenStreetMap/Nominatim**: búsqueda geográfica y consultas de lugares
+- **Mapbox**: capa opcional de mosaicos, habilitada con un token configurado localmente
 - **FastAPI**: Backend async de alto rendimiento
 - **PostgreSQL + PostGIS**: Base de datos espacial
 - **GDAL/Shapely/Geopandas**: Conversión de formatos (KML, KMZ, GPX, CSV, GeoJSON, Shapefile)
@@ -40,6 +42,13 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Acceder a: http://localhost:8000
+
+### Mapbox opcional
+
+La aplicación funciona sin token usando OpenStreetMap y ESRI. Para habilitar la
+capa satelital de Mapbox, define `window.MAPBOX_ACCESS_TOKEN` en
+`frontend/index.html` antes de cargar `app.js`. El token no se incluye en el
+repositorio.
 
 ## Estructura
 

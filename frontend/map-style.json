@@ -1,0 +1,45 @@
+{
+  "version": 8,
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      "tileSize": 256,
+      "maxzoom": 19
+    },
+    "satellite": {
+      "type": "raster",
+      "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+      "tileSize": 256,
+      "maxzoom": 21
+    },
+    "terrain": {
+      "type": "raster",
+      "tiles": ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"],
+      "tileSize": 256,
+      "maxzoom": 19
+    }
+  },
+  "layers": [
+    {
+      "id": "osm-tiles",
+      "type": "raster",
+      "source": "osm",
+      "paint": { "raster-opacity": 1, "raster-fade-duration": 0 }
+    },
+    {
+      "id": "satellite-tiles",
+      "type": "raster",
+      "source": "satellite",
+      "layout": { "visibility": "none" },
+      "paint": { "raster-opacity": 1, "raster-fade-duration": 0 }
+    },
+    {
+      "id": "terrain-tiles",
+      "type": "raster",
+      "source": "terrain",
+      "layout": { "visibility": "none" },
+      "paint": { "raster-opacity": 1, "raster-fade-duration": 0 }
+    }
+  ]
+}

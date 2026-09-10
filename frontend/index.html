@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FiberMap Táchira</title>
     <!-- MapLibre GL JS -->
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <!-- Estilos locales -->
-    <link rel="stylesheet" href="/static/css/style.css?v=4">
+    <link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
     <div id="app">
@@ -21,8 +21,8 @@
                 <h1>FiberMap Táchira</h1>
             </div>
             <div class="search-bar">
-                <input type="text" placeholder="Buscar elemento, cliente, caja...">
-                <button>🔍</button>
+                <input id="map-search-input" type="text" placeholder="Buscar lugar con OpenStreetMap...">
+                <button id="btn-map-search" type="button" title="Buscar con OpenStreetMap">🔍</button>
             </div>
             <div class="user-actions">
                 <button id="btn-export" title="Exportar red">💾 Exportar</button>
@@ -39,7 +39,7 @@
                 <div class="sidebar-section">
                     <h3>Capas Base</h3>
                     <div class="layer-selector">
-                        <label><input type="radio" name="basemap" value="osm" checked> OpenStreetMap</label>
+                        <label><input type="radio" name="basemap" value="osm" checked> Calles (OpenStreetMap)</label>
                         <label><input type="radio" name="basemap" value="satellite"> Satélite (ESRI)</label>
                         <label><input type="radio" name="basemap" value="terrain"> Relieve (ESRI)</label>
                         <label><input type="radio" name="basemap" value="hybrid"> Híbrido</label>
@@ -176,8 +176,8 @@
     </div>
 
     <!-- Archivos JS -->
-    <script src="/static/js/tachira-data.js"></script>
-    <script src="/static/js/network.js"></script>
-    <script src="/static/js/app.js"></script>
+    <script src="js/tachira-data.js"></script>
+    <script src="js/network.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

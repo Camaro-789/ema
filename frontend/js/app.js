@@ -1,5 +1,4 @@
-// Táchira Map System - Main Application
-// Uses MapLibre GL JS (open-source, no API key required)
+// Táchira Map System - Main Application (MapLibre GL JS)
 
 let map = null;
 let currentGeoJSON = null;
@@ -11,6 +10,9 @@ let basemapMenu = null;
 let postCatalog = JSON.parse(localStorage.getItem('fibermap-post-catalog') || '[]');
 let folders = JSON.parse(localStorage.getItem('fibermap-folders') || '[{"name":"Red principal","children":["Postes","Cajas","Ductos","Iluminarias"]}]');
 let selectedFeatureIndex = null;
+let networkLayer = null;
+let importedLayerId = null;
+const basemapLayers = {};
 
 const NETWORK_TOOLS = {
     post: { name: 'Poste', icon: '🪵', color: '#8e5a2a', geometry: 'Point' },
@@ -28,88 +30,65 @@ const NETWORK_TOOLS = {
 function initMap() {
     map = new maplibregl.Map({
         container: 'map',
-        style: {
-            version: 8,
-            sources: {
-                'osm': {
-                    type: 'raster',
-                    tiles: [
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-                    ],
-                    tileSize: 256,
-                    attribution: '© OpenStreetMap contributors'
-                },
-                'esri-satellite': {
-                    type: 'raster',
-                    tiles: [
-                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                    ],
-                    tileSize: 256,
-                    attribution: '© Esri'
-                },
-                'esri-terrain': {
-                    type: 'raster',
-                    tiles: [
-                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'
-                    ],
-                    tileSize: 256,
-                    attribution: '© Esri'
-                }
-            },
-            layers: [
-                {
-                    id: 'osm-layer',
-                    type: 'raster',
-                    source: 'osm'
-                },
-                {
-                    id: 'satellite-layer',
-                    type: 'raster',
-                    source: 'esri-satellite',
-                    layout: { visibility: 'none' }
-                },
-                {
-                    id: 'terrain-layer',
-                    type: 'raster',
-                    source: 'esri-terrain',
-                    layout: { visibility: 'none' }
-                }
-            ]
-        },
-        center: [-72.225, 7.766], // San Cristóbal, Táchira
-        zoom: 12,
+        style: 'map-style.json',
+        center: [-72.225, 7.766],
+        zoom: 17,
         minZoom: 8,
-        maxZoom: 17
+        maxZoom: 21,
+        doubleClickZoom: false,
+        attributionControl: false
     });
-
-    map.on('load', () => {
-        console.log('Map loaded');
-        loadLayers();
-        setupMapTools();
+    map.on('error', event => console.error('MapLibre error:', event.error || event));
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
+    map.addControl(new maplibregl.AttributionControl({
+        customAttribution: '© OpenStreetMap contributors | Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community'
+    }));
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left');
+    let layersInitialized = false;
+    const initializeMapLayers = () => {
+        if (layersInitialized) return;
+        if (!map.isStyleLoaded()) return;
+        layersInitialized = true;
+        addBasemapLayers();
+        networkLayer = 'network';
+        map.addSource(networkLayer, { type: 'geojson', data: emptyFeatureCollection() });
+        map.addLayer({ id: 'network-lines', type: 'line', source: networkLayer,
+            filter: ['==', '$type', 'LineString'],
+            paint: { 'line-color': ['coalesce', ['get', 'color'], '#2ecc71'], 'line-width': 4 } });
+        map.addLayer({ id: 'network-points', type: 'circle', source: networkLayer,
+            filter: ['==', '$type', 'Point'],
+            paint: { 'circle-radius': 8, 'circle-color': ['coalesce', ['get', 'color'], '#3498db'],
+                'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
+        map.on('click', 'network-lines', handleNetworkFeatureClick);
+        map.on('click', 'network-points', handleNetworkFeatureClick);
         restoreSavedMap();
-    });
-
-    // Add navigation controls
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
-    map.addControl(new maplibregl.ScaleControl());
-    map.addControl(new maplibregl.FullscreenControl());
+        map.resize();
+        map.triggerRepaint();
+    };
+    map.on('load', initializeMapLayers);
+    map.on('style.load', initializeMapLayers);
+    loadLayers();
+    setupMapTools();
+    setupMapSearch();
 }
 
 function setBasemap(type) {
     if (!map) return;
-    const visibility = {
-        osm: type === 'osm' || type === 'hybrid',
-        satellite: type === 'satellite' || type === 'hybrid',
-        terrain: type === 'terrain'
-    };
-    map.setLayoutProperty('osm-layer', 'visibility', visibility.osm ? 'visible' : 'none');
-    map.setLayoutProperty('satellite-layer', 'visibility', visibility.satellite ? 'visible' : 'none');
-    map.setLayoutProperty('terrain-layer', 'visibility', visibility.terrain ? 'visible' : 'none');
-    if (type === 'hybrid') {
-        map.setPaintProperty('osm-layer', 'raster-opacity', 0.65);
-    } else {
-        map.setPaintProperty('osm-layer', 'raster-opacity', 1);
-    }
+    ['osm', 'satellite', 'terrain'].forEach(layer => {
+        if (map.getLayer(`${layer}-tiles`)) {
+            map.setLayoutProperty(`${layer}-tiles`, 'visibility',
+                (type === layer || (type === 'hybrid' && layer === 'satellite') || (type === 'hybrid' && layer === 'osm')) ? 'visible' : 'none');
+            if (layer === 'osm') map.setPaintProperty('osm-tiles', 'raster-opacity', type === 'hybrid' ? 0.35 : 1);
+        }
+    });
+}
+
+function emptyFeatureCollection() { return { type: 'FeatureCollection', features: [] }; }
+
+function addBasemapLayers() {
+    basemapLayers.osm = 'osm-tiles';
+    basemapLayers.satellite = 'satellite-tiles';
+    basemapLayers.terrain = 'terrain-tiles';
 }
 
 function setupMapTools() {
@@ -121,7 +100,6 @@ function setupMapTools() {
     });
     map.on('click', handleMapClick);
     map.on('dblclick', finishLine);
-    map.doubleClickZoom.disable();
 
     const mapLayersButton = document.getElementById('btn-map-layers');
     const mapZoomOutButton = document.getElementById('btn-map-zoom-out');
@@ -130,6 +108,43 @@ function setupMapTools() {
     if (mapLayersButton) mapLayersButton.addEventListener('click', toggleBasemapMenu);
     if (mapZoomOutButton) mapZoomOutButton.addEventListener('click', () => map.zoomOut());
     if (mapGeolocateButton) mapGeolocateButton.addEventListener('click', locateUser);
+}
+
+function setupMapSearch() {
+    const input = document.getElementById('map-search-input');
+    const button = document.getElementById('btn-map-search');
+    if (!input || !button) return;
+    const search = () => searchOpenStreetMap(input.value.trim());
+    button.addEventListener('click', search);
+    input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') search();
+    });
+}
+
+async function searchOpenStreetMap(query) {
+    if (!query) return;
+    const button = document.getElementById('btn-map-search');
+    if (button) button.disabled = true;
+    try {
+        const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&q=${encodeURIComponent(query)}`,
+            { headers: { Accept: 'application/json' } }
+        );
+        if (!response.ok) throw new Error(`OpenStreetMap respondió ${response.status}`);
+        const results = await response.json();
+        if (!results.length) {
+            alert('No se encontró ese lugar en OpenStreetMap.');
+            return;
+        }
+        const result = results[0];
+        const center = [Number(result.lon), Number(result.lat)];
+        map.flyTo({ center, zoom: Math.max(map.getZoom(), 16) });
+        new maplibregl.Popup().setLngLat(center).setHTML(`<strong>${result.display_name}</strong>`).addTo(map);
+    } catch (error) {
+        alert(`Error buscando en OpenStreetMap: ${error.message}`);
+    } finally {
+        if (button) button.disabled = false;
+    }
 }
 
 function locateUser() {
@@ -141,11 +156,7 @@ function locateUser() {
     if (button) button.textContent = '⏳ Buscando...';
     navigator.geolocation.getCurrentPosition(
         position => {
-            map.flyTo({
-                center: [position.coords.longitude, position.coords.latitude],
-                zoom: Math.max(map.getZoom(), 15),
-                essential: true
-            });
+            map.flyTo({ center: [position.coords.longitude, position.coords.latitude], zoom: Math.max(map.getZoom(), 15) });
             if (button) button.textContent = '📍 Mi ubicación';
         },
         error => {
@@ -256,43 +267,21 @@ function addNetworkFeature(tool, coordinates) {
 }
 
 function redrawNetworkFeatures() {
-    if (!map) return;
-    const sourceId = 'network-elements';
-    if (map.getSource(sourceId)) {
-        map.getSource(sourceId).setData({
-            type: 'FeatureCollection',
-            features: networkFeatures.map(item => ({ type: item.type, geometry: item.geometry, properties: item.properties }))
-        });
-        return;
-    }
-    map.addSource(sourceId, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
+    if (!map || !map.getSource('network')) return;
+    map.getSource('network').setData({
+        type: 'FeatureCollection',
+        features: networkFeatures.map((item, index) => ({
+            type: item.type, geometry: item.geometry,
+            properties: { ...item.properties, _index: index }
+        }))
     });
-    map.addLayer({
-        id: 'network-lines',
-        type: 'line',
-        source: sourceId,
-        filter: ['==', '$type', 'LineString'],
-        paint: { 'line-color': ['coalesce', ['get', 'color'], '#2ecc71'], 'line-width': 4 }
-    });
-    map.addLayer({
-        id: 'network-points',
-        type: 'circle',
-        source: sourceId,
-        filter: ['==', '$type', 'Point'],
-        paint: {
-            'circle-radius': 8,
-            'circle-color': ['coalesce', ['get', 'color'], '#3498db'],
-            'circle-stroke-color': '#fff',
-            'circle-stroke-width': 2
-        }
-    });
-    map.on('click', 'network-points', event => {
-        const featureId = Number(event.features[0].properties.id);
-        selectedFeatureIndex = networkFeatures.findIndex(item => item.properties.id === featureId);
-        if (selectedFeatureIndex >= 0) openElementProperties(selectedFeatureIndex);
-    });
+}
+
+function handleNetworkFeatureClick(event) {
+    const feature = event.features && event.features[0];
+    if (!feature) return;
+    selectedFeatureIndex = Number(feature.properties._index);
+    openElementProperties(selectedFeatureIndex);
 }
 
 function renderPostCatalog() {
@@ -450,77 +439,34 @@ async function importFile() {
 
 // Add GeoJSON as map layer
 function addGeoJSONLayer(geojson, name) {
-    const layerId = `layer-${Date.now()}`;
-    
-    // Add source
-    map.addSource(layerId, {
-        type: 'geojson',
-        data: geojson
-    });
-    
-    // Determine geometry types
-    const types = new Set(geojson.features.map(f => f.geometry?.type));
-    
-    // Add layers for each geometry type
-    if (types.has('Point') || types.has('MultiPoint')) {
-        map.addLayer({
-            id: `${layerId}-points`,
-            type: 'circle',
-            source: layerId,
-            paint: {
-                'circle-radius': 6,
-                'circle-color': '#3498db',
-                'circle-opacity': 0.8
-            }
+    if (!map.isStyleLoaded()) return;
+    if (importedLayerId) {
+        ['points', 'lines', 'fills'].forEach(suffix => {
+            if (map.getLayer(`${importedLayerId}-${suffix}`)) map.removeLayer(`${importedLayerId}-${suffix}`);
         });
+        if (map.getSource(importedLayerId)) map.removeSource(importedLayerId);
     }
-    
-    if (types.has('LineString') || types.has('MultiLineString')) {
-        map.addLayer({
-            id: `${layerId}-lines`,
-            type: 'line',
-            source: layerId,
-            paint: {
-                'line-width': 3,
-                'line-color': '#e74c3c',
-                'line-opacity': 0.8
-            }
-        });
+    importedLayerId = `imported-${Date.now()}`;
+    map.addSource(importedLayerId, { type: 'geojson', data: geojson });
+    map.addLayer({ id: `${importedLayerId}-fills`, type: 'fill', source: importedLayerId,
+        filter: ['==', '$type', 'Polygon'], paint: { 'fill-color': '#2ecc71', 'fill-opacity': 0.35 } });
+    map.addLayer({ id: `${importedLayerId}-lines`, type: 'line', source: importedLayerId,
+        filter: ['==', '$type', 'LineString'], paint: { 'line-color': '#e74c3c', 'line-width': 3 } });
+    map.addLayer({ id: `${importedLayerId}-points`, type: 'circle', source: importedLayerId,
+        filter: ['==', '$type', 'Point'], paint: { 'circle-radius': 6, 'circle-color': '#3498db',
+            'circle-stroke-color': '#fff', 'circle-stroke-width': 1 } });
+    ['points', 'lines', 'fills'].forEach(suffix => map.on('click', `${importedLayerId}-${suffix}`, event => {
+        const feature = event.features && event.features[0];
+        if (feature && feature.properties) new maplibregl.Popup().setLngLat(event.lngLat)
+            .setHTML(`<pre>${JSON.stringify(feature.properties, null, 2)}</pre>`).addTo(map);
+    }));
+    const coords = [];
+    (geojson.features || []).forEach(feature => { if (feature.geometry) coords.push(...flattenCoords(feature.geometry.coordinates)); });
+    if (coords.length) {
+        const bounds = coords.reduce((result, coord) => result.extend(coord),
+            new maplibregl.LngLatBounds(coords[0], coords[0]));
+        map.fitBounds(bounds, { padding: 50 });
     }
-    
-    if (types.has('Polygon') || types.has('MultiPolygon')) {
-        map.addLayer({
-            id: `${layerId}-polygons`,
-            type: 'fill',
-            source: layerId,
-            paint: {
-                'fill-color': '#2ecc71',
-                'fill-opacity': 0.5
-            }
-        });
-    }
-    
-    // Fit bounds
-    const bounds = new maplibregl.LngLatBounds();
-    geojson.features.forEach(f => {
-        if (f.geometry?.coordinates) {
-            flattenCoords(f.geometry.coordinates).forEach(c => {
-                bounds.extend([c[0], c[1]]);
-            });
-        }
-    });
-    
-    map.fitBounds(bounds, { padding: 50 });
-    
-    // Add popup on click
-    map.on('click', `${layerId}-points`, (e) => {
-        if (e.features[0].properties) {
-            new maplibregl.Popup()
-                .setHTML(JSON.stringify(e.features[0].properties, null, 2))
-                .setLngLat(e.lngLat)
-                .addTo(map);
-        }
-    });
 }
 
 // Flatten coordinates recursively
