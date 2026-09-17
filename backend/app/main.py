@@ -1,4 +1,4 @@
-"""Táchira Map System - Main Application"""
+"""MapOlt C.A. - Main Application"""
 import os
 import sys
 from fastapi import FastAPI
@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 app = FastAPI(
-    title="Táchira Map System",
+    title="MapOlt C.A.",
     description="Sistema de mapeamiento y gestión de redes ópticas",
     version="1.0.0"
 )
@@ -24,12 +24,24 @@ app.add_middleware(
 )
 
 # Import routers
-from app.routers import maps, layers, formats, ai
+from app.database import Base, engine
+from app.models.catalog import CatalogCategoria, CatalogTipo
+import app.models.ftth_models as _ftth_models  # noqa: F401 — registra tablas FTTH en Base.metadata
+from app.routers import maps, layers, formats, ai, types, catalog
+from app.routers import ftth_tipos, ftth_elementos, ftth_carpetas
+
+Base.metadata.create_all(bind=engine)
 
 app.include_router(maps.router, prefix="/api/v1/maps", tags=["maps"])
 app.include_router(layers.router, prefix="/api/v1/layers", tags=["layers"])
 app.include_router(formats.router, prefix="/api/v1/formats", tags=["formats"])
 app.include_router(ai.router, prefix="/api/v1/ai", tags=["ai"])
+app.include_router(types.router, prefix="/api/v1", tags=["types"])
+app.include_router(catalog.router, tags=["catalogo"])
+# FTTH — tipos, elementos y carpetas
+app.include_router(ftth_tipos.router)
+app.include_router(ftth_elementos.router)
+app.include_router(ftth_carpetas.router)
 
 # Buscar frontend
 def find_frontend_path():
@@ -50,11 +62,24 @@ frontend_path = find_frontend_path()
 if frontend_path:
     print(f"Frontend found at: {frontend_path}")
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
-    
+
+    @app.get("/api/health")
+    async def health():
+        return {
+            "status": "healthy",
+            "system": "MapOlt C.A.",
+            "version": "1.0.0",
+            "frontend": "found" if frontend_path else "not found"
+        }
+
     @app.get("/", response_class=HTMLResponse)
     async def serve_frontend():
         return FileResponse(os.path.join(frontend_path, "index.html"))
-    
+
+    @app.get("/catalog", response_class=HTMLResponse)
+    async def serve_catalog():
+        return FileResponse(os.path.join(frontend_path, "catalog", "index.html"))
+
     @app.get("/{full_path:path}", response_class=HTMLResponse)
     async def serve_spa(full_path: str):
         if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json") or full_path.startswith("redoc"):
@@ -65,19 +90,19 @@ if frontend_path:
         return FileResponse(os.path.join(frontend_path, "index.html"))
 else:
     print("WARNING: Frontend not found. API only mode.")
-    
+
+    @app.get("/api/health")
+    async def health():
+        return {
+            "status": "healthy",
+            "system": "MapOlt C.A.",
+            "version": "1.0.0",
+            "frontend": "not found"
+        }
+
     @app.get("/")
     async def api_only():
-        return {"message": "Táchira Map System - API Only", "status": "running"}
-
-@app.get("/api/health")
-async def health():
-    return {
-        "status": "healthy",
-        "system": "Táchira Map System",
-        "version": "1.0.0",
-        "frontend": "found" if frontend_path else "not found"
-    }
+        return {"message": "MapOlt C.A. - API Only", "status": "running"}
 
 if __name__ == "__main__":
     import uvicorn

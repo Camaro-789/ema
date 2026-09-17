@@ -7,8 +7,7 @@ let activeTool = 'select';
 let pendingLine = [];
 let networkFeatures = [];
 let basemapMenu = null;
-let postCatalog = JSON.parse(localStorage.getItem('fibermap-post-catalog') || '[]');
-let folders = JSON.parse(localStorage.getItem('fibermap-folders') || '[{"name":"Red principal","children":["Postes","Cajas","Ductos","Iluminarias"]}]');
+let objectCatalog = [];
 let selectedFeatureIndex = null;
 let networkLayer = null;
 let importedLayerId = null;
@@ -17,6 +16,7 @@ const basemapLayers = {};
 const NETWORK_TOOLS = {
     post: { name: 'Poste', icon: '🪵', color: '#8e5a2a', geometry: 'Point' },
     box: { name: 'Caja', icon: '📦', color: '#9b59b6', geometry: 'Point' },
+    manga: { name: 'Manga', icon: '🟣', color: '#16a085', geometry: 'Point' },
     duct: { name: 'Ducto', icon: '🛠️', color: '#34495e', geometry: 'LineString' },
     light: { name: 'Iluminaria', icon: '💡', color: '#f1c40f', geometry: 'Point' },
     olt: { name: 'OLT', icon: '🔴', color: '#e74c3c', geometry: 'Point' },
@@ -28,7 +28,7 @@ const NETWORK_TOOLS = {
 
 // Initialize map
 function initMap() {
-    map = new maplibregl.Map({
+    window.map = map = new maplibregl.Map({
         container: 'map',
         style: 'map-style.json',
         center: [-72.225, 7.766],
@@ -64,6 +64,9 @@ function initMap() {
         restoreSavedMap();
         map.resize();
         map.triggerRepaint();
+        if (window.FTTHMapa && window.FTTHMapa.init) {
+            window.FTTHMapa.init();
+        }
     };
     map.on('load', initializeMapLayers);
     map.on('style.load', initializeMapLayers);
@@ -98,8 +101,7 @@ function setupMapTools() {
     document.querySelectorAll('[data-tool]').forEach(button => {
         button.addEventListener('click', () => selectTool(button.dataset.tool));
     });
-    map.on('click', handleMapClick);
-    map.on('dblclick', finishLine);
+    // FTTHMapa maneja los eventos de clic en el mapa
 
     const mapLayersButton = document.getElementById('btn-map-layers');
     const mapZoomOutButton = document.getElementById('btn-map-zoom-out');
@@ -195,24 +197,57 @@ function toggleBasemapMenu() {
     basemapMenu.classList.toggle('visible');
 }
 
+function getToolCatalogKind(tool) {
+    return tool === 'post' ? 'post' : tool;
+}
+
+function getToolObjectOptions(tool) {
+    const kind = getToolCatalogKind(tool);
+    return objectCatalog.filter(item => (item.kind || 'post') === kind);
+}
+
 function selectTool(tool) {
     activeTool = tool;
     pendingLine = [];
     const picker = document.getElementById('post-catalog-picker');
-    if (picker) picker.classList.toggle('hidden', tool !== 'post');
-    if (tool === 'post' && !postCatalog.length) {
-        document.getElementById('active-tool-hint').textContent = 'Crea primero un tipo de poste en el catálogo';
+    const options = getToolObjectOptions(tool);
+    const hasOptions = !!options.length;
+
+    if (picker) {
+        picker.classList.toggle('hidden', !hasOptions || tool === 'select');
+    }
+    if (picker && hasOptions) {
+        const select = document.getElementById('post-type-select');
+        if (select) {
+            select.innerHTML = options.map((item, index) => `<option value="${index}">${item.name}</option>`).join('');
+            select.value = '0';
+        }
     }
     document.querySelectorAll('[data-tool]').forEach(button => {
         button.classList.toggle('active', button.dataset.tool === tool);
     });
     const hint = document.getElementById('active-tool-hint');
     if (hint) {
-        hint.textContent = tool === 'select'
-            ? 'Modo selección activo'
-            : `${NETWORK_TOOLS[tool]?.icon || ''} ${NETWORK_TOOLS[tool]?.name || tool}: haz clic en el mapa`;
+        if (tool === 'select') {
+            hint.textContent = 'Modo selección activo';
+        } else if (!hasOptions) {
+            hint.textContent = 'Crea primero un tipo de objeto en el catálogo';
+        } else {
+            hint.textContent = `${NETWORK_TOOLS[tool]?.icon || ''} ${NETWORK_TOOLS[tool]?.name || tool}: haz clic en el mapa`;
+        }
     }
     if (map) map.getCanvas().style.cursor = tool === 'select' ? '' : 'crosshair';
+}
+
+function openSidebarPanel(panelName) {
+    document.querySelectorAll('.nav-icon').forEach(button => {
+        button.classList.toggle('active', button.dataset.sidebarPanel === panelName);
+    });
+    document.querySelectorAll('.sidebar-panel').forEach(panel => {
+        const isActive = panel.id === `panel-${panelName}`;
+        panel.classList.toggle('hidden', !isActive);
+        panel.classList.toggle('active', isActive);
+    });
 }
 
 function handleMapClick(event) {
@@ -237,24 +272,29 @@ function finishLine(event) {
 }
 
 function addNetworkFeature(tool, coordinates) {
-    const postType = tool === NETWORK_TOOLS.post && postCatalog.length
-        ? postCatalog[Number(document.getElementById('post-type-select').value) || 0]
+    const toolKey = Object.keys(NETWORK_TOOLS).find(key => NETWORK_TOOLS[key] === tool) || tool;
+    const typeOptions = getToolObjectOptions(toolKey);
+    const selectedType = typeOptions.length
+        ? (typeOptions[Number(document.getElementById('post-type-select')?.value) || 0] || typeOptions[0])
         : null;
-    if (tool === NETWORK_TOOLS.post && !postType) {
+
+    if (toolKey === 'post' && !selectedType) {
         alert('Crea y selecciona un tipo de poste antes de colocarlo.');
         return;
     }
+
     const feature = {
         type: 'Feature',
         geometry: { type: tool.geometry, coordinates },
         properties: {
             id: Date.now(),
-            name: postType ? postType.name : tool.name,
-            type: tool.name,
-            toolId: Object.keys(NETWORK_TOOLS).find(key => NETWORK_TOOLS[key] === tool),
-            color: tool.color,
+            name: selectedType ? selectedType.name : tool.name,
+            type: selectedType ? selectedType.name : tool.name,
+            toolId: toolKey,
+            color: selectedType ? selectedType.color : tool.color,
             folder: 'Red principal',
-            ...(postType || {})
+            ...(selectedType || {}),
+            objectTypeId: selectedType ? selectedType.id : null
         }
     };
     networkFeatures.push({ ...feature, _style: tool });
@@ -287,36 +327,68 @@ function handleNetworkFeatureClick(event) {
 function renderPostCatalog() {
     const list = document.getElementById('post-catalog-list');
     const picker = document.getElementById('post-type-select');
-    if (!list || !picker) return;
-    list.innerHTML = postCatalog.length
-        ? postCatalog.map(item => `<div class="catalog-item"><strong>${item.name}</strong><br>${item.height} m · ${item.material || 'Material no indicado'}</div>`).join('')
+    if (!list) return;
+    list.innerHTML = objectCatalog.length
+        ? objectCatalog.map(item => `
+            <div class="catalog-item">
+                <span class="catalog-swatch" style="background:${item.color || '#8e5a2a'}"></span>
+                <div>
+                    <strong>${item.name}</strong>
+                    <small>${item.kind} · ${item.height ? item.height + ' m' : 'Sin altura'} · ${item.material || 'Material no indicado'}</small>
+                </div>
+            </div>
+        `).join('')
         : '<p class="empty-state">No hay tipos creados.</p>';
-    picker.innerHTML = postCatalog.map((item, index) =>
-        `<option value="${index}">${item.name} (${item.height} m)</option>`).join('');
+    if (picker) {
+        const activeTool = activeTool || 'post';
+        const options = getToolObjectOptions(activeTool);
+        picker.innerHTML = options.length
+            ? options.map((item, index) => `<option value="${index}">${item.name}</option>`).join('')
+            : '<option value="">Sin tipos</option>';
+    }
+}
+
+async function saveObjectType(typeData) {
+    try {
+        const response = await fetch('/api/v1/object-types', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(typeData)
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.detail || 'No se pudo guardar el tipo');
+        }
+        document.getElementById('post-type-form').reset();
+        document.getElementById('post-type-form').classList.add('hidden');
+        await loadObjectTypes();
+        return result;
+    } catch (error) {
+        alert(error.message);
+        return null;
+    }
+}
+
+async function loadObjectTypes() {
+    try {
+        const response = await fetch('/api/v1/object-types');
+        if (!response.ok) throw new Error('No se pudo cargar la base de tipos');
+        objectCatalog = await response.json();
+        renderPostCatalog();
+        if (activeTool) selectTool(activeTool);
+    } catch (error) {
+        console.error('Error cargando tipos:', error);
+        objectCatalog = [];
+        renderPostCatalog();
+    }
 }
 
 function renderFolders() {
-    const tree = document.getElementById('folders-tree');
-    if (!tree) return;
-    tree.innerHTML = folders.map((folder, index) => `
-        <div class="folder-item">📁 ${folder.name}
-            <button type="button" class="add-subfolder" data-folder-index="${index}">＋ subcarpeta</button>
-            <div class="folder-children">${folder.children.map(child => `<div>└─ 📂 ${child}</div>`).join('')}</div>
-            <small>${networkFeatures.filter(item => (item.properties.folder || folder.name) === folder.name).length} elementos</small>
-        </div>`).join('');
-    tree.querySelectorAll('.add-subfolder').forEach(button => {
-        button.addEventListener('click', () => {
-            const name = prompt('Nombre de la subcarpeta:');
-            if (!name || !name.trim()) return;
-            folders[Number(button.dataset.folderIndex)].children.push(name.trim());
-            renderFolders();
-        });
-    });
+    // Reemplazado por ftth-carpetas.js
 }
 
 function saveMap() {
     localStorage.setItem('fibermap-network-features', JSON.stringify(networkFeatures));
-    localStorage.setItem('fibermap-post-catalog', JSON.stringify(postCatalog));
     localStorage.setItem('fibermap-folders', JSON.stringify(folders));
     alert('Mapa y elementos guardados en este navegador.');
 }
@@ -336,20 +408,37 @@ function restoreSavedMap() {
 
 function openElementProperties(index) {
     const item = networkFeatures[index];
-    const properties = item.properties;
-    const fields = document.getElementById('element-properties-fields');
+    if (!item) return;
+
+    const properties = item.properties || {};
     const coordinates = item.geometry.type === 'Point'
         ? item.geometry.coordinates
-        : item.geometry.coordinates[0];
-    fields.innerHTML = `
-        <label>Tipo<input value="${properties.type}" disabled></label>
-        <label>Nombre<input name="name" value="${properties.name || ''}" required></label>
-        <label>Coordenadas<input value="${coordinates[1].toFixed(6)}, ${coordinates[0].toFixed(6)}" disabled></label>
-        <label>Altura (m)<input name="height" type="number" step="0.1" value="${properties.height || ''}"></label>
-        <label>Imagen<input name="image" type="file" accept="image/*"></label>
-        ${properties.image ? '<small>Imagen cargada. Selecciona otra para reemplazarla.</small>' : ''}
-    `;
-    document.getElementById('element-properties-modal').classList.remove('hidden');
+        : (Array.isArray(item.geometry.coordinates[0]) ? item.geometry.coordinates[0] : item.geometry.coordinates);
+    const lat = Number(coordinates[1]);
+    const lon = Number(coordinates[0]);
+
+    if (window.FTTHMapa && typeof FTTHMapa.showPropertiesModal === 'function') {
+        FTTHMapa.showPropertiesModal({
+            id: properties.id || index,
+            categoria: properties.toolId || properties.type || 'poste',
+            tipo_nombre: properties.name || properties.type || 'Elemento',
+            color: properties.color,
+            foto: properties.image,
+            propiedades_instancia: {
+                name: properties.name,
+                material: properties.material,
+                height: properties.height,
+                color: properties.color,
+                notes: properties.notes
+            },
+            lat,
+            lon
+        }, item.geometry);
+        return;
+    }
+
+    const modal = document.getElementById('element-properties-modal');
+    if (modal) modal.classList.remove('hidden');
 }
 
 function renderNetworkLayersList() {
@@ -592,66 +681,73 @@ if (clearButton) clearButton.addEventListener('click', () => {
 // Initialize
 window.addEventListener('DOMContentLoaded', initMap);
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     renderPostCatalog();
     renderFolders();
-    document.getElementById('btn-toggle-add-tools')?.addEventListener('click', event => {
-        const content = document.getElementById('add-tools-content');
-        const expanded = content.classList.toggle('hidden') === false;
-        event.currentTarget.setAttribute('aria-expanded', String(expanded));
-        event.currentTarget.textContent = expanded ? '−' : '＋';
-        event.currentTarget.title = expanded ? 'Ocultar herramientas' : 'Mostrar herramientas';
+    await loadObjectTypes();
+    document.querySelectorAll('.nav-icon').forEach(button => {
+        button.addEventListener('click', () => openSidebarPanel(button.dataset.sidebarPanel));
     });
-    document.getElementById('btn-new-post-type')?.addEventListener('click', () => {
-        document.getElementById('post-type-form').classList.toggle('hidden');
+    document.getElementById('btn-add-post-type')?.addEventListener('click', () => {
+        const form = document.getElementById('post-type-form');
+        form.classList.toggle('hidden');
+        if (!form.classList.contains('hidden')) {
+            form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     });
-    document.getElementById('post-type-form')?.addEventListener('submit', event => {
+    document.getElementById('post-type-form')?.addEventListener('submit', async event => {
         event.preventDefault();
-        postCatalog.push({
-            name: document.getElementById('post-type-name').value.trim(),
-            height: document.getElementById('post-type-height').value,
-            material: document.getElementById('post-type-material').value.trim()
-        });
-        localStorage.setItem('fibermap-post-catalog', JSON.stringify(postCatalog));
-        event.target.reset();
-        event.target.classList.add('hidden');
-        renderPostCatalog();
+        const name = document.getElementById('post-type-name').value.trim();
+        const height = document.getElementById('post-type-height').value;
+        const material = document.getElementById('post-type-material').value.trim();
+        const color = document.getElementById('post-type-color').value;
+        const kind = document.getElementById('object-type-kind').value;
+        const imageFile = document.getElementById('post-type-image').files[0];
+
+        if (!name) {
+            alert('Completa el nombre del tipo de objeto.');
+            return;
+        }
+
+        const newType = {
+            kind,
+            name,
+            height: height ? Number(height) : null,
+            material: material || null,
+            color,
+            image: '',
+            icon: NETWORK_TOOLS[kind]?.icon || '📍'
+        };
+
+        if (imageFile) {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                newType.image = reader.result;
+                await saveObjectType(newType);
+            };
+            reader.readAsDataURL(imageFile);
+            return;
+        }
+
+        await saveObjectType(newType);
     });
     document.getElementById('btn-save-map')?.addEventListener('click', saveMap);
-    document.getElementById('btn-new-folder')?.addEventListener('click', () => {
-        document.getElementById('folder-form').classList.toggle('hidden');
+    // Eventos de carpetas eliminados para no interferir con ftth-carpetas.js
+    document.getElementById('prop-btn-close')?.addEventListener('click', () => {
+        document.getElementById('element-properties-modal')?.classList.add('hidden');
     });
-    document.getElementById('btn-create-folder')?.addEventListener('click', () => {
-        const input = document.getElementById('folder-name');
-        const name = input.value.trim();
-        if (!name) return;
-        folders.push({ name, children: [] });
-        input.value = '';
-        document.getElementById('folder-form').classList.add('hidden');
-        renderFolders();
-    });
-    document.getElementById('btn-close-properties')?.addEventListener('click', () => {
-        document.getElementById('element-properties-modal').classList.add('hidden');
-    });
-    document.getElementById('element-properties-form')?.addEventListener('submit', event => {
-        event.preventDefault();
+    document.getElementById('prop-btn-save')?.addEventListener('click', () => {
         const item = networkFeatures[selectedFeatureIndex];
         if (!item) return;
-        const form = event.target;
-        item.properties.name = form.elements.name.value;
-        item.properties.height = form.elements.height.value;
-        const image = form.elements.image.files[0];
-        const finish = () => {
-            redrawNetworkFeatures();
-            renderNetworkLayersList();
-            renderFolders();
-            document.getElementById('element-properties-modal').classList.add('hidden');
-        };
-        if (image) {
-            const reader = new FileReader();
-            reader.onload = () => { item.properties.image = reader.result; finish(); };
-            reader.onerror = () => alert('No se pudo cargar la imagen.');
-            reader.readAsDataURL(image);
-        } else finish();
+        document.querySelectorAll('#element-properties-modal [data-prop-key]').forEach(input => {
+            const key = input.dataset.propKey;
+            const value = input.value.trim();
+            if (!key || key === 'lat' || key === 'lon') return;
+            item.properties[key] = value;
+        });
+        redrawNetworkFeatures();
+        renderNetworkLayersList();
+        renderFolders();
+        document.getElementById('element-properties-modal')?.classList.add('hidden');
     });
 });

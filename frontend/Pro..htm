@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MapOlt - Sidebar Lateral Dinámico</title>
+<style>
+  :root {
+    --bg-surface: #ffffff;
+    --bg-dark: #1e293b;
+    --border-color: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --accent: #2563eb;
+    --success: #16a34a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+
+  body {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    background: #f8fafc;
+  }
+
+  #map {
+    flex: 1;
+    background: #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+
+  /* Toast Notificación */
+  .toast {
+    position: fixed;
+    top: 20px;
+    right: -300px;
+    background: var(--success);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 100;
+    transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .toast.show {
+    right: 20px;
+  }
+
+  /* Panel 1: Menú Categorías Principal */
+  .sidebar-main {
+    width: 280px;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    z-index: 30;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.05);
+  }
+
+  .sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .sidebar-header h2 { font-size: 16px; color: var(--text-primary); }
+  .sidebar-header p { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  .object-grid {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+  }
+
+  .object-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .object-btn:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+  }
+
+  .object-btn.active {
+    background: #eff6ff;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .object-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+  /* Panel 2: Subpanel Formulario de Creación / Edición */
+  .sidebar-sub {
+    width: 360px;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    z-index: 20;
+    transform: translateX(-100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.05);
+  }
+
+  .sidebar-sub.open {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* Panel 3: Panel de Objetos Registrados */
+  .registered-panel {
+    width: 320px;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+    transform: translateX(-100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.05);
+  }
+
+  .registered-panel.open {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .sub-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .close-btn {
+    border: none;
+    background: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+
+  .sub-content {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .type-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .type-card {
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .type-card:hover {
+    background: #eff6ff;
+    border-color: var(--accent);
+  }
+
+  .type-card.selected {
+    border-color: var(--accent);
+    background: #eff6ff;
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .type-card-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .color-badge {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+
+  .type-card-desc {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  /* Formulario General */
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .form-control {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+  }
+
+  .checkbox-group input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+
+  .checkbox-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin-bottom: 0;
+  }
+
+  textarea.form-control {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .row-2col {
+    display: flex;
+    gap: 10px;
+  }
+
+  .row-2col .form-group, .row-2col .checkbox-group {
+    flex: 1;
+  }
+
+  .row-3col {
+    display: flex;
+    gap: 8px;
+  }
+
+  .row-3col .form-group {
+    flex: 1;
+  }
+
+  /* Secciones con borde/agrupadores */
+  .fieldset-box {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+
+  .fieldset-box legend {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 0 4px;
+  }
+
+  .color-picker-input {
+    width: 36px;
+    height: 32px;
+    padding: 2px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+  }
+
+  /* Tabla Estilizada e Interactiva para Slots de OLT */
+  .slots-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+
+  .slots-table th {
+    background: #f1f5f9;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-align: center;
+    padding: 6px;
+    border: 1px solid var(--border-color);
+  }
+
+  .slots-table td {
+    padding: 2px 4px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+  }
+
+  .slots-table input[type="number"] {
+    width: 100%;
+    border: 1px solid transparent;
+    text-align: center;
+    background: transparent;
+    font-size: 12px;
+    padding: 4px;
+    border-radius: 4px;
+  }
+
+  .slots-table input[type="number"]:hover {
+    border-color: var(--border-color);
+    background: #ffffff;
+  }
+
+  .slots-table input[type="number"]:focus {
+    outline: 1px solid var(--accent);
+    background: #ffffff;
+    border-color: var(--accent);
+  }
+
+  .btn-submit {
+    width: 100%;
+    padding: 10px;
+    background: var(--bg-dark);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+
+  .btn-submit:hover { background: #0f172a; }
+</style>
+</head>
+<body>
+
+  <!-- Toast flotante de notificación -->
+  <div id="toast" class="toast">¡Cambios aplicados correctamente!</div>
+
+  <!-- Sidebar Principal (Panel 1) -->
+  <aside class="sidebar-main">
+    <div class="sidebar-header">
+      <h2>Plantillas de Red</h2>
+      <p>Selecciona un elemento para gestionar</p>
+    </div>
+    
+    <div class="object-grid">
+      <button class="object-btn" onclick="openSubpanel('Postes', event)">
+        <svg fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20M7 6h10M9 10h6"/></svg>
+        Postes
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('Cajas NAP', event)">
+        <svg fill="none" stroke="#10b981" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Cajas NAP
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('Mangas', event)">
+        <svg fill="none" stroke="#1e293b" stroke-width="2" viewBox="0 0 24 24"><rect x="7" y="4" width="10" height="13" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/></svg>
+        Mangas de Empalme
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('Armario', event)">
+        <svg fill="none" stroke="#d97706" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="8" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="16" y2="12"/></svg>
+        Armario
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('Cables de Fibra', event)">
+        <svg fill="none" stroke="#0284c7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <path d="M4 18L10 12"/>
+          <path d="M7 21L13 15"/>
+          <path d="M10 12C8 10 8 7 10 5s5-2 7 0"/>
+          <path d="M12 10c2-2 5-2 7 0s2 5 0 7"/>
+          <circle cx="18" cy="4" r="1" fill="#0284c7"/>
+          <circle cx="21" cy="7" r="1" fill="#0284c7"/>
+          <circle cx="20" cy="11" r="1" fill="#0284c7"/>
+          <circle cx="16" cy="14" r="1" fill="#0284c7"/>
+        </svg>
+        Cables de Fibra
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('Ductos', event)">
+        <svg fill="none" stroke="#f97316" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/></svg>
+        Ductos / Canalización
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('Luminarias', event)">
+        <svg fill="none" stroke="#eab308" stroke-width="2" viewBox="0 0 24 24"><path d="M7 22h4V10M11 10a5 5 0 0 1 5-5h3"/></svg>
+        Luminarias
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('ODF', event)">
+        <svg fill="none" stroke="#8b5cf6" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+        ODF
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('OLT', event)">
+        <svg fill="none" stroke="#ef4444" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="4" rx="1"/><rect x="2" y="10" width="20" height="4" rx="1"/></svg>
+        OLT
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('Switches', event)">
+        <svg fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>
+        Switches
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('Splitters', event)">
+        <svg fill="none" stroke="#06b6d4" stroke-width="2" viewBox="0 0 24 24"><rect x="8" y="9" width="5" height="6" rx="1"/><path d="M1 12h7M13 12h8"/></svg>
+        Splitters
+      </button>
+
+      <button class="object-btn" onclick="openSubpanel('Fusión', event)">
+        <svg fill="none" stroke="#ec4899" stroke-width="2" viewBox="0 0 24 24"><rect x="8" y="9" width="5" height="6" rx="1"/><path d="M1 12h7M13 12h8"/></svg>
+        Fusión
+      </button>
+    </div>
+  </aside>
+
+  <!-- Subpanel Formulario de Creación / Edición (Panel 2) -->
+  <aside class="sidebar-sub" id="subpanel">
+    <div class="sub-header">
+      <h3 id="selected-title">Nuevo Tipo</h3>
+      <button class="close-btn" onclick="closeSubpanel()">&times;</button>
+    </div>
+
+    <div class="sub-content">
+      <div id="dynamic-form"></div>
+    </div>
+  </aside>
+
+  <!-- Panel de Objetos Registrados (Panel 3) -->
+  <aside class="registered-panel" id="registeredPanel">
+    <div class="sub-header">
+      <h3 id="registered-title">Objetos Registrados</h3>
+    </div>
+
+    <div class="sub-content">
+      <div class="type-list" id="type-list"></div>
+    </div>
+  </aside>
+
+  <!-- Área Principal del Mapa -->
+  <main id="map">
+    [ Vista del Mapa Libre ]
+  </main>
+
+  <script>
+    let currentCategory = '';
+
+    function openSubpanel(title, event) {
+      currentCategory = title;
+      resetFormToCreateMode();
+
+      document.getElementById('subpanel').classList.add('open');
+      document.getElementById('registeredPanel').classList.add('open');
+
+      document.querySelectorAll('.object-btn').forEach(btn => btn.classList.remove('active'));
+      if(event) event.currentTarget.classList.add('active');
+
+      renderCategoryContent(title);
+    }
+
+    function renderCategoryContent(title) {
+      const listContainer = document.getElementById('type-list');
+
+      if (title === 'Fusión') {
+        listContainer.innerHTML = `
+          <div class="type-card" onclick="editItem('Fusión', { codigo: 'FUS-01-ESTANDAR', cliente: false, atenuacion: '0.1' }, this)">
+            <div class="type-card-title">
+              <span class="color-badge" style="background: #ec4899;"></span>
+              Fusión Estándar
+            </div>
+            <div class="type-card-desc">Atenuación: 0.1 dB | Permite cliente: No</div>
+          </div>
+        `;
+      } else if (title === 'OLT') {
+        listContainer.innerHTML = `
+          <div class="type-card" onclick="editItem('OLT', { codigo: 'ZTE C320', marca: 'ZTE', modelo: 'ZTE C320', maxClientes: '128', potencia: '6', descripcion: 'Chasis modular compacto', slots: '2', tamano: '2' }, this)">
+            <div class="type-card-title">
+              <span class="color-badge" style="background: #ef4444;"></span>
+              ZTE C320
+            </div>
+            <div class="type-card-desc">Marca: ZTE | Slots: 2 | Tamaño: 2U | Puertos/Slot: 16</div>
+          </div>
+        `;
+      } else if (title === 'Cables de Fibra') {
+        listContainer.innerHTML = `
+          <div class="type-card" onclick="editItem('Cables de Fibra', { codigo: 'ADSS 144H 12 Buffers', marca: 'Prysmian', modelo: 'ADSS-144', looses: '12', fibras: '144', atenuacion: '0.4', fibrasLoose: '12', desc: 'Cable autosoportado', colorImp: '#000000', grosorImp: '5.61', colorNoImp: '#4b5563', grosorNoImp: '5.61' }, this)">
+            <div class="type-card-title">
+              <span class="color-badge" style="background: #0284c7;"></span>
+              ADSS 144H 12 Buffers
+            </div>
+            <div class="type-card-desc">Fibras: 144 | Looses: 12 | Atenuación: 0.4 dB/km</div>
+          </div>
+        `;
+      } else if (title === 'Armario') {
+        listContainer.innerHTML = `
+          <div class="type-card" onclick="editItem('Armario', { nombre: 'Comum', prefijo: 'CO_', nivel: 'olt_hub', desc: 'Tipo padrão de POP', colorImp: '#008000', colorNoImp: '#78909c', colorProj: '#ff00ff' }, this)">
+            <div class="type-card-title">
+              <span class="color-badge" style="background: #008000;"></span>
+              Comum
+            </div>
+            <div class="type-card-desc">Prefijo: CO_ | Nivel: OLT HUB</div>
+          </div>
+        `;
+      } else if (title === 'Switches') {
+        listContainer.innerHTML = `
+          <div class="type-card" onclick="editItem('Switches', { codigo: 'Switch 24', marca: 'Cisco', modelo: 'Catalyst 2960', cliente: false, puertos: '24', administrable: true, tamano: '1', desc: 'Switch L2 para centro de distribución' }, this)">
+            <div class="type-card-title">
+              <span class="color-badge" style="background: #6366f1;"></span>
+              Switch 24 Puertos
+            </div>
+            <div class="type-card-desc">Puertos: 24 | Tamaño: 1U | Administrable: Sí</div>
+          </div>
+        `;
+      } else if (title === 'Splitters') {
+        listContainer.innerHTML = `
+          <div class="type-card" onclick="editItem('Splitters', { codigo: 'SPL-1x8-PLC', marca: 'Huawei', modelo: 'PLC-108', prefijo: 'SPL_', tamano: '1', tipoIO: 'conector_conector', balanceado: true, cliente: true, entradas: '1', salidas: '8', atenuacion: '10.5', desc: 'Splitter óptico de primer nivel' }, this)">
+            <div class="type-card-title">
+              <span class="color-badge" style="background: #06b6d4;"></span>
+              Splitter PLC 1x8
+            </div>
+            <div class="type-card-desc">Conector / Conector | Balanceado | Entradas: 1 | Salidas: 8</div>
+          </div>
+        `;
+      } else if (title === 'ODF') {
+        listContainer.innerHTML = `
+          <div class="type-card" onclick="editItem('ODF', { codigo: 'ODF-24-SCAPC', marca: 'Huawei', modelo: 'ODF-24', puertos: '24', bandejas: '2', tagA: 'Lado A', tagB: 'Lado B', atenuacion: '0.2', tamano: '1', desc: 'Distribuidor óptico de rack' }, this)">
+            <div class="type-card-title">
+              <span class="color-badge" style="background: #8b5cf6;"></span>
+              ODF 24 Puertos SC/APC
+            </div>
+            <div class="type-card-desc">Marca: Huawei | Tamaño: 1U | Bandejas: 2</div>
+          </div>
+        `;
+      } else if (title === 'Luminarias') {
+        listContainer.innerHTML = `
+          <div class="type-card" onclick="editItem('Luminarias', { nombre: 'Luminaria LED 100W', codigo: 'LUM-LED-01', desc: 'Luminaria vial pública', propiedad: 'publica' }, this)">
+            <div class="type-card-title">
+              <span class="color-badge" style="background: #eab308;"></span>
+              Luminaria LED 100W
+            </div>
+            <div class="type-card-desc">Código: LUM-LED-01 | Propiedad: Pública</div>
+          </div>
+        `;
+      } else {
+        listContainer.innerHTML = `
+          <div class="type-card" onclick="editItem('${title}', { nombre: 'Elemento Standard', codigo: 'ELEM-01', desc: 'Elemento de prueba' }, this)">
+            <div class="type-card-title">
+              <span class="color-badge" style="background: #2563eb;"></span>
+              Elemento Standard
+            </div>
+            <div class="type-card-desc">Código: ELEM-01 | Descripción: Genérica</div>
+          </div>
+        `;
+      }
+    }
+
+    function resetFormToCreateMode() {
+      document.getElementById('selected-title').innerText = 'Crear Tipo de ' + currentCategory;
+      document.getElementById('registered-title').innerText = currentCategory + ' Registrados';
+      document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+      renderFormFields(currentCategory, null);
+    }
+
+    function editItem(category, data, cardEl) {
+      document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+      if(cardEl) cardEl.classList.add('selected');
+
+      const nameOrCode = data.nombre || data.codigo || 'Objeto';
+      document.getElementById('selected-title').innerText = 'Editar ' + nameOrCode;
+
+      renderFormFields(category, data);
+    }
+
+    function renderFormFields(title, data) {
+      const formContainer = document.getElementById('dynamic-form');
+      const isEdit = !!data;
+      const btnText = isEdit ? 'Guardar Cambios' : 'Guardar';
+
+      if (title === 'Fusión') {
+        formContainer.innerHTML = `
+          <div class="form-group">
+            <label>Código:</label>
+            <input type="text" id="f_codigo" class="form-control" value="${data?.codigo || ''}" placeholder="Escribe el código del tipo de fusión...">
+          </div>
+
+          <div class="row-2col" style="align-items: center;">
+            <div class="checkbox-group">
+              <input type="checkbox" id="f_cliente" ${data?.cliente ? 'checked' : ''}>
+              <label for="f_cliente">Permite conexión del cliente:</label>
+            </div>
+            <div class="form-group">
+              <label>Atenuación (dB):</label>
+              <input type="number" id="f_atenuacion" class="form-control" value="${data?.atenuacion || '0.1'}" step="0.01" placeholder="0.1">
+            </div>
+          </div>
+
+          <button class="btn-submit" onclick="handleSave()">${btnText}</button>
+        `;
+      } else if (title === 'OLT') {
+        const slotsVal = data?.slots || '2';
+        formContainer.innerHTML = `
+          <div class="form-group">
+            <label>Código</label>
+            <input type="text" class="form-control" value="${data?.codigo || ''}" placeholder="Ej: ZTE C320">
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Marca</label>
+              <input type="text" class="form-control" value="${data?.marca || ''}" placeholder="Ej: ZTE">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <input type="text" class="form-control" value="${data?.modelo || ''}" placeholder="Ej: ZTE C320">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Máximo de clientes estándar por puerto</label>
+              <input type="number" class="form-control" value="${data?.maxClientes || ''}" placeholder="Ej: 128">
+            </div>
+            <div class="form-group">
+              <label>Potencia estándar por puerto</label>
+              <input type="number" class="form-control" value="${data?.potencia || ''}" placeholder="Ej: 6">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Descripción</label>
+            <textarea class="form-control" placeholder="Descripción...">${data?.descripcion || ''}</textarea>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Número de Slots</label>
+              <input type="number" id="num-slots" class="form-control" placeholder="Ej: 2" value="${slotsVal}" min="1" max="32" step="1" oninput="updateSlotsTable(this.value)">
+            </div>
+            <div class="form-group">
+              <label>Tamaño (U)</label>
+              <input type="number" class="form-control" placeholder="Ej: 2" value="${data?.tamano || '2'}" min="1" max="16" step="1">
+            </div>
+          </div>
+
+          <table class="slots-table">
+            <thead>
+              <tr>
+                <th>Número do Slot</th>
+                <th>Número de puertos</th>
+                <th>Índice inicial de puertos</th>
+              </tr>
+            </thead>
+            <tbody id="slots-table-body">
+              <tr>
+                <td><input type="number" value="1" min="1"></td>
+                <td><input type="number" value="16" placeholder="16"></td>
+                <td><input type="number" value="1" placeholder="1"></td>
+              </tr>
+              <tr>
+                <td><input type="number" value="2" min="1"></td>
+                <td><input type="number" value="16" placeholder="16"></td>
+                <td><input type="number" value="1" placeholder="1"></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <button class="btn-submit" onclick="handleSave()">${btnText}</button>
+        `;
+        if (data?.slots) updateSlotsTable(data.slots);
+      } else if (title === 'Cables de Fibra') {
+        formContainer.innerHTML = `
+          <div class="form-group">
+            <label>Código</label>
+            <input type="text" class="form-control" value="${data?.codigo || ''}" placeholder="ADSS 144H 12 Buffers">
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Marca</label>
+              <input type="text" class="form-control" value="${data?.marca || ''}" placeholder="Marca del tipo de cable">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <input type="text" class="form-control" value="${data?.modelo || ''}" placeholder="Modelo de tipo de cable">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Nivel estándar</label>
+            <select class="form-control">
+              <option value="derivaciones">DERIVACIONES (2LVL)</option>
+              <option value="troncal">TRONCAL (1LVL)</option>
+              <option value="acceso">ACCESO / DROPS</option>
+            </select>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Número de looses</label>
+              <input type="number" class="form-control" value="${data?.looses || ''}" placeholder="12">
+            </div>
+            <div class="form-group">
+              <label>Número total de fibras</label>
+              <input type="number" class="form-control" value="${data?.fibras || ''}" placeholder="144">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Atenuación por Km (dB)</label>
+              <input type="number" class="form-control" value="${data?.atenuacion || ''}" placeholder="0.4" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>Fibras por loose</label>
+              <input type="number" class="form-control" value="${data?.fibrasLoose || ''}" placeholder="12">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Perfil de fibra</label>
+            <select class="form-control">
+              <option value="eia598a">Perfil EIA598-A</option>
+              <option value="custom">Perfil Personalizado</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Descripción</label>
+            <textarea class="form-control" placeholder="Descripción...">${data?.desc || ''}</textarea>
+          </div>
+
+          <fieldset class="fieldset-box">
+            <legend>Representación del cable implantado</legend>
+            <div class="row-2col" style="align-items: center;">
+              <div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">
+                <label style="margin-bottom:0;">Color:</label>
+                <input type="color" class="color-picker-input" value="${data?.colorImp || '#000000'}">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>Grosor:</label>
+                <input type="number" class="form-control" value="${data?.grosorImp || ''}" placeholder="5.61" step="0.01">
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="fieldset-box">
+            <legend>Representación del cable no implantado</legend>
+            <div class="row-2col" style="align-items: center;">
+              <div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">
+                <label style="margin-bottom:0;">Color:</label>
+                <input type="color" class="color-picker-input" value="${data?.colorNoImp || '#4b5563'}">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>Grosor:</label>
+                <input type="number" class="form-control" value="${data?.grosorNoImp || ''}" placeholder="5.61" step="0.01">
+              </div>
+            </div>
+          </fieldset>
+
+          <button class="btn-submit" onclick="handleSave()">${btnText}</button>
+        `;
+      } else if (title === 'Armario') {
+        formContainer.innerHTML = `
+          <div class="form-group">
+            <label>Nombre:</label>
+            <input type="text" class="form-control" value="${data?.nombre || ''}" placeholder="Comum">
+          </div>
+
+          <div class="form-group">
+            <label>Prefijo:</label>
+            <input type="text" class="form-control" value="${data?.prefijo || ''}" placeholder="CO_">
+          </div>
+
+          <div class="form-group">
+            <label>Nivel estándar:</label>
+            <select class="form-control">
+              <option value="olt_hub" ${data?.nivel === 'olt_hub' ? 'selected' : ''}>OLT HUB</option>
+              <option value="pop_secundario" ${data?.nivel === 'pop_secundario' ? 'selected' : ''}>POP SECUNDARIO</option>
+              <option value="distribucion" ${data?.nivel === 'distribucion' ? 'selected' : ''}>DISTRIBUCIÓN</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Descripción:</label>
+            <textarea class="form-control" placeholder="Tipo padrão de POP">${data?.desc || ''}</textarea>
+          </div>
+
+          <fieldset class="fieldset-box">
+            <legend>Representación de estado</legend>
+            <div class="row-3col" style="align-items: center;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:11px;">Implantada:</label>
+                <input type="color" class="color-picker-input" value="${data?.colorImp || '#008000'}">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:11px;">No implantada:</label>
+                <input type="color" class="color-picker-input" value="${data?.colorNoImp || '#78909c'}">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:11px;">En proyecto:</label>
+                <input type="color" class="color-picker-input" value="${data?.colorProj || '#ff00ff'}">
+              </div>
+            </div>
+          </fieldset>
+
+          <button class="btn-submit" onclick="handleSave()">${btnText}</button>
+        `;
+      } else if (title === 'Switches') {
+        formContainer.innerHTML = `
+          <div class="form-group">
+            <label>Código</label>
+            <input type="text" class="form-control" value="${data?.codigo || ''}" placeholder="Switch 24">
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Marca</label>
+              <input type="text" class="form-control" value="${data?.marca || ''}" placeholder="Marca del tipo de switch">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <input type="text" class="form-control" value="${data?.modelo || ''}" placeholder="Modelo del tipo de switch">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="checkbox-group">
+              <input type="checkbox" id="cliente_switch" ${data?.cliente ? 'checked' : ''}>
+              <label for="cliente_switch">Permite conexión del cliente</label>
+            </div>
+            <div class="form-group">
+              <label>Número de puertos</label>
+              <input type="number" class="form-control" value="${data?.puertos || ''}" placeholder="24">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="checkbox-group">
+              <input type="checkbox" id="administrable" ${data?.administrable ? 'checked' : ''}>
+              <label for="administrable">Administrable</label>
+            </div>
+            <div class="form-group">
+              <label>Tamaño (U)</label>
+              <input type="number" class="form-control" value="${data?.tamano || ''}" placeholder="1">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Descripción</label>
+            <textarea class="form-control" placeholder="Descripción...">${data?.desc || ''}</textarea>
+          </div>
+
+          <button class="btn-submit" onclick="handleSave()">${btnText}</button>
+        `;
+      } else if (title === 'Splitters') {
+        formContainer.innerHTML = `
+          <div class="form-group">
+            <label>Código</label>
+            <input type="text" class="form-control" value="${data?.codigo || ''}" placeholder="Código del tipo de splitter">
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Marca</label>
+              <input type="text" class="form-control" value="${data?.marca || ''}" placeholder="Marca del tipo de splitter">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <input type="text" class="form-control" value="${data?.modelo || ''}" placeholder="Modelo del tipo de splitter">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Prefijo</label>
+              <input type="text" class="form-control" value="${data?.prefijo || ''}" placeholder="Prefijo para la nomenclatura">
+            </div>
+            <div class="form-group">
+              <label>Tamaño (U)</label>
+              <input type="number" class="form-control" value="${data?.tamano || ''}" placeholder="1">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Tipo de entrada/salida</label>
+              <select class="form-control">
+                <option value="" disabled ${!data?.tipoIO ? 'selected' : ''}>Seleccione opción...</option>
+                <option value="fusion_fusion" ${data?.tipoIO === 'fusion_fusion' ? 'selected' : ''}>Fusión / Fusión</option>
+                <option value="fusion_conector" ${data?.tipoIO === 'fusion_conector' ? 'selected' : ''}>Fusión / Conector</option>
+                <option value="conector_fusion" ${data?.tipoIO === 'conector_fusion' ? 'selected' : ''}>Conector / Fusión</option>
+                <option value="conector_conector" ${data?.tipoIO === 'conector_conector' ? 'selected' : ''}>Conector / Conector</option>
+              </select>
+            </div>
+            <div class="checkbox-group" style="margin-top: 18px;">
+              <input type="checkbox" id="balanceado" ${data?.balanceado ? 'checked' : ''}>
+              <label for="balanceado">Splitter balanceado</label>
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="checkbox-group">
+              <input type="checkbox" id="cliente" ${data?.cliente ? 'checked' : ''}>
+              <label for="cliente">Permite conexión del cliente</label>
+            </div>
+            <div class="form-group">
+              <label>Número de entradas</label>
+              <input type="number" class="form-control" value="${data?.entradas || ''}" placeholder="1">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Atenuación (dB)</label>
+              <input type="number" class="form-control" step="0.1" value="${data?.atenuacion || ''}" placeholder="Ej: 3.5">
+            </div>
+            <div class="form-group">
+              <label>Número de salidas</label>
+              <input type="number" class="form-control" value="${data?.salidas || ''}" placeholder="2">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Descripción</label>
+            <textarea class="form-control" placeholder="Descripción...">${data?.desc || ''}</textarea>
+          </div>
+
+          <button class="btn-submit" onclick="handleSave()">${btnText}</button>
+        `;
+      } else if (title === 'ODF') {
+        formContainer.innerHTML = `
+          <div class="form-group">
+            <label>Código</label>
+            <input type="text" class="form-control" value="${data?.codigo || ''}" placeholder="Escribe el código del tipo de ODF">
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Marca</label>
+              <input type="text" class="form-control" value="${data?.marca || ''}" placeholder="Escribe la marca del tipo de ODF">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <input type="text" class="form-control" value="${data?.modelo || ''}" placeholder="Escribe el modelo del tipo de ODF">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Total de puertos</label>
+              <input type="number" class="form-control" value="${data?.puertos || ''}" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label>Número de bandejas</label>
+              <input type="number" class="form-control" value="${data?.bandejas || ''}" placeholder="0">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Etiqueta del lado A</label>
+              <input type="text" class="form-control" value="${data?.tagA || ''}" placeholder="Lado A">
+            </div>
+            <div class="form-group">
+              <label>Etiqueta del lado B</label>
+              <input type="text" class="form-control" value="${data?.tagB || ''}" placeholder="Lado B">
+            </div>
+          </div>
+
+          <div class="row-2col">
+            <div class="form-group">
+              <label>Atenuación</label>
+              <input type="number" class="form-control" value="${data?.atenuacion || ''}" placeholder="0" step="0.1">
+            </div>
+            <div class="form-group">
+              <label>Tamaño (U)</label>
+              <input type="number" class="form-control" value="${data?.tamano || ''}" placeholder="1">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Descripción</label>
+            <textarea class="form-control" placeholder="Descripción...">${data?.desc || ''}</textarea>
+          </div>
+
+          <button class="btn-submit" onclick="handleSave()">${btnText}</button>
+        `;
+      } else if (title === 'Luminarias') {
+        formContainer.innerHTML = `
+          <div class="form-group">
+            <label>Nombre</label>
+            <input type="text" class="form-control" value="${data?.nombre || ''}" placeholder="Escribe el nombre...">
+          </div>
+          <div class="form-group">
+            <label>Código</label>
+            <input type="text" class="form-control" value="${data?.codigo || ''}" placeholder="Escribe el código...">
+          </div>
+          <div class="form-group">
+            <label>Descripción</label>
+            <input type="text" class="form-control" value="${data?.desc || ''}" placeholder="Escribe la descripción...">
+          </div>
+          <div class="form-group">
+            <label>Propiedad</label>
+            <select class="form-control">
+              <option value="" disabled ${!data?.propiedad ? 'selected' : ''}>Seleccione pública o privada</option>
+              <option value="publica" ${data?.propiedad === 'publica' ? 'selected' : ''}>Pública</option>
+              <option value="privada" ${data?.propiedad === 'privada' ? 'selected' : ''}>Privada</option>
+            </select>
+          </div>
+          <button class="btn-submit" onclick="handleSave()">${btnText}</button>
+        `;
+      } else {
+        formContainer.innerHTML = `
+          <div class="form-group">
+            <label>Nombre</label>
+            <input type="text" class="form-control" value="${data?.nombre || ''}" placeholder="Escribe el nombre...">
+          </div>
+          <div class="form-group">
+            <label>Código</label>
+            <input type="text" class="form-control" value="${data?.codigo || ''}" placeholder="Escribe el código...">
+          </div>
+          <div class="form-group">
+            <label>Descripción</label>
+            <input type="text" class="form-control" value="${data?.desc || ''}" placeholder="Descripción...">
+          </div>
+          <button class="btn-submit" onclick="handleSave()">${btnText}</button>
+        `;
+      }
+    }
+
+    function updateSlotsTable(numSlots) {
+      const tbody = document.getElementById('slots-table-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      
+      const count = Math.max(0, parseInt(numSlots) || 0);
+      for (let i = 1; i <= count; i++) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><input type="number" value="${i}" min="1"></td>
+          <td><input type="number" value="16" placeholder="16"></td>
+          <td><input type="number" value="1" placeholder="1"></td>
+        `;
+        tbody.appendChild(row);
+      }
+    }
+
+    function handleSave() {
+      showToast('¡Cambios aplicados correctamente!');
+      resetFormToCreateMode();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2500);
+    }
+
+    function closeSubpanel() {
+      document.getElementById('subpanel').classList.remove('open');
+      document.getElementById('registeredPanel').classList.remove('open');
+      document.querySelectorAll('.object-btn').forEach(btn => btn.classList.remove('active'));
+    }
+  </script>
+</body>
+</html>

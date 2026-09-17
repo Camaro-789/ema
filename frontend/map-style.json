@@ -20,6 +20,7 @@
       "maxzoom": 19
     }
   },
+  "glyphs": "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   "layers": [
     {
       "id": "osm-tiles",

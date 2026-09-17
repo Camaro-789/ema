@@ -1,0 +1,580 @@
+﻿/* Estilos del modal de propiedades — acotados para no afectar el resto de la app */
+#element-properties-modal {
+    --prop-ink: #141414;
+    --prop-gray-1: #fafafa;
+    --prop-gray-2: #f0f0f0;
+    --prop-line: #e3e3e3;
+    --prop-gray-4: #8f8f8f;
+    --prop-ease-out: cubic-bezier(.22, .8, .3, 1);
+    --prop-ease-in: cubic-bezier(.55, .06, .68, .19);
+}
+
+#element-properties-modal .prop-card {
+    width: 100%;
+    max-width: 640px;
+    max-height: calc(100vh - 40px);
+    background: #fff;
+    border: 1px solid var(--prop-line);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    color: var(--prop-ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    animation: prop-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes prop-modal-in {
+    from { opacity: 0; transform: translateY(12px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+#element-properties-modal .prop-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 18px 24px 16px;
+    flex-shrink: 0;
+}
+
+#element-properties-modal .prop-mark {
+    width: 30px;
+    height: 30px;
+    flex: none;
+    border: 1.5px solid var(--prop-ink);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#element-properties-modal .prop-mark svg {
+    width: 15px;
+    height: 15px;
+}
+
+#element-properties-modal .prop-header h1 {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: .02em;
+    margin: 0;
+    color: var(--prop-ink);
+    text-transform: none;
+}
+
+#element-properties-modal .prop-status {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    border: 1px solid var(--prop-ink);
+    border-radius: 999px;
+    padding: 3px 10px;
+    background: transparent;
+    color: var(--prop-ink);
+}
+
+#element-properties-modal .prop-status::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--prop-ink);
+    margin-right: 6px;
+    vertical-align: 1px;
+}
+
+#element-properties-modal .prop-spacer {
+    flex: 1;
+}
+
+#element-properties-modal .prop-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    border: 1px solid var(--prop-ink);
+    background: #fff;
+    color: var(--prop-ink);
+    border-radius: 8px;
+    padding: 7px 13px;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+
+#element-properties-modal .prop-btn:hover {
+    background: var(--prop-ink);
+    color: #fff;
+}
+
+#element-properties-modal .prop-btn svg {
+    width: 13px;
+    height: 13px;
+}
+
+#element-properties-modal .prop-tabs {
+    position: relative;
+    display: flex;
+    gap: 2px;
+    padding: 0 24px;
+    border-top: 1px solid var(--prop-line);
+    border-bottom: 1px solid var(--prop-line);
+    background: var(--prop-gray-1);
+    flex-shrink: 0;
+}
+
+#element-properties-modal .prop-tab-button {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 400;
+    background: none;
+    border: none;
+    border-bottom: none;
+    cursor: pointer;
+    color: var(--prop-gray-4);
+    padding: 13px 12px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: color .2s;
+    text-transform: none;
+    letter-spacing: 0;
+    outline: none;
+}
+
+#element-properties-modal .prop-tab-button svg {
+    width: 14px;
+    height: 14px;
+}
+
+#element-properties-modal .prop-tab-button:hover {
+    color: var(--prop-ink);
+    background: transparent;
+}
+
+#element-properties-modal .prop-tab-button.active {
+    color: var(--prop-ink);
+    font-weight: 500;
+    background: transparent;
+    border-bottom-color: transparent;
+}
+
+#element-properties-modal .prop-count {
+    font-size: 10.5px;
+    color: var(--prop-gray-4);
+    border: 1px solid var(--prop-line);
+    border-radius: 999px;
+    padding: 1px 7px;
+}
+
+#element-properties-modal .prop-tab-button.active .prop-count {
+    border-color: var(--prop-ink);
+    color: var(--prop-ink);
+}
+
+#element-properties-modal .prop-indicator {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    background: var(--prop-ink);
+    transition: transform .28s var(--prop-ease-out), width .28s var(--prop-ease-out);
+}
+
+#element-properties-modal .prop-stage {
+    padding: 24px;
+    perspective: 1200px;
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+#element-properties-modal .prop-pages {
+    position: relative;
+    transition: height .24s var(--prop-ease-out);
+}
+
+#element-properties-modal .prop-page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: none;
+}
+
+#element-properties-modal .prop-page.current {
+    display: block;
+    position: relative;
+}
+
+#element-properties-modal .prop-coord-band {
+    background: var(--prop-ink);
+    color: #fff;
+    border-radius: 12px;
+    padding: 16px 18px;
+}
+
+#element-properties-modal .prop-full {
+    grid-column: 1 / -1;
+}
+
+#element-properties-modal .prop-coord-band .prop-label {
+    font-size: 10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #9a9a9a;
+    margin-bottom: 8px;
+}
+
+#element-properties-modal .prop-coord-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+#element-properties-modal .prop-coord-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+    flex: 1;
+    min-width: 200px;
+    white-space: nowrap;
+    user-select: all;
+}
+
+#element-properties-modal .prop-band-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: .04em;
+    border: 1px solid #4a4a4a;
+    background: transparent;
+    color: #fff;
+    border-radius: 7px;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+}
+
+#element-properties-modal .prop-band-btn:hover,
+#element-properties-modal .prop-band-btn.copied {
+    background: #fff;
+    color: var(--prop-ink);
+    border-color: #fff;
+}
+
+#element-properties-modal .prop-band-btn svg {
+    width: 13px;
+    height: 13px;
+}
+
+#element-properties-modal .prop-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 28px;
+}
+
+@media (max-width: 560px) {
+    #element-properties-modal .prop-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+#element-properties-modal .prop-field label {
+    display: block;
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--prop-gray-4);
+    margin-bottom: 4px;
+}
+
+#element-properties-modal .prop-field input,
+#element-properties-modal .prop-field select,
+#element-properties-modal .prop-field textarea {
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    color: var(--prop-ink);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--prop-line);
+    border-radius: 0;
+    padding: 7px 2px;
+    outline: none;
+    transition: border-color .15s;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+#element-properties-modal .prop-field textarea {
+    resize: vertical;
+    min-height: 64px;
+    line-height: 1.5;
+}
+
+#element-properties-modal .prop-field textarea.prop-remarcado {
+    border: 1.5px solid var(--prop-ink);
+    border-radius: 10px;
+    background: #fff;
+    padding: 12px 14px;
+}
+
+#element-properties-modal .prop-field input:focus,
+#element-properties-modal .prop-field select:focus,
+#element-properties-modal .prop-field textarea:focus {
+    border-bottom-color: var(--prop-ink);
+}
+
+#element-properties-modal .prop-field textarea.prop-remarcado:focus {
+    border-color: var(--prop-ink);
+}
+
+#element-properties-modal .prop-field select {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' stroke='%238f8f8f' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    padding-right: 20px;
+    cursor: pointer;
+}
+
+#element-properties-modal .prop-extra-fields,
+#element-properties-modal #element-properties-fields {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 28px;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+}
+
+#element-properties-modal .prop-extra-fields:empty {
+    display: none;
+}
+
+#element-properties-modal .prop-meta-line {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    color: var(--prop-gray-4);
+    border-top: 1px solid var(--prop-line);
+    padding-top: 14px;
+}
+
+#element-properties-modal .prop-meta-line b {
+    color: var(--prop-ink);
+    font-weight: 500;
+}
+
+#element-properties-modal .prop-timeline {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#element-properties-modal .prop-timeline li,
+#element-properties-modal .prop-timeline-item {
+    display: flex;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--prop-line);
+    font-size: 14px;
+    position: static;
+}
+
+#element-properties-modal .prop-timeline li:last-child,
+#element-properties-modal .prop-timeline-item:last-child {
+    border-bottom: none;
+}
+
+#element-properties-modal .prop-timeline-item::before {
+    display: none;
+}
+
+#element-properties-modal .prop-dot,
+#element-properties-modal .prop-timeline-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--prop-ink);
+    margin-top: 7px;
+    flex: none;
+    border: none;
+    position: static;
+}
+
+#element-properties-modal .prop-when,
+#element-properties-modal .prop-timeline-meta {
+    font-size: 12px;
+    color: var(--prop-gray-4);
+    margin-top: 2px;
+}
+
+#element-properties-modal .prop-timeline-title {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--prop-ink);
+    text-transform: none;
+}
+
+#element-properties-modal .prop-photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+#element-properties-modal .prop-photo {
+    aspect-ratio: 4 / 3;
+    border: 1px solid var(--prop-line);
+    border-radius: 10px;
+    background: var(--prop-gray-1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: #c4c4c4;
+    overflow: hidden;
+}
+
+#element-properties-modal .prop-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#element-properties-modal .prop-photo svg {
+    width: 26px;
+    height: 26px;
+}
+
+#element-properties-modal .prop-photo span {
+    font-size: 11px;
+    color: var(--prop-gray-4);
+}
+
+#element-properties-modal .prop-photo.add {
+    border-style: dashed;
+    cursor: default;
+}
+
+#element-properties-modal .prop-check-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    margin: 0;
+}
+
+#element-properties-modal .prop-check-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--prop-line);
+}
+
+#element-properties-modal .prop-check-list li:last-child {
+    border-bottom: none;
+}
+
+#element-properties-modal .prop-box {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--prop-ink);
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+}
+
+#element-properties-modal .prop-box.prop-done {
+    background: var(--prop-ink);
+}
+
+#element-properties-modal .prop-box.prop-done svg {
+    width: 10px;
+    height: 10px;
+    color: #fff;
+}
+
+#element-properties-modal .prop-state {
+    margin-left: auto;
+    font-size: 11.5px;
+    color: var(--prop-gray-4);
+}
+
+#element-properties-modal .prop-preview {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-top: 1px solid var(--prop-line);
+    padding: 16px 24px;
+    background: var(--prop-gray-1);
+    flex-shrink: 0;
+}
+
+#element-properties-modal .prop-thumb {
+    width: 58px;
+    height: 58px;
+    flex: none;
+    border: 1px solid var(--prop-line);
+    border-radius: 10px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #c4c4c4;
+    overflow: hidden;
+    position: relative;
+}
+
+#element-properties-modal .prop-thumb svg {
+    width: 22px;
+    height: 22px;
+}
+
+#element-properties-modal .prop-thumb img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+}
+
+#element-properties-modal .prop-thumb.has-photo img {
+    display: block;
+}
+
+#element-properties-modal .prop-thumb.has-photo svg {
+    display: none;
+}
+
+#element-properties-modal .prop-preview-info {
+    flex: 1;
+    min-width: 0;
+}
+
+#element-properties-modal .prop-preview-info b {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+#element-properties-modal .prop-preview-info small {
+    display: block;
+    font-size: 12px;
+    color: var(--prop-gray-4);
+    margin-top: 2px;
+}

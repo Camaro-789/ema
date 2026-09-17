@@ -34,3 +34,17 @@ class MapProject(Base):
     zoom = Column(Integer, default=10)
     layers = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MapObjectType(Base):
+    __tablename__ = "map_object_types"
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String(50), index=True, nullable=False)
+    name = Column(String(255), index=True, nullable=False)
+    icon = Column(String(50), default="📍")
+    color = Column(String(50), default="#3498db")
+    material = Column(String(255))
+    height = Column(Float)
+    image = Column(String(10000))
+    meta_data = Column("metadata", JSON, default={})
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
