@@ -1,64 +1,21 @@
 /**
  * ftth-tipos.js
- * Panel de "Tipos de Objetos" (Plantillas de Red) en ventana emergente de 3 paneles:
- *   1) Categorías (menú principal)
- *   2) Formulario de creación / edición          <- segunda ventana
- *   3) Objetos registrados en la base de datos   <- tercera ventana
- * Al hacer clic en un objeto registrado se carga en el formulario en modo edición
- * y "Guardar Cambios" persiste con PUT /api/tipos/{id} (crear usa POST /api/tipos/).
+ * Panel de "Tipos de Objetos" (Plantillas de Red).
  *
- * El diseño proviene de frontend/Pro..htm; la lógica y la base de datos son las
- * que ya usaba el proyecto (proyecto activo + tabla ftth_tipos), ampliada con las
- * categorías nuevas: Armario, Cables de Fibra, Switches y Fusión.
+ * Estructura visual: panel v2 -> ventana glass, tabla con
+ * columnas generadas desde el tipo de objeto y formulario plegable.
+ * Contenido: el de siempre -> CATS (12 tipos de objeto) con sus íconos,
+ * tipos de campo, opciones y placeholders originales.
+ *
+ * Persistencia real: GET/POST/PUT/DELETE /api/tipos
+ * API pública (la que usa el resto de la app):
+ *   init, openModal, closeModal, openSubpanel, closeSubpanel, editItemById,
+ *   handleSave, resetFormToCreateMode, updateSlotsTable, getCategorias,
+ *   getTipos, showToast, deleteTipo, CATS, _setActiveTab
  */
 const FTTHTipos = (() => {
 
-  // ── Estado ────────────────────────────────────────────────────────────────
-  let currentCategory = '';
-  let editingId = null;
-  let editingData = null;
-  let _toastTimer = null;
-  const _tiposPorCat = {};
-
-  // ── Utilidades ────────────────────────────────────────────────────────────
-  function escapeHtml(valor) {
-    return String(valor == null ? '' : valor).replace(/[&<>"']/g, ch => (
-      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
-    ));
-  }
-
-  function apiUrl(path) {
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    const origin = window.location.origin;
-    if (origin && origin !== 'null' && !origin.includes('file://')) {
-      return origin + (path.startsWith('/') ? path : '/' + path);
-    }
-    return 'http://127.0.0.1:8000' + (path.startsWith('/') ? path : '/' + path);
-  }
-
-  async function api(path, options = {}) {
-    const metodo = (options.method || 'GET').toUpperCase();
-    let url = apiUrl(path);
-    if (metodo === 'GET' && window.currentProjectId && !/[?&]proyecto_id=/.test(url)) {
-      url += (url.includes('?') ? '&' : '?') + 'proyecto_id=' + encodeURIComponent(window.currentProjectId);
-    }
-    const res = await fetch(url, Object.assign({ headers: { 'Content-Type': 'application/json' } }, options));
-    if (!res.ok) {
-      let detalle = '';
-      try {
-        const cuerpo = await res.json();
-        if (cuerpo && cuerpo.detail) {
-          detalle = typeof cuerpo.detail === 'string' ? cuerpo.detail : JSON.stringify(cuerpo.detail);
-        }
-      } catch (e) { /* respuesta sin JSON */ }
-      throw new Error(detalle || ('Error ' + res.status));
-    }
-    if (res.status === 204) return null;
-    const texto = await res.text();
-    return texto ? JSON.parse(texto) : null;
-  }
-
-  // ── Opciones de los <select> ──────────────────────────────────────────────
+  // ── Opciones de los <select> ─────────────────────────────────────────────
   const OP = {
     material: ['Concreto', 'Madera', 'Hierro / Metal', 'Fibra de vidrio'],
     tipoPoste: ['Sencillo', 'Tipo H', 'Doble', 'Con tirantes/vientos'],
@@ -95,11 +52,12 @@ const FTTHTipos = (() => {
     ]
   };
 
-  // ── Categorías (clave en BD) + formulario de cada una ─────────────────────
+  // ── Tipos de objeto (clave en BD) + formulario de cada uno ───────────────
   // w: 'full' | 'half' | 'third'  ·  fieldset: agrupador con leyenda
+  // La tabla genera sus columnas desde estos campos.
   const CATS = [
     {
-      clave: 'poste', titulo: 'Postes', color: '#8b4513', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'poste', titulo: 'Postes', color: '#8b4513', campoClave: 'codigo', campoDesc: 'desc', singular: 'poste',
       campos: [
         { id: 'nombre', label: 'Nombre', type: 'text', ph: 'Escribe el nombre...', w: 'full' },
         { id: 'codigo', label: 'Código', type: 'text', ph: 'POST-01', w: 'full' },
@@ -110,7 +68,7 @@ const FTTHTipos = (() => {
       ]
     },
     {
-      clave: 'cajanap', titulo: 'Cajas NAP', color: '#eab308', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'cajanap', titulo: 'Cajas NAP', color: '#eab308', campoClave: 'codigo', campoDesc: 'desc', singular: 'caja NAP',
       campos: [
         { id: 'nombre', label: 'Nombre', type: 'text', ph: 'Escribe el nombre...', w: 'full' },
         { id: 'codigo', label: 'Código', type: 'text', ph: 'NAP-01', w: 'full' },
@@ -122,7 +80,7 @@ const FTTHTipos = (() => {
       ]
     },
     {
-      clave: 'manga', titulo: 'Mangas de Empalme', color: '#a855f7', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'manga', titulo: 'Mangas de Empalme', color: '#a855f7', campoClave: 'codigo', campoDesc: 'desc', singular: 'manga de empalme',
       campos: [
         { id: 'nombre', label: 'Nombre', type: 'text', ph: 'Escribe el nombre...', w: 'full' },
         { id: 'codigo', label: 'Código', type: 'text', ph: 'MAN-01', w: 'full' },
@@ -134,7 +92,7 @@ const FTTHTipos = (() => {
       ]
     },
     {
-      clave: 'armario', titulo: 'Armario', color: '#008000', campoClave: 'nombre', campoDesc: 'desc',
+      clave: 'armario', titulo: 'Armario', color: '#008000', campoClave: 'nombre', campoDesc: 'desc', singular: 'armario',
       campos: [
         { id: 'nombre', label: 'Nombre:', type: 'text', ph: 'Comum', w: 'full' },
         { id: 'prefijo', label: 'Prefijo:', type: 'text', ph: 'CO_', w: 'full' },
@@ -150,8 +108,9 @@ const FTTHTipos = (() => {
         }
       ]
     },
+
     {
-      clave: 'cables', titulo: 'Cables de Fibra', color: '#0284c7', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'cables', titulo: 'Cables de Fibra', color: '#0284c7', campoClave: 'codigo', campoDesc: 'desc', singular: 'cable de fibra',
       campos: [
         { id: 'codigo', label: 'Código', type: 'text', ph: 'ADSS 144H 12 Buffers', w: 'full' },
         { id: 'marca', label: 'Marca', type: 'text', ph: 'Marca del tipo de cable', w: 'half' },
@@ -180,7 +139,7 @@ const FTTHTipos = (() => {
       ]
     },
     {
-      clave: 'ducto', titulo: 'Ductos / Canalización', color: '#ff5722', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'ducto', titulo: 'Ductos / Canalización', color: '#ff5722', campoClave: 'codigo', campoDesc: 'desc', singular: 'ducto',
       campos: [
         { id: 'nombre', label: 'Nombre', type: 'text', ph: 'Escribe el nombre...', w: 'full' },
         { id: 'codigo', label: 'Código', type: 'text', ph: 'DUCT-01', w: 'full' },
@@ -189,7 +148,7 @@ const FTTHTipos = (() => {
       ]
     },
     {
-      clave: 'luminaria', titulo: 'Luminarias', color: '#eab308', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'luminaria', titulo: 'Luminarias', color: '#eab308', campoClave: 'codigo', campoDesc: 'desc', singular: 'luminaria',
       campos: [
         { id: 'nombre', label: 'Nombre', type: 'text', ph: 'Escribe el nombre...', w: 'full' },
         { id: 'codigo', label: 'Código', type: 'text', ph: 'Escribe el código...', w: 'full' },
@@ -198,7 +157,7 @@ const FTTHTipos = (() => {
       ]
     },
     {
-      clave: 'odf', titulo: 'ODF', color: '#8b5cf6', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'odf', titulo: 'ODF', color: '#8b5cf6', campoClave: 'codigo', campoDesc: 'desc', singular: 'ODF',
       campos: [
         { id: 'codigo', label: 'Código', type: 'text', ph: 'Escribe el código del tipo de ODF', w: 'full' },
         { id: 'marca', label: 'Marca', type: 'text', ph: 'Escribe la marca del tipo de ODF', w: 'half' },
@@ -212,8 +171,10 @@ const FTTHTipos = (() => {
         { id: 'desc', label: 'Descripción', type: 'textarea', ph: 'Descripción...', w: 'full' }
       ]
     },
+
     {
-      clave: 'olt', titulo: 'OLT', color: '#ef4444', campoClave: 'codigo', campoDesc: 'descripcion', slots: { def: 2 },
+      clave: 'olt', titulo: 'OLT', color: '#ef4444', campoClave: 'codigo', campoDesc: 'descripcion', singular: 'OLT',
+      slots: { def: 2 },
       campos: [
         { id: 'codigo', label: 'Código', type: 'text', ph: 'Ej: ZTE C320', w: 'full' },
         { id: 'marca', label: 'Marca', type: 'text', ph: 'Ej: ZTE', w: 'half' },
@@ -226,7 +187,7 @@ const FTTHTipos = (() => {
       ]
     },
     {
-      clave: 'switches', titulo: 'Switches', color: '#6366f1', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'switches', titulo: 'Switches', color: '#6366f1', campoClave: 'codigo', campoDesc: 'desc', singular: 'switch',
       campos: [
         { id: 'codigo', label: 'Código', type: 'text', ph: 'Switch 24', w: 'full' },
         { id: 'marca', label: 'Marca', type: 'text', ph: 'Marca del tipo de switch', w: 'half' },
@@ -239,7 +200,7 @@ const FTTHTipos = (() => {
       ]
     },
     {
-      clave: 'splitter', titulo: 'Splitters', color: '#06b6d4', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'splitter', titulo: 'Splitters', color: '#06b6d4', campoClave: 'codigo', campoDesc: 'desc', singular: 'splitter',
       campos: [
         { id: 'codigo', label: 'Código', type: 'text', ph: 'Código del tipo de splitter', w: 'full' },
         { id: 'marca', label: 'Marca', type: 'text', ph: 'Marca del tipo de splitter', w: 'half' },
@@ -256,7 +217,7 @@ const FTTHTipos = (() => {
       ]
     },
     {
-      clave: 'fusion', titulo: 'Fusión', color: '#ec4899', campoClave: 'codigo', campoDesc: 'desc',
+      clave: 'fusion', titulo: 'Fusión', color: '#ec4899', campoClave: 'codigo', campoDesc: 'desc', singular: 'fusión',
       campos: [
         { id: 'codigo', label: 'Código:', type: 'text', ph: 'Escribe el código del tipo de fusión...', w: 'full' },
         { id: 'cliente', label: 'Permite conexión del cliente:', type: 'checkbox', w: 'half' },
@@ -268,9 +229,320 @@ const FTTHTipos = (() => {
   const CATS_MAP = {};
   CATS.forEach(c => { CATS_MAP[c.clave] = c; });
 
-  const ICONO_PAPELERA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>';
+  // ── Estado ───────────────────────────────────────────────────────────────
+  let currentCategory = '';
+  let currentSortField = '';
+  let currentSortAsc = true;
+  let _filas = [];           // filas de la categoría actual (ya ordenadas)
+  let _porCat = {};          // caché: { clave: [registros del backend] }
+  let _editingId = null;
+  let _editingData = null;
+  let _toastTimer = null;
+  let _iniciado = false;
+  let _esAdmin = true;       // reservado por si luego se ocultan acciones
 
-  // ── Render del formulario dinámico (Panel 2) ──────────────────────────────
+  // ── API (mismo contrato que antes) ───────────────────────────────────────
+  function apiUrl(path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const origin = window.location.origin;
+    if (origin && origin !== 'null' && !origin.includes('file://')) {
+      return origin + (path.startsWith('/') ? path : '/' + path);
+    }
+    return 'http://127.0.0.1:8000' + (path.startsWith('/') ? path : '/' + path);
+  }
+
+  async function api(path, options = {}) {
+    const metodo = (options.method || 'GET').toUpperCase();
+    let url = apiUrl(path);
+    if (metodo === 'GET' && window.currentProjectId && !/[?&]proyecto_id=/.test(url)) {
+      url += (url.includes('?') ? '&' : '?') + 'proyecto_id=' + encodeURIComponent(window.currentProjectId);
+    }
+    const res = await fetch(url, Object.assign({ headers: { 'Content-Type': 'application/json' } }, options));
+    if (!res.ok) {
+      let detalle = '';
+      try {
+        const cuerpo = await res.json();
+        if (cuerpo && cuerpo.detail) {
+          detalle = typeof cuerpo.detail === 'string' ? cuerpo.detail : JSON.stringify(cuerpo.detail);
+        }
+      } catch (e) { /* respuesta sin JSON */ }
+      throw new Error(detalle || ('Error ' + res.status));
+    }
+    if (res.status === 204) return null;
+    const texto = await res.text();
+    return texto ? JSON.parse(texto) : null;
+  }
+
+  // ── Utilidades ───────────────────────────────────────────────────────────
+  function escapeHtml(valor) {
+    return String(valor == null ? '' : valor).replace(/[&<>"']/g, ch => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+    ));
+  }
+
+  // Campos aplanados conservando el fieldset padre (para etiquetar columnas)
+  function camposPlanos(cfg) {
+    const lista = [];
+    (cfg.campos || []).forEach(f => {
+      if (f.fieldset) {
+        (f.campos || []).forEach(g => lista.push({ f: g, grupo: f.fieldset }));
+        return;
+      }
+      lista.push({ f, grupo: null });
+    });
+    return lista;
+  }
+
+  function etiquetaCampo(label) {
+    return String(label || '').replace(/[:\uFF1A]\s*$/, '').trim();
+  }
+
+  function etiquetaColumna(entrada) {
+    const base = etiquetaCampo(entrada.f.label);
+    return entrada.grupo ? entrada.grupo + ' \u00b7 ' + base : base;
+  }
+
+  /**
+   * Columnas de la tabla: resumen corto y ordenado para listas largas
+   *   Color · <identidad: Código / Nombre> · Modelo (si el tipo lo tiene) · Descripción · Acciones
+   * El resto de las propiedades del tipo se ven y editan en el formulario.
+   */
+  const COLS_RESUMEN = ['modelo'];
+
+  function columnasDe(cfg) {
+    const planos = camposPlanos(cfg);
+    const porId = {};
+    planos.forEach(p => { porId[p.f.id] = p; });
+
+    const cols = [{ key: 'color_mapa', label: 'Color', kind: 'color' }];
+
+    // Identidad del tipo: su código si existe; si no, su campo clave (ej. Armario -> Nombre)
+    const ident = porId['codigo'] || porId[cfg.campoClave];
+    if (ident) {
+      cols.push({
+        key: ident.f.id,
+        label: etiquetaColumna(ident),
+        kind: 'text',
+        campo: ident.f,
+        resaltar: true
+      });
+    }
+
+    // Columnas extra del resumen (solo si el tipo las tiene)
+    COLS_RESUMEN.forEach(id => {
+      const p = porId[id];
+      if (!p) return;
+      if (p.f.id === cfg.campoDesc || p.f.id === 'numSlots') return;
+      if (cols.some(c => c.key === p.f.id)) return;
+      cols.push({
+        key: p.f.id,
+        label: etiquetaColumna(p),
+        kind: p.f.type === 'color' ? 'color' : p.f.type === 'checkbox' ? 'bool' : 'text',
+        campo: p.f
+      });
+    });
+
+    if (cfg.campoDesc) cols.push({ key: cfg.campoDesc, label: 'Descripción', kind: 'desc' });
+    cols.push({ key: '__acciones', label: '', kind: 'acciones' });
+    return cols;
+  }
+
+  function textoSelect(f, valor) {
+    const op = (f.options || []).find(o => String(typeof o === 'string' ? o : o.v) === String(valor));
+    if (!op) return String(valor);
+    return typeof op === 'string' ? op : op.t;
+  }
+
+  // Valor de la fila para una columna (también se usa para ordenar)
+  function valorDeFila(rec, col, cfg) {
+    const props = rec.propiedades || {};
+    if (col.key === 'color_mapa') return rec.color_mapa || '';
+    if (col.key === '__acciones') return '';
+    if (col.key === cfg.campoClave) return rec.nombre_id || props[col.key] || '';
+    if (col.key === cfg.campoDesc) return rec.observaciones || props[col.key] || '';
+    return props[col.key];
+  }
+
+  const ICO_DETALLE = '<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>';
+  const ICO_INFO = '<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"/></svg>';
+  const ICO_DUPLICAR = '<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+  const ICO_ELIMINAR = '<svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>';
+
+  function celdaHtml(col, rec, cfg) {
+    const valor = valorDeFila(rec, col, cfg);
+
+    if (col.kind === 'color') {
+      const color = valor || '#a1a1a6';
+      return `<span class="color-swatch" style="background:${escapeHtml(color)};"></span>`;
+    }
+    if (col.kind === 'bool') {
+      const si = !!valor;
+      return `<span class="${si ? 'col-venta-si' : 'col-venta-no'}">${si ? 'Sí' : 'No'}</span>`;
+    }
+    if (col.kind === 'acciones') {
+      return '<div class="row-actions">'
+        + `<button type="button" title="Detalle" data-accion="detalle" data-id="${rec.id}">${ICO_DETALLE}</button>`
+        + `<button type="button" title="Información" data-accion="info" data-id="${rec.id}">${ICO_INFO}</button>`
+        + `<button type="button" title="Duplicar" data-accion="duplicar" data-id="${rec.id}">${ICO_DUPLICAR}</button>`
+        + `<button type="button" class="danger" title="Eliminar" data-accion="eliminar" data-id="${rec.id}">${ICO_ELIMINAR}</button>`
+        + '</div>';
+    }
+    if (valor === undefined || valor === null || valor === '') {
+      return '<span style="color:#a1a1a6;">—</span>';
+    }
+    if (col.kind === 'desc') {
+      return `<span class="col-desc-cell" title="${escapeHtml(valor)}">${escapeHtml(valor)}</span>`;
+    }
+    if (col.campo && col.campo.type === 'select') {
+      const texto = textoSelect(col.campo, valor);
+      return col.resaltar ? `<span class="col-name-cell">${escapeHtml(texto)}</span>` : escapeHtml(texto);
+    }
+    return col.resaltar ? `<span class="col-name-cell">${escapeHtml(valor)}</span>` : escapeHtml(valor);
+  }
+
+  // ── Categorías (botones con los íconos minimalistas) ─────────────────────
+  function renderCategorias() {
+    const cont = document.getElementById('tipos-categorias');
+    if (!cont) return;
+    cont.innerHTML = CATS.map(c => `
+      <button type="button" class="object-btn${c.clave === currentCategory ? ' active' : ''}" data-cat="${c.clave}">
+        <span class="object-ico"><img src="assets/icons/${c.clave}.svg" alt="${escapeHtml(c.titulo)}" width="18" height="18"></span>
+        ${escapeHtml(c.titulo)}
+      </button>`).join('');
+  }
+
+  function marcarCategoriaActiva() {
+    document.querySelectorAll('#ftth-tipos-modal .object-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.cat === currentCategory);
+    });
+  }
+
+  // Marca el tipo activo en el submenú desplegable del sidebar izquierdo
+  function marcarTipoSidebar(clave) {
+    document.querySelectorAll('#submenu-tipos .sub-tipo-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.clave === clave);
+    });
+  }
+
+  // ── Cabecera de la tabla: columnas generadas desde el tipo ───────────────
+  function renderCabecera(cfg) {
+    const head = document.getElementById('tipos-table-head');
+    if (!head) return;
+    const cols = columnasDe(cfg);
+    head.innerHTML = cols.map(c => {
+      if (c.kind === 'acciones') return '<th style="width:110px;"></th>';
+      const ancho = c.kind === 'color' ? ' style="width:56px;"' : '';
+      const flecha = `<span class="sort-arrow" id="tipos-arrow-${c.key}">`
+        + (currentSortField === c.key && !currentSortAsc ? '↓' : '↑') + '</span>';
+      return `<th class="sortable"${ancho} data-sort="${c.key}">${escapeHtml(c.label)} ${flecha}</th>`;
+    }).join('');
+  }
+
+  function ordenarFilas(cfg, lista) {
+    const filas = (lista || []).slice();
+    const col = columnasDe(cfg).find(c => c.key === currentSortField);
+    if (!col) return filas;
+    filas.sort((a, b) => {
+      let av = valorDeFila(a, col, cfg);
+      let bv = valorDeFila(b, col, cfg);
+      const na = Number(av); const nb = Number(bv);
+      if (av !== '' && bv !== '' && Number.isFinite(na) && Number.isFinite(nb)) {
+        return currentSortAsc ? na - nb : nb - na;
+      }
+      av = String(av == null ? '' : av).toLowerCase();
+      bv = String(bv == null ? '' : bv).toLowerCase();
+      if (av < bv) return currentSortAsc ? -1 : 1;
+      if (av > bv) return currentSortAsc ? 1 : -1;
+      return 0;
+    });
+    return filas;
+  }
+
+  function sortTableBy(key) {
+    if (currentSortField === key) currentSortAsc = !currentSortAsc;
+    else { currentSortField = key; currentSortAsc = true; }
+
+    const cfg = CATS_MAP[currentCategory];
+    if (cfg) {
+      columnasDe(cfg).forEach(c => {
+        const flecha = document.getElementById('tipos-arrow-' + c.key);
+        if (flecha) flecha.innerText = (c.key === currentSortField) ? (currentSortAsc ? '↑' : '↓') : '↑';
+      });
+      _filas = ordenarFilas(cfg, _porCat[cfg.clave]);
+      pintarFilas(cfg);
+    }
+  }
+
+  function actualizarPie(cantidad, total) {
+    const el = document.getElementById('tipos-page-count');
+    if (el) el.innerText = total > 0 ? `Mostrando 1 - ${cantidad} de ${total}` : 'Mostrando 0 - 0 de 0';
+
+    const cfg = CATS_MAP[currentCategory];
+    const lbl = document.getElementById('tipos-create-label');
+    if (lbl && cfg) lbl.innerText = 'Nuevo tipo de ' + cfg.singular;
+    const sub = document.getElementById('tipos-subtitle');
+    if (sub && cfg) sub.innerText = cfg.titulo;
+  }
+
+  function pintarFilas(cfg) {
+    const tbody = document.getElementById('tipos-table-body');
+    if (!tbody) return;
+    const cols = columnasDe(cfg);
+
+    if (!_filas.length) {
+      tbody.innerHTML = `<tr><td colspan="${cols.length}" class="table-empty">Sin tipos registrados.<br>`
+        + `Usa «Nuevo tipo de ${escapeHtml(cfg.singular)}» para crear el primero.</td></tr>`;
+    } else {
+      tbody.innerHTML = _filas.map(rec => {
+        const celdas = cols.map(c => `<td>${celdaHtml(c, rec, cfg)}</td>`).join('');
+        return `<tr data-id="${rec.id}">${celdas}</tr>`;
+      }).join('');
+    }
+
+    document.querySelectorAll('#tipos-table-body tr.selected').forEach(tr => tr.classList.remove('selected'));
+    if (_editingId) {
+      const tr = tbody.querySelector(`tr[data-id="${_editingId}"]`);
+      if (tr) tr.classList.add('selected');
+    }
+    actualizarPie(_filas.length, (_porCat[cfg.clave] || []).length);
+  }
+
+  // ── Tabla: carga desde la base de datos y pinta ──────────────────────────
+  async function renderTabla() {
+    const cfg = CATS_MAP[currentCategory];
+    const tbody = document.getElementById('tipos-table-body');
+    if (!cfg || !tbody) return;
+
+    renderCabecera(cfg);
+    const cols = columnasDe(cfg);
+    tbody.innerHTML = `<tr><td colspan="${cols.length}" class="table-empty">Consultando base de datos...</td></tr>`;
+
+    try {
+      const tipos = await api(`/api/tipos/${cfg.clave}`);
+      _porCat[cfg.clave] = Array.isArray(tipos) ? tipos : [];
+    } catch (err) {
+      _porCat[cfg.clave] = [];
+      tbody.innerHTML = `<tr><td colspan="${cols.length}" class="table-empty">Error: ${escapeHtml(err.message)}</td></tr>`;
+      actualizarPie(0, 0);
+      return;
+    }
+
+    _filas = ordenarFilas(cfg, _porCat[cfg.clave]);
+    pintarFilas(cfg);
+  }
+
+  // ── Toast flotante (lo comparten Tipos, Carpetas y Mapa) ─────────────────
+  function showToast(msg, type) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.innerText = msg;
+    toast.classList.toggle('toast-error', type === 'error');
+    toast.classList.add('show');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+
+  // ── Formulario dinámico ──────────────────────────────────────────────────
   function valorInicial(f, data) {
     if (data && data[f.id] !== undefined && data[f.id] !== null && data[f.id] !== '') return data[f.id];
     return f.def !== undefined ? f.def : '';
@@ -281,13 +553,13 @@ const FTTHTipos = (() => {
     const id = 'f_' + f.id;
 
     if (f.type === 'checkbox') {
-      return `<div class="checkbox-group"><input type="checkbox" id="${id}" ${val ? 'checked' : ''}>`
+      return `<div class="checkbox-group"><input type="checkbox" class="apple-checkbox" id="${id}" ${val ? 'checked' : ''}>`
         + `<label for="${id}">${f.label}</label></div>`;
     }
 
     if (f.type === 'color') {
       const estiloLabel = f.small ? 'margin-bottom:0; font-size:11px;' : 'margin-bottom:0;';
-      return `<div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">`
+      return '<div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">'
         + `<label style="${estiloLabel}">${f.label}</label>`
         + `<input type="color" class="color-picker-input" id="${id}" value="${escapeHtml(val || '#000000')}"></div>`;
     }
@@ -347,13 +619,42 @@ const FTTHTipos = (() => {
     return html;
   }
 
+  function updateSlotsTable(numSlots, detalle) {
+    const tbody = document.getElementById('slots-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    let count = parseInt(numSlots, 10);
+    if (!Number.isFinite(count) || count < 1) count = 1;
+    if (count > 32) count = 32;
+    for (let i = 1; i <= count; i++) {
+      const d = (detalle && detalle[i - 1]) || {};
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><input type="number" value="${d.slot !== undefined ? d.slot : i}" min="1"></td>
+        <td><input type="number" value="${d.puertos !== undefined ? d.puertos : 16}" placeholder="16"></td>
+        <td><input type="number" value="${d.indice !== undefined ? d.indice : 1}" placeholder="1"></td>`;
+      tbody.appendChild(row);
+    }
+  }
+
+  // ── Selector del color del objeto (el que se usa en el mapa) ─────────────
+  function campoColorObjeto(cfg, data) {
+    const val = (data && data.color_mapa) || cfg.color || '#000000';
+    return '<div class="form-group" style="display:flex; align-items:center; gap:10px;">'
+      + '<label style="margin-bottom:0;">Color del objeto</label>'
+      + `<input type="color" class="color-picker-input" id="f_color_mapa" value="${escapeHtml(val)}"`
+      + ' oninput="this.nextElementSibling.textContent = this.value">'
+      + `<span style="font-size:12px; color:#8e8e93;">${escapeHtml(val)}</span>`
+      + '</div>';
+  }
+
   function renderFormFields(clave, data) {
     const cfg = CATS_MAP[clave];
     const cont = document.getElementById('dynamic-form');
     if (!cfg || !cont) return;
 
-    const btnText = data ? 'Guardar Cambios' : 'Guardar';
-    let html = renderCampos(cfg.campos, data);
+    const esEdicion = !!data;
+    let html = campoColorObjeto(cfg, data) + renderCampos(cfg.campos, data);
 
     if (cfg.slots) {
       html += `
@@ -369,32 +670,14 @@ const FTTHTipos = (() => {
         </table>`;
     }
 
-    html += `<button class="btn-submit" onclick="FTTHTipos.handleSave()">${btnText}</button>`;
+    html += '<button class="btn-submit" type="button" onclick="FTTHTipos.handleSave()">'
+      + (esEdicion ? 'Guardar Cambios' : 'Guardar') + '</button>';
     cont.innerHTML = html;
 
     if (cfg.slots) {
-      const total = (data && data.slots) ? data.slots : (cfg.slots.def || 2);
+      const inp = cont.querySelector('#f_numSlots');
+      const total = inp && inp.value ? inp.value : (cfg.slots.def || 2);
       updateSlotsTable(total, data ? data.slots_detalle : null);
-    }
-  }
-
-  function updateSlotsTable(numSlots, detalle) {
-    const tbody = document.getElementById('slots-table-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    let count = parseInt(numSlots, 10);
-    if (!Number.isFinite(count) || count < 1) count = 1;
-    if (count > 32) count = 32;
-
-    for (let i = 1; i <= count; i++) {
-      const fila = document.createElement('tr');
-      const d = (detalle && detalle[i - 1]) || {};
-      fila.innerHTML = `
-        <td><input type="number" value="${d.slot !== undefined ? d.slot : i}" min="1"></td>
-        <td><input type="number" value="${d.puertos !== undefined ? d.puertos : 16}" placeholder="16"></td>
-        <td><input type="number" value="${d.indice !== undefined ? d.indice : 1}" placeholder="1"></td>`;
-      tbody.appendChild(fila);
     }
   }
 
@@ -429,160 +712,106 @@ const FTTHTipos = (() => {
     });
   }
 
-  // ── Panel 3: objetos registrados en la base de datos ──────────────────────
-  function camposPlanos(cfg) {
-    const lista = [];
-    (cfg.campos || []).forEach(f => {
-      if (f.fieldset) { (f.campos || []).forEach(g => lista.push(g)); return; }
-      lista.push(f);
-    });
-    return lista;
-  }
-
-  function etiquetaCampo(label) {
-    return String(label || '').replace(/[:：]\s*$/, '');
-  }
-
-  function resumenTipo(cfg, rec) {
-    const props = rec.propiedades || {};
-    const partes = [];
-    for (const f of camposPlanos(cfg)) {
-      if (partes.length >= 3) break;
-      if (f.type === 'color' || f.type === 'textarea') continue;
-      if (f.id === cfg.campoClave || f.id === 'numSlots') continue;
-      const valor = props[f.id];
-      if (valor === undefined || valor === null || valor === '') continue;
-      let texto = valor;
-      if (typeof valor === 'boolean') {
-        texto = valor ? 'Sí' : 'No';
-      } else if (f.type === 'select') {
-        const op = (f.options || []).find(o => String(typeof o === 'string' ? o : o.v) === String(valor));
-        if (op && typeof op !== 'string') texto = op.t;
-      }
-      partes.push(`${etiquetaCampo(f.label)}: ${texto}`);
-    }
-    return partes.join(' | ') || 'Sin parámetros adicionales';
-  }
-
   function formularioDesdeRegistro(rec) {
-    const cfg = CATS_MAP[rec.categoria] || {};
+    const cfg = CATS_MAP[rec.categoria] || CATS_MAP[currentCategory] || {};
     const data = Object.assign({}, rec.propiedades || {});
     if (cfg.campoClave) data[cfg.campoClave] = rec.nombre_id;
     if (cfg.campoDesc) data[cfg.campoDesc] = rec.observaciones || '';
+    data.color_mapa = rec.color_mapa || cfg.color || '#000000';
     return data;
   }
 
-  async function cargarTiposRegistrados(clave) {
+  // ── Navegación: categorías, tabla y formulario ───────────────────────────
+  async function seleccionar(clave) {
     const cfg = CATS_MAP[clave];
-    const cont = document.getElementById('type-list');
-    if (!cfg || !cont) return;
-
-    cont.innerHTML = '<div class="type-empty">Consultando base de datos...</div>';
-    try {
-      const tipos = await api(`/api/tipos/${clave}`);
-      _tiposPorCat[clave] = Array.isArray(tipos) ? tipos : [];
-
-      if (!_tiposPorCat[clave].length) {
-        cont.innerHTML = `<div class="type-empty">Sin plantillas guardadas.<br>Completa el formulario y pulsa <b>Guardar</b> para registrar la primera de <b>${cfg.titulo}</b>.</div>`;
-        return;
-      }
-
-      cont.innerHTML = '';
-      _tiposPorCat[clave].forEach(rec => {
-        const card = document.createElement('div');
-        card.className = 'type-card';
-        card.setAttribute('data-id', rec.id);
-        card.innerHTML = `
-          <div class="type-card-title">
-            <span class="color-badge" style="background: ${rec.color_mapa || cfg.color};"></span>
-            ${escapeHtml(rec.nombre_id || 'Sin nombre')}
-          </div>
-          <div class="type-card-desc">${escapeHtml(resumenTipo(cfg, rec))}</div>
-          <button type="button" class="card-del-btn" title="Eliminar de la base de datos">${ICONO_PAPELERA}</button>`;
-        card.addEventListener('click', () => editItemById(rec.id, card));
-        const btnDel = card.querySelector('.card-del-btn');
-        if (btnDel) btnDel.addEventListener('click', ev => { ev.stopPropagation(); deleteTipo(rec.id); });
-        cont.appendChild(card);
-      });
-    } catch (err) {
-      cont.innerHTML = `<div class="type-empty">Error: ${escapeHtml(err.message)}</div>`;
-    }
+    if (!cfg) return;
+    currentCategory = clave;
+    const visibles = columnasDe(cfg).filter(c => c.kind !== 'color' && c.kind !== 'acciones');
+    currentSortField = visibles.length ? visibles[0].key : cfg.campoClave;
+    currentSortAsc = true;
+    marcarCategoriaActiva();
+    marcarTipoSidebar(clave);
+    hideForm();
+    await renderTabla();
   }
 
-  // ── Navegación entre paneles ─────────────────────────────────────────────
+  function showCreateForm() {
+    const cfg = CATS_MAP[currentCategory];
+    if (!cfg) { showToast('Selecciona primero un tipo de objeto'); return; }
+    _editingId = null;
+    _editingData = null;
+    const t = document.getElementById('tipos-form-title');
+    if (t) t.innerText = 'Crear Tipo de ' + cfg.titulo;
+    document.querySelectorAll('#tipos-table-body tr.selected').forEach(tr => tr.classList.remove('selected'));
+    renderFormFields(cfg.clave, null);
+    const sec = document.getElementById('tipos-form-section');
+    if (sec) sec.classList.add('visible');
+  }
+
+  function hideForm() {
+    _editingId = null;
+    _editingData = null;
+    const sec = document.getElementById('tipos-form-section');
+    if (sec) sec.classList.remove('visible');
+    document.querySelectorAll('#tipos-table-body tr.selected').forEach(tr => tr.classList.remove('selected'));
+  }
+
+  // Clic sobre una fila -> carga el formulario en modo edición
+  function editItemById(id, rowEl) {
+    const cfg = CATS_MAP[currentCategory];
+    const rec = (_porCat[currentCategory] || []).find(t => Number(t.id) === Number(id));
+    if (!cfg || !rec) return;
+
+    _editingId = rec.id;
+    _editingData = rec;
+
+    const t = document.getElementById('tipos-form-title');
+    if (t) t.innerText = 'Editar: ' + ((rec.propiedades && rec.propiedades.nombre) || rec.nombre_id || 'Objeto');
+
+    renderFormFields(currentCategory, formularioDesdeRegistro(rec));
+    const sec = document.getElementById('tipos-form-section');
+    if (sec) sec.classList.add('visible');
+
+    document.querySelectorAll('#tipos-table-body tr').forEach(tr => {
+      tr.classList.toggle('selected', Number(tr.dataset.id) === Number(id));
+    });
+    if (rowEl) rowEl.classList.add('selected');
+  }
+
+  // Duplicar: abre el formulario de creación precargado con esos datos
+  function duplicarTipo(id) {
+    const cfg = CATS_MAP[currentCategory];
+    const rec = (_porCat[currentCategory] || []).find(t => Number(t.id) === Number(id));
+    if (!cfg || !rec) return;
+
+    _editingId = null;
+    _editingData = null;
+
+    const t = document.getElementById('tipos-form-title');
+    if (t) t.innerText = 'Duplicar Tipo de ' + cfg.titulo;
+
+    const data = formularioDesdeRegistro(rec);
+    if (cfg.campoClave) data[cfg.campoClave] = String(data[cfg.campoClave] || '') + ' (copia)';
+
+    renderFormFields(cfg.clave, data);
+    const sec = document.getElementById('tipos-form-section');
+    if (sec) sec.classList.add('visible');
+    document.querySelectorAll('#tipos-table-body tr.selected').forEach(tr => tr.classList.remove('selected'));
+  }
+
+  function refrescar() {
+    if (currentCategory) renderTabla();
+  }
+
+  // Compatibilidad con el API anterior
   function resetFormToCreateMode() {
     const cfg = CATS_MAP[currentCategory];
-    editingId = null;
-    editingData = null;
-    const titulo = document.getElementById('selected-title');
-    const tituloReg = document.getElementById('registered-title');
-    if (titulo) titulo.innerText = 'Crear Tipo de ' + (cfg ? cfg.titulo : '');
-    if (tituloReg) tituloReg.innerText = (cfg ? cfg.titulo : 'Objetos') + ' Registrados';
-    document.querySelectorAll('#ftth-tipos-modal .type-card').forEach(c => c.classList.remove('selected'));
-    renderFormFields(currentCategory, null);
-  }
-
-  // Clic sobre un objeto registrado (tercera ventana): carga el formulario en modo edición
-  function editItemById(tipoId, cardEl) {
-    const rec = (_tiposPorCat[currentCategory] || []).find(t => Number(t.id) === Number(tipoId));
-    if (!rec) return;
-    document.querySelectorAll('#ftth-tipos-modal .type-card').forEach(c => c.classList.remove('selected'));
-    if (cardEl) cardEl.classList.add('selected');
-    editingId = rec.id;
-    editingData = rec;
-    const titulo = document.getElementById('selected-title');
-    if (titulo) titulo.innerText = 'Editar ' + (rec.nombre_id || 'Objeto');
-    renderFormFields(currentCategory, formularioDesdeRegistro(rec));
-  }
-
-  async function openSubpanel(clave, event) {
-    if (!CATS_MAP[clave]) return;
-    currentCategory = clave;
-    editingId = null;
-    editingData = null;
-
-    const sub = document.getElementById('subpanel');
-    const reg = document.getElementById('registeredPanel');
-    if (sub) sub.classList.add('open');
-    if (reg) reg.classList.add('open');
-
-    document.querySelectorAll('#ftth-tipos-modal .object-btn').forEach(b => b.classList.remove('active'));
-    const btn = (event && event.currentTarget) || document.querySelector(`#ftth-tipos-modal .object-btn[data-cat="${clave}"]`);
-    if (btn) btn.classList.add('active');
-
-    resetFormToCreateMode();
-    await cargarTiposRegistrados(clave);
-  }
-
-  function closeSubpanel() {
-    const sub = document.getElementById('subpanel');
-    const reg = document.getElementById('registeredPanel');
-    if (sub) sub.classList.remove('open');
-    if (reg) reg.classList.remove('open');
-    document.querySelectorAll('#ftth-tipos-modal .object-btn').forEach(b => b.classList.remove('active'));
-    editingId = null;
-    editingData = null;
-  }
-
-  function openModal(categoria) {
-    if (!window.currentProjectId) {
-      alert('⚠️ Selecciona o crea un proyecto en la barra superior antes de gestionar tipos.');
-      return;
-    }
-    const modal = document.getElementById('ftth-tipos-modal');
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    if (categoria && CATS_MAP[categoria]) {
-      openSubpanel(categoria, null);
-    } else {
-      closeSubpanel();
-    }
-  }
-
-  function closeModal() {
-    const modal = document.getElementById('ftth-tipos-modal');
-    if (modal) modal.classList.add('hidden');
-    closeSubpanel();
+    if (!cfg) return;
+    _editingId = null;
+    _editingData = null;
+    const t = document.getElementById('tipos-form-title');
+    if (t) t.innerText = 'Crear Tipo de ' + cfg.titulo;
+    renderFormFields(cfg.clave, null);
   }
 
   // ── Guardar (crear o editar) en la base de datos ─────────────────────────
@@ -616,27 +845,32 @@ const FTTHTipos = (() => {
       propiedades.slots_detalle = detallesSlots;
     }
 
+    // Color elegido en el formulario (si el usuario lo cambió)
+    const inputColor = document.getElementById('f_color_mapa');
+    const colorElegido = inputColor && inputColor.value ? inputColor.value : null;
+
     const payload = {
       proyecto_id: Number(window.currentProjectId),
       categoria: currentCategory,
       nombre_id: nombre,
-      color_mapa: (editingData && editingData.color_mapa) || cfg.color,
-      foto: (editingData && editingData.foto) || null,
+      color_mapa: colorElegido || (_editingData && _editingData.color_mapa) || cfg.color,
+      foto: (_editingData && _editingData.foto) || null,
       observaciones: valores[cfg.campoDesc] || null,
       // Conserva las propiedades previas que no gestiona el formulario
-      propiedades: Object.assign({}, (editingData && editingData.propiedades) || {}, propiedades)
+      propiedades: Object.assign({}, (_editingData && _editingData.propiedades) || {}, propiedades)
     };
 
+    const id = _editingId;
     try {
-      if (editingId) {
-        await api(`/api/tipos/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) });
-        showToast('¡Cambios guardados en la base de datos!');
+      if (id) {
+        await api(`/api/tipos/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        showToast('¡Cambios guardados correctamente!');
       } else {
         await api('/api/tipos/', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Tipo registrado en la base de datos');
+        showToast('¡Cambios guardados! Objeto creado en la base de datos');
       }
-      await cargarTiposRegistrados(currentCategory);
-      resetFormToCreateMode();
+      hideForm();
+      await renderTabla();
     } catch (err) {
       showToast('Error al guardar: ' + err.message, 'error');
     }
@@ -647,24 +881,74 @@ const FTTHTipos = (() => {
     try {
       await api(`/api/tipos/${id}`, { method: 'DELETE' });
       showToast('Tipo eliminado de la base de datos');
-      if (currentCategory) await cargarTiposRegistrados(currentCategory);
+      if (Number(_editingId) === Number(id)) hideForm();
+      await renderTabla();
     } catch (err) {
       showToast(err.message, 'error');
     }
   }
 
-  // ── Toast flotante (lo comparten Tipos, Carpetas y Mapa) ─────────────────
-  function showToast(msg, type) {
-    const toast = document.getElementById('toast');
-    if (!toast) return;
-    toast.innerText = msg;
-    toast.classList.toggle('toast-error', type === 'error');
-    toast.classList.add('show');
-    clearTimeout(_toastTimer);
-    _toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+  // ── Abrir / cerrar el panel ──────────────────────────────────────────────
+  // Ajusta la ventana al layout real: deja visible la barra lateral (con su
+  // despliegue de tipos) y la barra superior; el panel sale a la derecha.
+  function ajustarVentana(modal) {
+    if (!modal || !modal.style || !modal.style.setProperty) return;
+    const sidebar = document.getElementById('sidebar-navy');
+    const topbar = document.getElementById('topbar');
+    let izq = 210;
+    let arriba = 52;
+    try {
+      if (sidebar && sidebar.getBoundingClientRect) izq = Math.round(sidebar.getBoundingClientRect().width) || 210;
+      if (topbar && topbar.getBoundingClientRect) arriba = Math.round(topbar.getBoundingClientRect().height) || 52;
+    } catch (e) { /* medidas no disponibles: se usan los valores por defecto */ }
+    modal.style.setProperty('--tipos-left', izq + 'px');
+    modal.style.setProperty('--tipos-top', arriba + 'px');
   }
 
-  // ── API pública ──────────────────────────────────────────────────────────
+  function openModal(categoria) {
+    if (!window.currentProjectId) {
+      alert('⚠️ Selecciona o crea un proyecto en la barra superior antes de gestionar tipos.');
+      return;
+    }
+    const modal = document.getElementById('ftth-tipos-modal');
+    if (!modal) return;
+
+    ajustarVentana(modal);
+    modal.classList.remove('hidden');
+    renderCategorias();
+
+    let clave = CATS[0].clave;
+    if (categoria && CATS_MAP[categoria]) clave = categoria;
+    else if (currentCategory && CATS_MAP[currentCategory]) clave = currentCategory;
+
+    seleccionar(clave);
+  }
+
+  // Abre el panel directamente en un tipo (lo usa el submenú del sidebar)
+  function abrirTipo(clave) {
+    if (!CATS_MAP[clave]) return;
+    openModal(clave);
+  }
+
+  function closeModal() {
+    const modal = document.getElementById('ftth-tipos-modal');
+    if (modal) modal.classList.add('hidden');
+    hideForm();
+  }
+
+  // Compatibilidad con las llamadas antiguas (openSubpanel / closeSubpanel)
+  function openSubpanel(clave, event) {
+    if (!CATS_MAP[clave]) return;
+    const modal = document.getElementById('ftth-tipos-modal');
+    if (modal && modal.classList.contains('hidden')) { openModal(clave); return; }
+    seleccionar(clave);
+  }
+
+  function closeSubpanel() {
+    hideForm();
+  }
+
+  // ── Consultas para el resto de la app ────────────────────────────────────
   function getCategorias() {
     const salida = {};
     CATS.forEach(c => { salida[c.clave] = c; });
@@ -676,21 +960,68 @@ const FTTHTipos = (() => {
     return await api(`/api/tipos/${categoria}`);
   }
 
+  // ── Inicialización ───────────────────────────────────────────────────────
   function init() {
+    if (_iniciado) return;
+    _iniciado = true;
+
     const modal = document.getElementById('ftth-tipos-modal');
+    const cats = document.getElementById('tipos-categorias');
+    const head = document.getElementById('tipos-table-head');
+    const tbody = document.getElementById('tipos-table-body');
+
     if (modal) {
       modal.addEventListener('click', ev => { if (ev.target === modal) closeModal(); });
     }
+
+    if (cats) {
+      cats.addEventListener('click', ev => {
+        const btn = ev.target.closest('.object-btn');
+        if (btn && btn.dataset.cat) seleccionar(btn.dataset.cat);
+      });
+    }
+
+    if (head) {
+      head.addEventListener('click', ev => {
+        const th = ev.target.closest('th[data-sort]');
+        if (th) sortTableBy(th.dataset.sort);
+      });
+    }
+
+    if (tbody) {
+      tbody.addEventListener('click', ev => {
+        const accion = ev.target.closest('button[data-accion]');
+        if (accion) {
+          ev.stopPropagation();
+          const id = Number(accion.dataset.id);
+          const tipo = accion.dataset.accion;
+          if (tipo === 'eliminar') { deleteTipo(id); return; }
+          if (tipo === 'duplicar') { duplicarTipo(id); return; }
+          editItemById(id, accion.closest('tr'));
+          return;
+        }
+        const tr = ev.target.closest('tr[data-id]');
+        if (tr) editItemById(Number(tr.dataset.id), tr);
+      });
+    }
+
     document.addEventListener('keydown', ev => {
-      if (ev.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal();
+      if (ev.key !== 'Escape' || !modal || modal.classList.contains('hidden')) return;
+      const sec = document.getElementById('tipos-form-section');
+      if (sec && sec.classList.contains('visible')) { hideForm(); return; }
+      closeModal();
     });
+
     document.addEventListener('project-changed', () => {
-      if (currentCategory && modal && !modal.classList.contains('hidden')) {
-        cargarTiposRegistrados(currentCategory);
-      }
+      if (!modal || modal.classList.contains('hidden')) return;
+      _porCat = {};
+      if (currentCategory) renderTabla();
     });
+
+    renderCategorias();
   }
 
+  // ── API pública (la que usa el resto de la app) ──────────────────────────
   return {
     init,
     openModal,
@@ -705,6 +1036,14 @@ const FTTHTipos = (() => {
     getTipos,
     showToast,
     deleteTipo,
+    // extras del nuevo diseño
+    seleccionar,
+    abrirTipo,
+    showCreateForm,
+    hideForm,
+    duplicarTipo,
+    refrescar,
+    sortTableBy,
     CATS,
     _setActiveTab: (cat) => openModal(cat)
   };

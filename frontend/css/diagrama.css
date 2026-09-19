@@ -1,0 +1,707 @@
+/* Estilos del diagrama lógico del nodo — aislados en #ftth-diagrama-modal.
+   Archivo nuevo: no modifica prop-modal.css, hilos.css ni el resto de la app. */
+#ftth-diagrama-modal {
+    --diag-ink: #141414;
+    --diag-gray-1: #fafafa;
+    --diag-gray-2: #f0f0f0;
+    --diag-line: #e3e3e3;
+    --diag-gray-4: #8f8f8f;
+}
+
+#ftth-diagrama-modal .diag-card {
+    width: 100%;
+    max-width: 980px;
+    max-height: calc(100vh - 40px);
+    background: #fff;
+    border: 1px solid var(--diag-line);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    color: var(--diag-ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    animation: diag-in .25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes diag-in {
+    from { opacity: 0; transform: translateY(12px) scale(.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+#ftth-diagrama-modal .diag-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--diag-line);
+}
+#ftth-diagrama-modal .diag-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--diag-gray-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+#ftth-diagrama-modal .diag-mark img { width: 18px; height: 18px; object-fit: contain; }
+#ftth-diagrama-modal .diag-header h1 { font-size: 15px; font-weight: 500; margin: 0; }
+#ftth-diagrama-modal .diag-status {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--diag-gray-2);
+    color: #3f3f46;
+}
+#ftth-diagrama-modal .diag-status--off { background: #fee2e2; color: #991b1b; }
+#ftth-diagrama-modal .diag-spacer { flex: 1; }
+#ftth-diagrama-modal .diag-btn {
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 6px 11px;
+    border-radius: 6px;
+    border: 1px solid var(--diag-ink);
+    background: #fff;
+    color: var(--diag-ink);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+#ftth-diagrama-modal .diag-btn:hover { background: var(--diag-ink); color: #fff; }
+
+#ftth-diagrama-modal .diag-sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--diag-line);
+    background: var(--diag-gray-1);
+}
+#ftth-diagrama-modal .diag-chip {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid var(--diag-line);
+    color: #444;
+}
+#ftth-diagrama-modal .diag-chip--warn { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+#ftth-diagrama-modal .diag-chip--ok   { background: #dcfce7; border-color: #86efac; color: #166534; }
+#ftth-diagrama-modal .diag-nota { font-size: 10.5px; color: var(--diag-gray-4); margin-left: auto; }
+
+#ftth-diagrama-modal .diag-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+    gap: 14px;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+#ftth-diagrama-modal .diag-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+#ftth-diagrama-modal .diag-col-title {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--diag-gray-4);
+}
+#ftth-diagrama-modal .diag-col-title span { font-weight: 500; text-transform: none; letter-spacing: 0; }
+
+#ftth-diagrama-modal .diag-vacio {
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--diag-gray-4);
+    text-align: center;
+    padding: 14px;
+    border: 1px dashed var(--diag-line);
+    border-radius: 8px;
+}
+
+#ftth-diagrama-modal .diag-grupo {
+    border: 1px solid var(--diag-line);
+    border-radius: 8px;
+    overflow: hidden;
+}
+#ftth-diagrama-modal .diag-grupo-cab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 9px;
+    background: var(--diag-gray-1);
+    border-bottom: 1px solid var(--diag-line);
+    font-size: 11.5px;
+}
+#ftth-diagrama-modal .diag-grupo-info { margin-left: auto; font-size: 10px; color: var(--diag-gray-4); }
+#ftth-diagrama-modal .diag-items { display: flex; flex-wrap: wrap; gap: 5px; padding: 7px; }
+
+/* Hilo: chip con franja de color TIA-598 */
+#ftth-diagrama-modal .diag-hilo {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px 5px 12px;
+    border: 1px solid var(--diag-line);
+    border-radius: 6px;
+    background: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color .15s, background .15s;
+}
+#ftth-diagrama-modal .diag-hilo:hover { border-color: #9ca3af; background: var(--diag-gray-1); }
+#ftth-diagrama-modal .diag-hilo-franja {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    border-radius: 6px 0 0 6px;
+}
+#ftth-diagrama-modal .diag-hilo-nombre { font-weight: 600; }
+#ftth-diagrama-modal .diag-hilo-ext { font-size: 9.5px; color: var(--diag-gray-4); }
+#ftth-diagrama-modal .diag-hilo.sel { border-color: var(--diag-ink); box-shadow: inset 0 0 0 1px var(--diag-ink); }
+
+/* Estado (mismo código de color que la pestaña Hilos) */
+#ftth-diagrama-modal .diag-estado {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--diag-gray-2);
+    color: #3f3f46;
+}
+#ftth-diagrama-modal .diag-estado--empalmado { background: #dbeafe; color: #1e40af; }
+#ftth-diagrama-modal .diag-estado--conectado { background: #dcfce7; color: #166534; }
+#ftth-diagrama-modal .diag-estado--reservado { background: #fef3c7; color: #92400e; }
+#ftth-diagrama-modal .diag-estado--averiado  { background: #fee2e2; color: #991b1b; }
+
+/* Bandeja: rejilla de posiciones (slots) */
+#ftth-diagrama-modal .diag-bandeja { border: 1px solid var(--diag-line); border-radius: 8px; overflow: hidden; }
+#ftth-diagrama-modal .diag-bandeja-cab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 9px;
+    background: var(--diag-gray-1);
+    border-bottom: 1px solid var(--diag-line);
+    font-size: 11.5px;
+}
+#ftth-diagrama-modal .diag-bandeja-info { margin-left: auto; font-size: 10px; color: var(--diag-gray-4); }
+#ftth-diagrama-modal .diag-slots {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(26px, 1fr));
+    gap: 4px;
+    padding: 7px;
+}
+#ftth-diagrama-modal .diag-slot {
+    height: 22px;
+    border: 1px dashed var(--diag-line);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: var(--diag-gray-4);
+    background: #fff;
+}
+#ftth-diagrama-modal .diag-slot--ocupado {
+    border-style: solid;
+    border-color: #93c5fd;
+    background: #dbeafe;
+    color: #1e40af;
+    font-weight: 600;
+}
+
+/* Puertos */
+#ftth-diagrama-modal .diag-puerto {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 7px;
+    border: 1px solid var(--diag-line);
+    border-radius: 5px;
+    background: #fff;
+    font-size: 10.5px;
+    cursor: pointer;
+    font-family: inherit;
+}
+#ftth-diagrama-modal .diag-puerto:hover { border-color: #9ca3af; background: var(--diag-gray-1); }
+#ftth-diagrama-modal .diag-puerto--in   { border-left: 3px solid #a855f7; }
+#ftth-diagrama-modal .diag-puerto--out  { border-left: 3px solid #0284c7; }
+#ftth-diagrama-modal .diag-puerto--bidi { border-left: 3px solid #0d9488; }
+#ftth-diagrama-modal .diag-puerto--ocupado { background: #dcfce7; border-color: #86efac; }
+#ftth-diagrama-modal .diag-puerto--reservado { background: #fef3c7; border-color: #fcd34d; }
+
+#ftth-diagrama-modal .diag-dispositivo { border: 1px solid var(--diag-line); border-radius: 8px; overflow: hidden; }
+#ftth-diagrama-modal .diag-dispositivo-cab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 9px;
+    background: var(--diag-gray-1);
+    border-bottom: 1px solid var(--diag-line);
+    font-size: 11.5px;
+}
+#ftth-diagrama-modal .diag-dispositivo-info { margin-left: auto; font-size: 10px; color: var(--diag-gray-4); }
+#ftth-diagrama-modal .diag-dispositivo-puertos { display: flex; flex-wrap: wrap; gap: 5px; padding: 7px; }
+
+/* Banda de avisos y detalle */
+#ftth-diagrama-modal .diag-pie {
+    border-top: 1px solid var(--diag-line);
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--diag-gray-1);
+}
+#ftth-diagrama-modal .diag-aviso {
+    font-size: 11px;
+    line-height: 1.5;
+    padding: 6px 9px;
+    border-radius: 6px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+}
+#ftth-diagrama-modal .diag-detalle {
+    font-size: 11px;
+    color: #3f3f46;
+    padding: 6px 9px;
+    border-radius: 6px;
+    background: #fff;
+    border: 1px solid var(--diag-line);
+}
+#ftth-diagrama-modal .diag-error {
+    margin: 16px;
+    padding: 12px;
+    border-radius: 8px;
+    background: #fdeceb;
+    color: #ff3b30;
+}
+
+/* ======== NEW APPLE STYLE DIAGRAMA ======== */
+.app-card {
+  width: 780px;
+  height: 480px;
+  max-width: 75vw;
+  max-height: 70vh;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+}
+
+.diagram-workspace {
+  flex: 1;
+  height: 100%;
+  background-color: #fafafa;
+  background-image: radial-gradient(circle, #e0e0e0 1px, transparent 1px);
+  background-size: 20px 20px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.25s ease;
+  overflow: hidden;
+}
+
+.diagram-workspace.illuminating {
+  box-shadow: inset 0 0 0 3px rgba(255, 59, 48, 0.35);
+}
+
+.diag-body-container {
+  position: absolute;
+  top: 60px;
+  bottom: 60px;
+  left: 0;
+  right: 0;
+  overflow: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.top-toolbar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  gap: 4px;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 22px;
+  background: #e5e5ea;
+  margin: 0 4px;
+}
+
+.toolbar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: #1d1d1f;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.toolbar-btn:hover { background: #f5f5f7; }
+.toolbar-btn.active { background: #000000; color: #ffffff; }
+
+.mode-btn {
+  width: auto;
+  padding: 0 12px 0 10px;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.mode-btn i.chevron { font-size: 10px; transition: transform 0.2s ease; }
+.mode-btn.open i.chevron { transform: rotate(180deg); }
+
+.mode-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 160px;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  padding: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+}
+.mode-dropdown.open { display: flex; }
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #1d1d1f;
+  cursor: pointer;
+}
+.mode-option:hover { background: #f5f5f7; }
+.mode-option i { font-size: 11px; color: #000; opacity: 0; }
+.mode-option.selected i { opacity: 1; }
+
+.toolbar-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  background: #000000;
+  color: #ffffff;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+.top-toolbar .toolbar-btn::after {
+  top: calc(100% + 8px);
+  transform: translate(-50%, -6px);
+}
+.top-toolbar .toolbar-btn:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+.bottom-toolbar .toolbar-btn::after {
+  bottom: calc(100% + 8px);
+  transform: translate(-50%, 6px);
+}
+.bottom-toolbar .toolbar-btn:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+.bottom-toolbar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  gap: 4px;
+}
+
+.toolbar-btn.danger:hover { background: #fdeceb; color: #ff3b30; }
+
+.sidebar-dock {
+  width: 56px;
+  height: 100%;
+  background: #ffffff;
+  border-left: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 16px;
+  padding-bottom: 16px;
+  gap: 12px;
+  z-index: 20;
+}
+
+.sidebar-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #1d1d1f;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.sidebar-btn:hover { background: #f5f5f7; }
+.sidebar-btn.active { background: #000000; color: #ffffff; }
+
+.sidebar-drawer {
+  position: absolute;
+  right: 56px;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  background: #ffffff;
+  border-left: 1px solid #f0f0f0;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.03);
+  transform: translateX(100%);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 10;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-drawer.open {
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+}
+
+.drawer-content { display: none; height: 100%; flex-direction: column; }
+.drawer-content.active { display: flex; }
+
+.drawer-header {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.drawer-body { font-size: 13px; color: #515154; line-height: 1.5; }
+
+.info-list, .timeline-list, .pending-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  margin: 0;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #f5f5f7;
+  padding-bottom: 8px;
+}
+
+.info-label { color: #86868b; }
+.info-val { font-weight: 500; color: #1d1d1f; }
+
+.timeline-item { position: relative; padding-left: 16px; border-left: 2px solid #e5e5ea; }
+.timeline-time { font-size: 11px; color: #86868b; }
+.timeline-text { color: #1d1d1f; font-weight: 500; }
+
+.pending-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: #f5f5f7;
+  border-radius: 8px;
+}
+
+.sidebar-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(6px);
+  background: #000000;
+  color: #ffffff;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+.sidebar-btn:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Fix the overlay to be visible when not hidden */
+#ftth-diagrama-modal:not(.hidden) {
+  display: flex !important;
+}
+
+/* ---- Node Identity Bar ---- */
+.diag-identity-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 56px; /* don't overlap the sidebar-dock */
+  height: 40px;
+  background: #ffffff;
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  z-index: 20;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+
+.diag-identity-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.diag-identity-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1d1d1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.diag-identity-sep {
+  font-size: 12px;
+  color: #c7c7cc;
+}
+
+.diag-identity-code {
+  font-size: 11px;
+  font-weight: 500;
+  color: #86868b;
+  white-space: nowrap;
+}
+
+.diag-identity-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.diag-identity-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: #1d1d1f;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+  position: relative;
+}
+
+.diag-identity-btn:hover {
+  background: #f5f5f7;
+}
+
+.diag-identity-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  background: #000;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.15s ease;
+  z-index: 200;
+}
+.diag-identity-btn:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+/* Push body container down to account for identity bar */
+.diag-body-container {
+  top: 100px !important; /* 40px bar + 60px top-toolbar */
+}

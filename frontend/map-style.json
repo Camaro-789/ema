@@ -21,6 +21,7 @@
     }
   },
   "glyphs": "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+  "transition": { "duration": 0, "delay": 0 },
   "layers": [
     {
       "id": "osm-tiles",

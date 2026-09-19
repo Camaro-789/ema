@@ -25,10 +25,11 @@ app.add_middleware(
 
 # Import routers
 from app.database import Base, engine
-from app.models.catalog import CatalogCategoria, CatalogTipo
 import app.models.ftth_models as _ftth_models  # noqa: F401 — registra tablas FTTH en Base.metadata
-from app.routers import maps, layers, formats, ai, types, catalog
+import app.models.ftth_logica as _ftth_logica  # noqa: F401 — registra la capa lógica (tubos/hilos/extremos)
+from app.routers import maps, layers, formats, ai, types
 from app.routers import ftth_tipos, ftth_elementos, ftth_carpetas
+from app.routers import ftth_logica
 
 Base.metadata.create_all(bind=engine)
 
@@ -37,11 +38,12 @@ app.include_router(layers.router, prefix="/api/v1/layers", tags=["layers"])
 app.include_router(formats.router, prefix="/api/v1/formats", tags=["formats"])
 app.include_router(ai.router, prefix="/api/v1/ai", tags=["ai"])
 app.include_router(types.router, prefix="/api/v1", tags=["types"])
-app.include_router(catalog.router, tags=["catalogo"])
 # FTTH — tipos, elementos y carpetas
 app.include_router(ftth_tipos.router)
 app.include_router(ftth_elementos.router)
 app.include_router(ftth_carpetas.router)
+# Capa lógica FTTH — contención de hilos (tablas nuevas, no afecta al mapa)
+app.include_router(ftth_logica.router)
 
 # Buscar frontend
 def find_frontend_path():
@@ -75,10 +77,6 @@ if frontend_path:
     @app.get("/", response_class=HTMLResponse)
     async def serve_frontend():
         return FileResponse(os.path.join(frontend_path, "index.html"))
-
-    @app.get("/catalog", response_class=HTMLResponse)
-    async def serve_catalog():
-        return FileResponse(os.path.join(frontend_path, "catalog", "index.html"))
 
     @app.get("/{full_path:path}", response_class=HTMLResponse)
     async def serve_spa(full_path: str):

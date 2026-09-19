@@ -1,0 +1,12 @@
+const fs = require('fs');
+const html = fs.readFileSync('d:/Desktop/VS/ema/frontend/index.html', 'utf8');
+console.log('Total chars:', html.length);
+console.log('Has app-card:', html.includes('app-card'));
+console.log('Has diagram-workspace:', html.includes('diagram-workspace'));
+console.log('Has sidebar-dock:', html.includes('sidebar-dock'));
+console.log('Has diag-body:', html.includes('id="diag-body"'));
+console.log('Has top-toolbar:', html.includes('top-toolbar'));
+console.log('Has bottom-toolbar:', html.includes('bottom-toolbar'));
+console.log('Has FontAwesome:', html.includes('font-awesome'));
+console.log('Has fa-solid:', html.includes('fa-solid'));
+console.log('Closes properly:', html.trimEnd().endsWith('</html>'));

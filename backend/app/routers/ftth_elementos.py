@@ -23,8 +23,15 @@ class ElementoCreate(ElementoBase):
 
 @router.post("/", summary="Crear un elemento unificado")
 def crear_elemento(payload: ElementoCreate, db: Session = Depends(get_db)):
-    # Autogenerar un nombre_id o dejarlo vacío (se puede actualizar luego)
-    # Por ahora asginamos un placeholder hasta que lo cree y le asigne el ID
+    # Validar el tipo ANTES de insertar: si la plantilla no existe (fue borrada),
+    # antes se guardaba la fila huérfana y luego reventaba con AttributeError (500).
+    db_tipo = db.query(models.FtthTipo).filter(models.FtthTipo.id == payload.tipo_id).first()
+    if not db_tipo:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El tipo_id {payload.tipo_id} no existe (plantilla eliminada). Elige o crea otra plantilla.",
+        )
+
     nuevo = models.FtthElemento(
         proyecto_id=payload.proyecto_id,
         tipo_id=payload.tipo_id,
@@ -38,9 +45,6 @@ def crear_elemento(payload: ElementoCreate, db: Session = Depends(get_db)):
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
-    
-    # Formatear el geojson feature para retornar
-    db_tipo = db.query(models.FtthTipo).filter(models.FtthTipo.id == nuevo.tipo_id).first()
     return feature_from_elemento(nuevo, db_tipo)
 
 @router.get("/todos", summary="Obtener todos los elementos en GeoJSON")
@@ -51,11 +55,11 @@ def obtener_todos(proyecto_id: int, db: Session = Depends(get_db)):
     tipos_dict = {t.id: t for t in db.query(models.FtthTipo).filter(models.FtthTipo.proyecto_id == proyecto_id).all()}
     
     features = []
+    # IMPORTANTE: se incluyen tambien los elementos cuya plantilla fue eliminada.
+    # Antes se omitian (if t:) y quedaban invisibles en el mapa para siempre.
     for el in elementos:
-        t = tipos_dict.get(el.tipo_id)
-        if t:
-            features.append(feature_from_elemento(el, t))
-            
+        features.append(feature_from_elemento(el, tipos_dict.get(el.tipo_id)))
+
     return {"type": "FeatureCollection", "features": features}
 
 @router.put("/{elem_id}")
@@ -97,25 +101,28 @@ def eliminar_elemento(elem_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "eliminado"}
 
-def feature_from_elemento(el: models.FtthElemento, tipo: models.FtthTipo) -> dict:
+def feature_from_elemento(el: models.FtthElemento, tipo: models.FtthTipo = None) -> dict:
     # GeoJSON estándar
     geom = None
     if el.lat is not None and el.lon is not None:
         geom = {"type": "Point", "coordinates": [el.lon, el.lat]}
     elif el.coords_json is not None:
         geom = {"type": "LineString", "coordinates": el.coords_json}
-        
+
+    # El tipo (plantilla) puede haber sido eliminado: se usan valores por defecto
+    # en vez de reventar con AttributeError.
     props = {
         "id": el.id,
         "categoria": el.categoria,
         "tipo_id": el.tipo_id,
-        "tipo_nombre": tipo.nombre_id,
-        "color": tipo.color_mapa,
-        "foto": tipo.foto,
-        "observaciones": tipo.observaciones,
+        "tipo_nombre": getattr(tipo, "nombre_id", None) or "Sin plantilla",
+        "color": getattr(tipo, "color_mapa", None) or "#3388ff",
+        "foto": getattr(tipo, "foto", None),
+        "observaciones": getattr(tipo, "observaciones", None),
         "poste_ref_id": el.poste_ref_id,
-        "propiedades_tipo": tipo.propiedades,
-        "propiedades_instancia": el.propiedades_instancia
+        "propiedades_tipo": getattr(tipo, "propiedades", None) or {},
+        "propiedades_instancia": el.propiedades_instancia,
+        "sin_plantilla": tipo is None,
     }
     
     return {

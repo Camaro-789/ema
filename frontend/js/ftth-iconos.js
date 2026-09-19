@@ -10,7 +10,7 @@
 const FTTHIconos = (() => {
 
   // Base absoluta calculada desde la ubicación de este script, para que
-  // funcione tanto en "/" como en subrutas ("/catalog", etc.).
+  // funcione tanto en "/" como en cualquier subruta.
   const _script = document.currentScript;
   const APP_BASE = _script
     ? _script.src.replace(/js\/ftth-iconos\.js.*$/, '')

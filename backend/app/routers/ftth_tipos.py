@@ -22,7 +22,8 @@ class TipoCreate(TipoBase):
 class TipoResponse(TipoBase):
     id: int
     class Config:
-        orm_mode = True
+        # Pydantic v2: 'orm_mode' fue renombrado a 'from_attributes'
+        from_attributes = True
 
 @router.get("/{categoria}", response_model=List[TipoResponse])
 def listar_tipos(categoria: str, proyecto_id: int, db: Session = Depends(get_db)):
