@@ -16,7 +16,10 @@ const FTTHIconos = (() => {
     ? _script.src.replace(/js\/ftth-iconos\.js.*$/, '')
     : '';
 
-  // Mapa oficial: categoría → archivo SVG
+  // Mapa oficial: categoría → archivo SVG.
+  // Son EXACTAMENTE los íconos del panel general izquierdo: cualquier parte del
+  // programa (menús, listas de ruta, popups, diagramas) debe usar esta lista y
+  // ninguna otra imagen para representar un tipo de objeto.
   const ICONOS = Object.freeze({
     poste: 'poste.svg',
     cajanap: 'cajanap.svg',
@@ -29,16 +32,23 @@ const FTTHIconos = (() => {
     armario: 'armario.svg',
     cables: 'cables.svg',
     switches: 'switches.svg',
-    fusion: 'fusion.svg'
+    fusion: 'fusion.svg',
+    reserva: 'reserva.svg'
   });
 
   // Alias usados por versiones anteriores del código
   const ALIAS = Object.freeze({
     post: 'poste',
+    postes: 'poste',
     caja: 'cajanap',
+    cajas: 'cajanap',
     nap: 'cajanap',
     'caja-nap': 'cajanap',
-    'caja_nap': 'cajanap'
+    'caja_nap': 'cajanap',
+    cable: 'cables',
+    fibra: 'cables',
+    fibras: 'cables',
+    switch: 'switches'
   });
 
   /** Normaliza una categoría a una clave válida (con alias) */
@@ -54,11 +64,12 @@ const FTTHIconos = (() => {
     return APP_BASE + 'assets/icons/' + ICONOS[normalizar(categoria)];
   }
 
-  /** Etiqueta <img> lista para insertar en HTML (panel derecho, listas, etc.) */
-  function imgHtml(categoria, size = 16, extraClass = '') {
+  /** Etiqueta <img> lista para insertar en HTML (panel derecho, listas, menús, etc.) */
+  function imgHtml(categoria, size = 16, extraClass = '', extraStyle = '') {
     const cls = ('ftth-icono ' + extraClass).trim();
+    const estilo = `width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;${extraStyle}`;
     return `<img src="${url(categoria)}" alt="${normalizar(categoria)}" class="${cls}" `
-      + `width="${size}" height="${size}" style="width:${size}px;height:${size}px;object-fit:contain;vertical-align:middle;" `
+      + `width="${size}" height="${size}" style="${estilo}" `
       + `onerror="this.style.visibility='hidden'">`;
   }
 
@@ -69,25 +80,43 @@ const FTTHIconos = (() => {
   function cargarParaMapa(size = 64) {
     const cats = Object.keys(ICONOS);
     const tareas = cats.map(cat => new Promise(resolve => {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = size;
-          canvas.height = size;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, size, size);
-          resolve({ cat, imageData: ctx.getImageData(0, 0, size, size) });
-        } catch (e) {
-          console.warn('FTTHIconos: no se pudo rasterizar', cat, e);
+      const u = url(cat);
+      fetch(u)
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.text();
+        })
+        .then(svgText => {
+          const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+          const blobUrl = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = size;
+              canvas.height = size;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, size, size);
+              const imageData = ctx.getImageData(0, 0, size, size);
+              URL.revokeObjectURL(blobUrl);
+              resolve({ cat, imageData });
+            } catch (e) {
+              console.warn('FTTHIconos: no se pudo rasterizar canvas para', cat, e);
+              URL.revokeObjectURL(blobUrl);
+              resolve({ cat, imageData: null });
+            }
+          };
+          img.onerror = () => {
+            console.warn('FTTHIconos: error cargando imagen Blob para', cat);
+            URL.revokeObjectURL(blobUrl);
+            resolve({ cat, imageData: null });
+          };
+          img.src = blobUrl;
+        })
+        .catch(err => {
+          console.warn('FTTHIconos: fetch falló para', cat, err);
           resolve({ cat, imageData: null });
-        }
-      };
-      img.onerror = () => {
-        console.warn('FTTHIconos: no se pudo cargar', cat);
-        resolve({ cat, imageData: null });
-      };
-      img.src = url(cat);
+        });
     }));
 
     return Promise.all(tareas).then(resultados => {
@@ -117,7 +146,14 @@ const FTTHIconos = (() => {
           console.warn('FTTHIconos: addImage falló para', cat, e);
         }
       });
-      if (onReady) onReady();
+      // El callback (crear la capa de etiquetas, etc.) se llama SIEMPRE y protegido:
+      // un error aquí no debe convertirse en un rejection suelto que confunda al
+      // usuario ni cortar la actualización de datos del mapa.
+      try {
+        if (onReady) onReady();
+      } catch (e) {
+        console.warn('FTTHIconos: los íconos quedaron registrados, pero onReady falló:', e);
+      }
     });
   }
 

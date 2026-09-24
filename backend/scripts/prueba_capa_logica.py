@@ -23,6 +23,15 @@ import json
 import os
 import sys
 
+# La consola de Windows suele estar en cp1252 y no soporta algunos caracteres
+# (por ejemplo la flecha → de los listados): se fuerza UTF-8 en la salida para
+# que la prueba NUNCA falle por un carácter.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio  # noqa: E402

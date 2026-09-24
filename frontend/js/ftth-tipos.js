@@ -38,8 +38,19 @@ const FTTHTipos = (() => {
     ],
     perfilFibra: [
       { v: 'eia598a', t: 'Perfil EIA598-A' },
+      { v: 'abnt', t: 'Perfil ABNT' },
       { v: 'custom', t: 'Perfil Personalizado' }
     ],
+    // Estructura de un cable de fibra: con buffer (looses) o drop (sin buffer).
+    // Mismas claves que backend/app/models/ftth_logica.py::ESTRUCTURAS_CABLE.
+    estructuraCable: [
+      { v: 'con_buffer', t: 'Con buffer' },
+      { v: 'drop', t: 'Drop (sin buffer)' }
+    ],
+    // Totales reales de mercado de un cable drop: select cerrado, no se puede
+    // escribir un 7 ni un 15 (ver FTTHCableReglas.HILOS_DROP).
+    hilosDrop: [1, 2, 4, 6, 8],
+
     propiedad: [
       { v: 'publica', t: 'Pública' },
       { v: 'privada', t: 'Privada' }
@@ -49,12 +60,37 @@ const FTTHTipos = (() => {
       { v: 'fusion_conector', t: 'Fusión / Conector' },
       { v: 'conector_fusion', t: 'Conector / Fusión' },
       { v: 'conector_conector', t: 'Conector / Conector' }
+    ],
+    // Divisiones validas de un splitter PLC (entradas x salidas). Son las mismas
+    // que tabula el backend (ATENUACION_SPLITTER): el formulario no deja crear un
+    // splitter que luego no se pueda materializar.
+    divisionSplitter: [
+      { v: '1x2', t: '1x2  - 2 salidas  - 3.6 dB' },
+      { v: '1x4', t: '1x4  - 4 salidas  - 7.3 dB' },
+      { v: '1x8', t: '1x8  - 8 salidas  - 10.7 dB' },
+      { v: '1x16', t: '1x16 - 16 salidas - 13.7 dB' },
+      { v: '1x32', t: '1x32 - 32 salidas - 16.9 dB' },
+      { v: '1x64', t: '1x64 - 64 salidas - 20.5 dB' }
     ]
   };
+
+  // Atenuacion nominal (dB) por division: es la MISMA tabla del backend
+  // (ATENUACION_SPLITTER en backend/app/routers/ftth_logica.py). Una prueba
+  // compara las dos para que no se separen. El formulario la usa para SUGERIR el
+  // valor en el campo de atenuacion; el backend la aplica si va vacio.
+  const NOMINAL_SPLITTER = Object.freeze({
+    '1x2': 3.6, '1x4': 7.3, '1x8': 10.7, '1x16': 13.7, '1x32': 16.9, '1x64': 20.5,
+    '2x2': 3.6, '2x4': 7.3, '2x8': 10.7, '2x16': 13.7, '2x32': 16.9,
+  });
 
   // ── Tipos de objeto (clave en BD) + formulario de cada uno ───────────────
   // w: 'full' | 'half' | 'third'  ·  fieldset: agrupador con leyenda
   // La tabla genera sus columnas desde estos campos.
+  // Límites de los splitters. El backend aplica exactamente los mismos
+  // (backend/app/models/ftth_logica.py → MAX_SPLITTER_*): 1x64 es el mayor.
+  const SPLITTER_MAX_SALIDAS = 64;
+  const SPLITTER_MAX_ENTRADAS = 2;
+
   const CATS = [
     {
       clave: 'poste', titulo: 'Postes', color: '#8b4513', campoClave: 'codigo', campoDesc: 'desc', singular: 'poste',
@@ -116,11 +152,19 @@ const FTTHTipos = (() => {
         { id: 'marca', label: 'Marca', type: 'text', ph: 'Marca del tipo de cable', w: 'half' },
         { id: 'modelo', label: 'Modelo', type: 'text', ph: 'Modelo de tipo de cable', w: 'half' },
         { id: 'nivel', label: 'Nivel estándar', type: 'select', options: OP.nivelCable, w: 'full' },
-        { id: 'looses', label: 'Número de looses', type: 'number', ph: '12', w: 'half' },
-        { id: 'fibras', label: 'Número total de fibras', type: 'number', ph: '144', w: 'half' },
+        // ── Estructura del cable: define los buffers y QUIÉN manda en los campos ──
+        //   con buffer → looses + total de fibras; «fibras por loose» es CALCULADO
+        //   drop       → solo el total de hilos (1, 2, 4, 6 u 8), sin buffers
+        { id: 'estructura', label: 'Estructura', type: 'select', options: OP.estructuraCable, def: 'con_buffer', w: 'full' },
+        { id: 'looses', label: 'Número de looses (buffers)', type: 'number', ph: '12', w: 'half', min: 1, max: 96, soloSi: 'conBuffer' },
+        { id: 'fibras', label: 'Número total de fibras', type: 'number', ph: '144', w: 'half', soloSi: 'conBuffer' },
+        {
+          id: 'fibrasLoose', label: 'Fibras por loose (calculado)', type: 'calculo', w: 'half', soloSi: 'conBuffer',
+          titulo: 'Se calcula solo: total de fibras ÷ número de looses. No se edita a mano.'
+        },
+        { id: 'perfil', label: 'Perfil de fibra', type: 'select', options: OP.perfilFibra, w: 'half', soloSi: 'conBuffer' },
+        { id: 'total_hilos', label: 'Número total de hilos', type: 'select', options: OP.hilosDrop, w: 'half', soloSi: 'drop' },
         { id: 'atenuacion', label: 'Atenuación por Km (dB)', type: 'number', ph: '0.4', step: '0.1', w: 'half' },
-        { id: 'fibrasLoose', label: 'Fibras por loose', type: 'number', ph: '12', w: 'half' },
-        { id: 'perfil', label: 'Perfil de fibra', type: 'select', options: OP.perfilFibra, w: 'full' },
         { id: 'desc', label: 'Descripción', type: 'textarea', ph: 'Descripción...', w: 'full' },
         {
           fieldset: 'Representación del cable implantado',
@@ -206,13 +250,12 @@ const FTTHTipos = (() => {
         { id: 'marca', label: 'Marca', type: 'text', ph: 'Marca del tipo de splitter', w: 'half' },
         { id: 'modelo', label: 'Modelo', type: 'text', ph: 'Modelo del tipo de splitter', w: 'half' },
         { id: 'prefijo', label: 'Prefijo', type: 'text', ph: 'Prefijo para la nomenclatura', w: 'half' },
-        { id: 'tamano', label: 'Tamaño (U)', type: 'number', ph: '1', w: 'half' },
+        { id: 'tamano', label: 'Tamaño (U de rack)', type: 'number', ph: '1', min: 1, max: 16, step: '1', w: 'half' },
         { id: 'tipoIO', label: 'Tipo de entrada/salida', type: 'select', options: OP.tipoIO, placeholderOption: 'Seleccione opción...', w: 'half' },
         { id: 'balanceado', label: 'Splitter balanceado', type: 'checkbox', w: 'half' },
         { id: 'cliente', label: 'Permite conexión del cliente', type: 'checkbox', w: 'half' },
-        { id: 'entradas', label: 'Número de entradas', type: 'number', ph: '1', w: 'half' },
-        { id: 'atenuacion', label: 'Atenuación (dB)', type: 'number', ph: 'Ej: 3.5', step: '0.1', w: 'half' },
-        { id: 'salidas', label: 'Número de salidas', type: 'number', ph: '2', w: 'half' },
+        { id: 'division', label: 'División (salidas)', type: 'select', options: OP.divisionSplitter, def: '1x8', onchange: 'FTTHTipos.sugerirAtenuacion(this)', w: 'half' },
+        { id: 'atenuacion', label: 'Atenuación (dB)', type: 'number', ph: 'Vacío = la nominal', step: '0.01', min: 0, max: 40, w: 'half' },
         { id: 'desc', label: 'Descripción', type: 'textarea', ph: 'Descripción...', w: 'full' }
       ]
     },
@@ -576,9 +619,14 @@ const FTTHTipos = (() => {
         const t = typeof op === 'string' ? op : op.t;
         ops.push(`<option value="${escapeHtml(v)}" ${String(val) === String(v) ? 'selected' : ''}>${t}</option>`);
       });
-      control = `<select class="form-control" id="${id}">${ops.join('')}</select>`;
+      control = `<select class="form-control" id="${id}"${f.onchange ? ` onchange="${f.onchange}"` : ''}>${ops.join('')}</select>`;
     } else if (f.type === 'textarea') {
       control = `<textarea class="form-control" id="${id}" placeholder="${escapeHtml(f.ph || '')}">${escapeHtml(val)}</textarea>`;
+    } else if (f.type === 'calculo') {
+      // Campo CALCULADO: se pinta pero no se puede escribir. Lo recalcula
+      // actualizarCalculoCable() cada vez que cambia la estructura o los datos.
+      control = `<input type="text" class="form-control campo-calculado" id="${id}" value="${escapeHtml(val)}" `
+        + `readonly tabindex="-1" title="${escapeHtml(f.titulo || 'Se calcula solo: no se edita a mano.')}">`;
     } else {
       const extra = (f.step !== undefined ? ` step="${f.step}"` : '')
         + (f.min !== undefined ? ` min="${f.min}"` : '')
@@ -586,7 +634,8 @@ const FTTHTipos = (() => {
         + (f.oninput ? ` oninput="${f.oninput}"` : '');
       control = `<input type="${f.type || 'text'}" class="form-control" id="${id}" value="${escapeHtml(val)}" placeholder="${escapeHtml(f.ph || '')}"${extra}>`;
     }
-    return `<div class="form-group"><label>${f.label}</label>${control}</div>`;
+    const condicional = f.soloSi ? ` data-solo-si="${escapeHtml(f.soloSi)}"` : '';
+    return `<div class="form-group"${condicional}><label>${f.label}</label>${control}</div>`;
   }
 
   // Agrupa campos consecutivos con el mismo ancho en .row-2col / .row-3col
@@ -619,6 +668,80 @@ const FTTHTipos = (() => {
     return html;
   }
 
+  // ── Estructura del cable: quién manda en cada campo ───────────────────────
+  // El usuario solo ve lo que le toca:
+  //   con buffer → looses, total de fibras, «fibras por loose» (CALCULADO) y perfil
+  //   drop       → solo el total de hilos (select cerrado: 1, 2, 4, 6 u 8)
+  // Las reglas viven en FTTHCableReglas (mismas que valida el backend).
+  function _reglasCable() {
+    return window.FTTHCableReglas || null;
+  }
+
+  function _valor(id) {
+    const el = document.getElementById(id);
+    return el ? String(el.value || '') : '';
+  }
+
+  /** Muestra/oculta los campos que le tocan a la estructura elegida. */
+  function aplicarEstructuraCable() {
+    const reglas = _reglasCable();
+    const cont = document.getElementById('dynamic-form');
+    if (!reglas || !cont) return;
+    const esDrop = _valor('f_estructura') === reglas.ESTRUCTURA_DROP;
+
+    cont.querySelectorAll('[data-solo-si]').forEach(bloque => {
+      const toca = bloque.getAttribute('data-solo-si');
+      const visible = esDrop ? (toca === 'drop') : (toca === 'conBuffer');
+      bloque.style.display = visible ? '' : 'none';
+    });
+
+    actualizarCalculoCable();
+  }
+
+  /** Recalcula «fibras por loose» (solo lectura) y el resumen del envase. */
+  function actualizarCalculoCable() {
+    const reglas = _reglasCable();
+    if (!reglas) return;
+    const campo = document.getElementById('f_fibrasLoose');
+    const vista = document.getElementById('cable-preview');
+    const esDrop = _valor('f_estructura') === reglas.ESTRUCTURA_DROP;
+
+    const entrada = {
+      estructura: esDrop ? reglas.ESTRUCTURA_DROP : reglas.ESTRUCTURA_CON_BUFFER,
+      fibras: esDrop ? _valor('f_total_hilos') : _valor('f_fibras'),
+      looses: _valor('f_looses'),
+      perfil: _valor('f_perfil') || undefined,
+    };
+    const r = reglas.normalizar(entrada);
+
+    if (campo) {
+      campo.value = r.ok ? String(r.props.fibrasLoose) : '';
+      campo.title = r.ok
+        ? 'Se calcula solo: total de fibras ÷ número de looses.'
+        : r.error;
+    }
+    if (vista) {
+      vista.textContent = r.ok ? r.props ? reglas.describir(r.props) : '' : r.error;
+      vista.classList.toggle('cable-preview--error', !r.ok);
+    }
+  }
+
+  /** Engancha el formulario del cable para que reaccione al vuelo. */
+  function engancharEstructuraCable(cont) {
+    if (!cont) return;
+    ['f_estructura', 'f_looses', 'f_fibras', 'f_perfil', 'f_total_hilos'].forEach(id => {
+      const el = cont.querySelector('#' + id);
+      if (!el) return;
+      const reaccionar = () => {
+        if (id === 'f_estructura') aplicarEstructuraCable();
+        else actualizarCalculoCable();
+      };
+      el.addEventListener('input', reaccionar);
+      el.addEventListener('change', reaccionar);
+    });
+    aplicarEstructuraCable();
+  }
+
   function updateSlotsTable(numSlots, detalle) {
     const tbody = document.getElementById('slots-table-body');
     if (!tbody) return;
@@ -648,13 +771,66 @@ const FTTHTipos = (() => {
       + '</div>';
   }
 
+  // ── Splitter: division guardada y atenuacion nominal ──────────────────────
+  const DIVISION_POR_DEFECTO = '1x8';
+
+  /** Division guardada de un tipo: '1x16' (de relacion_division o entradas/salidas). */
+  function divisionDe(props) {
+    const p = props || {};
+    const declarada = String(p.relacion_division || p.division || '').trim();
+    const hallada = declarada.match(/(\d+)\s*[xX]\s*(\d+)/);
+    if (hallada) return `${hallada[1]}x${hallada[2]}`;
+    const salidas = Number(p.salidas);
+    if (Number.isFinite(salidas) && salidas > 0) {
+      const entradas = Number(p.entradas);
+      return `${Number.isFinite(entradas) && entradas > 0 ? entradas : 1}x${salidas}`;
+    }
+    return '';
+  }
+
+  /** Atenuacion nominal (dB) de una division; null si no esta tabulada. */
+  function nominalDe(division) {
+    const clave = String(division || '').trim().toLowerCase();
+    const valor = NOMINAL_SPLITTER[clave];
+    return valor === undefined ? null : valor;
+  }
+
+  /** Sugiere en el campo de atenuacion la nominal de la division elegida. */
+  function sugerirAtenuacion(select) {
+    const division = (select && select.value) ? select.value : DIVISION_POR_DEFECTO;
+    const nominal = nominalDe(division);
+    const campo = document.getElementById('f_atenuacion');
+    if (campo && nominal !== null) campo.value = String(nominal);
+    return nominal;
+  }
+
   function renderFormFields(clave, data) {
     const cfg = CATS_MAP[clave];
     const cont = document.getElementById('dynamic-form');
     if (!cfg || !cont) return;
 
     const esEdicion = !!data;
-    let html = campoColorObjeto(cfg, data) + renderCampos(cfg.campos, data);
+    // El formulario del splitter trabaja con la DIVISION, pero en la BD se guarda
+    // como entradas/salidas: al abrir un tipo se reconstruye aqui (asi conserva lo
+    // que se guardo) y al crear uno nuevo se parte del 1x8 por defecto, con su
+    // atenuacion nominal ya sugerida en el campo.
+    const datos = Object.assign({}, data || {});
+    if (clave === 'splitter') {
+      const division = divisionDe(datos) || DIVISION_POR_DEFECTO;
+      datos.division = division;
+      const sinAtenuacion = datos.atenuacion === undefined
+        || datos.atenuacion === null || datos.atenuacion === '';
+      if (!esEdicion || sinAtenuacion) datos.atenuacion = nominalDe(division);
+    }
+    if (clave === 'cables' && String(datos.estructura || '') === 'drop') {
+      // Un drop guarda el total en `fibras`, pero el formulario lo enseña en el
+      // select «Número total de hilos»: al reabrir el tipo hay que reconstruirlo.
+      datos.total_hilos = datos.fibras;
+    }
+    let html = campoColorObjeto(cfg, data) + renderCampos(cfg.campos, datos);
+
+    // Resumen en vivo del envase del cable (se recalcula desde aplicarEstructuraCable)
+    if (clave === 'cables') html += '<div class="cable-preview" id="cable-preview"></div>';
 
     if (cfg.slots) {
       html += `
@@ -674,11 +850,32 @@ const FTTHTipos = (() => {
       + (esEdicion ? 'Guardar Cambios' : 'Guardar') + '</button>';
     cont.innerHTML = html;
 
+    // El cable decide qué campos manda cada estructura (con buffer / drop)
+    if (clave === 'cables') engancharEstructuraCable(cont);
+
     if (cfg.slots) {
       const inp = cont.querySelector('#f_numSlots');
       const total = inp && inp.value ? inp.value : (cfg.slots.def || 2);
       updateSlotsTable(total, data ? data.slots_detalle : null);
     }
+  }
+
+  // ── Limites de los campos numericos ───────────────────────────────────────
+  // min/max ya se pintan como atributos HTML, pero el navegador NO impide
+  // teclear un valor mayor: aqui se ajusta y se avisa al guardar.
+  let _limitesAplicados = [];
+
+  function _ajustarAlLimite(f, valor, el) {
+    const min = f.min !== undefined ? Number(f.min) : null;
+    const max = f.max !== undefined ? Number(f.max) : null;
+    let v = valor;
+    if (min !== null && Number.isFinite(min) && v < min) v = min;
+    if (max !== null && Number.isFinite(max) && v > max) v = max;
+    if (v !== valor) {
+      _limitesAplicados.push({ label: f.label || f.id, puesto: valor, limitado: v });
+      if (el) el.value = String(v);   // que se vea el valor corregido en el formulario
+    }
+    return v;
   }
 
   function leerCampos(campos, salida) {
@@ -691,7 +888,9 @@ const FTTHTipos = (() => {
       } else if (f.type === 'number') {
         const txt = String(el.value || '').trim();
         const num = Number(txt);
-        salida[f.id] = (txt === '' || !Number.isFinite(num)) ? null : num;
+        let v = (txt === '' || !Number.isFinite(num)) ? null : num;
+        if (v !== null) v = _ajustarAlLimite(f, v, el);
+        salida[f.id] = v;
       } else {
         salida[f.id] = el.value;
       }
@@ -829,10 +1028,67 @@ const FTTHTipos = (() => {
     const totalSlots = cfg.slots ? (Number(valores.numSlots) || 1) : null;
     delete valores.numSlots;
 
+    // Si el usuario tecleo un valor fuera de rango, se ajusto al limite y se le dice.
+    if (_limitesAplicados.length) {
+      const detalle = _limitesAplicados
+        .map(l => `${l.label}: ${l.puesto} se ajusto a ${l.limitado}`)
+        .join(' - ');
+      showToast('Valor fuera de rango: ' + detalle, 'warning');
+      _limitesAplicados = [];
+    }
+
     const nombre = String(valores[cfg.campoClave] || valores.nombre || valores.codigo || '').trim();
     if (!nombre) {
       showToast('Escribe el nombre o código del tipo', 'error');
       return;
+    }
+
+    // Un splitter se define por su DIVISIÓN. Se guarda como entradas x salidas
+    // (lo que lee el backend para materializarlo y para poner la atenuación
+    // nominal) y también como relacion_division, igual que los tipos antiguos.
+    if (cfg.clave === 'splitter') {
+      const division = String(valores.division || '').trim().toLowerCase();
+      delete valores.division;
+      const partes = division.split('x');
+      const entradas = Number(partes[0]);
+      const salidas = Number(partes[1]);
+      const ok = division && Number.isFinite(entradas) && Number.isFinite(salidas)
+        && entradas >= 1 && entradas <= SPLITTER_MAX_ENTRADAS
+        && salidas >= 1 && salidas <= SPLITTER_MAX_SALIDAS;
+      if (!ok) {
+        showToast('Elige la división del splitter (por ejemplo 1 x 16)', 'error');
+        return;
+      }
+      valores.relacion_division = division;
+      valores.entradas = entradas;
+      valores.salidas = salidas;
+    }
+
+    // ── Cable de fibra: el envase lo manda la ESTRUCTURA ─────────────────────
+    // con buffer → fibras por loose = total ÷ looses (división exacta y tope del perfil)
+    // drop       → sin buffer: looses=1 interno, fibrasLoose = total (1, 2, 4, 6 u 8)
+    // Es la MISMA validación que aplica el backend al guardar el tipo.
+    if (cfg.clave === 'cables') {
+      const reglas = _reglasCable();
+      const esDrop = reglas
+        ? String(valores.estructura || '') === reglas.ESTRUCTURA_DROP
+        : String(valores.estructura || '') === 'drop';
+      const revisado = reglas
+        ? reglas.normalizar({
+            estructura: valores.estructura,
+            looses: valores.looses,
+            fibras: esDrop ? valores.total_hilos : valores.fibras,
+            perfil: valores.perfil,
+          })
+        : { ok: false, error: 'Falta el módulo de reglas del cable (js/ftth-cable-reglas.js).' };
+
+      if (!revisado.ok) {
+        showToast(revisado.error, 'error');
+        return;
+      }
+      delete valores.total_hilos;          // solo existe en el formulario
+      delete valores.perfil;               // se vuelve a poner solo si tiene buffer
+      Object.assign(valores, revisado.props);
     }
 
     const propiedades = {};
@@ -1036,6 +1292,10 @@ const FTTHTipos = (() => {
     getTipos,
     showToast,
     deleteTipo,
+    divisionDe,
+    nominalDe,
+    sugerirAtenuacion,
+    NOMINAL_SPLITTER,
     // extras del nuevo diseño
     seleccionar,
     abrirTipo,

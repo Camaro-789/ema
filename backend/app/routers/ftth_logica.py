@@ -2,8 +2,8 @@
 Router de la CAPA LÓGICA FTTH — contención de hilos.
 
 Diseño no destructivo (docs/DISENO_CAPA_LOGICA.md §12):
-- Solo crea/lee/escribe las tablas NUEVAS `ftth_cable_tubos`, `ftth_cable_fibras`
-  y `ftth_fibra_extremos`.
+- Solo crea/lee/escribe las tablas NUEVAS `ftth_cable_tubos`, `ftth_cable_fibras`,
+  `ftth_fibra_extremos` y `ftth_diagrama_posiciones`.
 - No modifica el GeoJSON de `/api/elementos/todos` ni el comportamiento del mapa.
 - La materialización es IDEMPOTENTE: re-ejecutarla nunca duplica ni destruye
   estado capturado (estado de hilo, extremos anclados).
@@ -13,6 +13,7 @@ Materialización de un cable (Anexo B del diseño):
     plantilla.propiedades.fibrasLoose -> fibras por tubo (fallback 12)
     plantilla.propiedades.fibras      -> total declarado (se valida, no se impone)
 """
+import math
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -33,6 +34,11 @@ MAX_HILOS_TOTAL = 3456
 
 FALLBACK_TUBOS = 12
 FALLBACK_FIBRAS_POR_TUBO = 12
+
+# Etiqueta del contenedor de un cable DROP: no es un buffer, es el hueco de las
+# fibras sueltas que salen directas del jacket. Se guarda en el tubo para que la
+# pestaña Hilos y el diagrama sepan que ahí no hay buffer que valga.
+ETIQUETA_SIN_BUFFER = "SIN BUFFER"
 
 CATEGORIAS_CON_HILOS = ("cables",)
 
@@ -81,6 +87,8 @@ def _parametros_materializacion(tipo) -> Dict[str, Any]:
     tubos = _to_int(props.get("looses"), FALLBACK_TUBOS)
     por_tubo = _to_int(props.get("fibrasLoose"), FALLBACK_FIBRAS_POR_TUBO)
     declarado = _to_int(props.get("fibras"), None)
+    estructura = str(props.get("estructura") or "").strip().lower()
+    es_drop = estructura == logica.ESTRUCTURA_DROP
     return {
         "tubos": tubos,
         "fibras_por_loose": por_tubo,
@@ -88,6 +96,9 @@ def _parametros_materializacion(tipo) -> Dict[str, Any]:
         "fibras_declaradas": declarado,
         "perfil": props.get("perfil"),
         "atenuacion_km_db": props.get("atenuacion"),
+        # Estructura de la plantilla: 'con_buffer' o 'drop' ('' en tipos antiguos)
+        "estructura": estructura,
+        "etiqueta_tubo": ETIQUETA_SIN_BUFFER if es_drop else None,
     }
 
 
@@ -158,6 +169,7 @@ def materializar_hilos(cable_id: int, forzar: bool = False, db: Session = Depend
         params["fibras_por_loose"] or 0,
         params["perfil"],
         db,
+        etiqueta_tubo=params.get("etiqueta_tubo"),
     )
     db.commit()
 
@@ -175,12 +187,14 @@ def materializar_hilos(cable_id: int, forzar: bool = False, db: Session = Depend
     }
 
 
-def _materializar(elemento, tubos: int, por_tubo: int, perfil, db: Session) -> Dict[str, int]:
+def _materializar(elemento, tubos: int, por_tubo: int, perfil, db: Session,
+                 etiqueta_tubo: Optional[str] = None) -> Dict[str, int]:
     """
     Crea o completa tubos, hilos y extremos de un cable.
 
     Idempotente: la llave natural de cada tubo es (elemento_id, tubo_no) y la de
     cada hilo es (tubo_id, hilo_no_en_tubo). Lo que ya existe se conserva.
+    `etiqueta_tubo` marca el contenedor de un cable DROP ("SIN BUFFER").
     """
     cable_id = elemento.id
 
@@ -201,12 +215,15 @@ def _materializar(elemento, tubos: int, por_tubo: int, perfil, db: Session) -> D
                 color=nombre_color,
                 color_hex=hex_color,
                 capacidad_fibras=por_tubo,
+                etiqueta=etiqueta_tubo,
             )
             db.add(tubo)
             tubos_existentes[n] = tubo
             tubos_creados += 1
         else:
             # Se respeta lo capturado; solo se rellenan huecos
+            if etiqueta_tubo and not tubo.etiqueta:
+                tubo.etiqueta = etiqueta_tubo
             if not tubo.color:
                 tubo.color = nombre_color
             if not tubo.color_hex:
@@ -589,6 +606,9 @@ def listar_cables(proyecto_id: int, db: Session = Depends(get_db)) -> Dict[str, 
                 "fibras_por_loose": props.get("fibrasLoose"),
                 "fibras_declaradas": props.get("fibras"),
                 "perfil": props.get("perfil"),
+                # Estructura de la plantilla: con_buffer | drop ('' en tipos antiguos)
+                "estructura": props.get("estructura"),
+                "plantilla_visual": props.get("plantilla_visual"),
             },
             "geometria": {"tipo": "LineString" if geo else "sin_coords", "puntos": len(geo)},
             "materializado": conteos["tubos"].get(cable.id, 0) > 0,
@@ -718,9 +738,18 @@ CATEGORIAS_SIN_CONMUTAR = ("poste", "ducto", "luminaria", "switches", "cables")
 CATEGORIAS_NODO = ("cajanap", "manga", "odf", "armario", "olt", "splitter", "fusion")
 
 TIPOS_BANDEJA = ("empalme", "paso", "splitter", "mixta")
-TIPOS_DISPOSITIVO = ("splitter", "adaptador", "wdm", "pigtail", "switch")
+# Aparatos que se pueden instalar dentro de un nodo. Todo lo que se cree en
+# "Tipos de objetos" con estas categorías se puede añadir al diagrama.
+TIPOS_DISPOSITIVO = ("splitter", "adaptador", "wdm", "pigtail", "switch", "fusion", "odf")
+
+# Categorías de aparato que NO necesitan puertos (no se dividen ni conectan por puerto)
+TIPOS_SIN_PUERTOS = ("fusion",)
+# Pérdida típica de un manguito de fusión (dB)
+ATENUACION_FUSION_DB = 0.1
 
 # Atenuación nominal de splitters PLC balanceados (dB)
+# El tope de tamaño de un splitter vive en el modelo (logica.MAX_SPLITTER_*), que
+# es donde también lo consulta el catálogo de tipos.
 ATENUACION_SPLITTER = {
     "1x2": 3.6, "1x4": 7.3, "1x8": 10.7, "1x16": 13.7, "1x32": 16.9, "1x64": 20.5,
     "2x2": 3.6, "2x4": 7.3, "2x8": 10.7, "2x16": 13.7, "2x32": 16.9,
@@ -748,22 +777,16 @@ class DispositivoCreate(BaseModel):
     estado: Optional[str] = None
 
 
-def _parsear_division(division: Optional[str]) -> Optional[tuple]:
-    """'1x8' -> (1, 8). Devuelve None si el formato no es válido."""
-    if not division:
-        return None
-    texto = str(division).lower().replace(" ", "")
-    for sep in ("x", ":"):
-        if sep in texto:
-            partes = texto.split(sep, 1)
-            try:
-                entradas, salidas = int(partes[0]), int(partes[1])
-            except (TypeError, ValueError):
-                return None
-            if entradas < 1 or salidas < 1:
-                return None
-            return (entradas, salidas)
-    return None
+def _parsear_division(division) -> Optional[tuple]:
+    """
+    '1x8' -> (1, 8). Delega en el parser compartido del modelo para que el
+    catálogo de tipos y la materialización no se desincronicen.
+
+    Acepta también el formato que guarda el formulario de Tipos de objetos:
+        '1x8 (10.7 dB)' -> (1, 8)
+        '1 x 16'        -> (1, 16)
+    """
+    return logica.parsear_division(division)
 
 
 def _nodo_para_conmutar(elem_id: int, db: Session):
@@ -884,16 +907,37 @@ def crear_dispositivo(elem_id: int, payload: DispositivoCreate, db: Session = De
     if tipo == "splitter":
         entradas = entradas if entradas is not None else 1
         if not salidas:
+            # Si venía de una plantilla, se le dice cuál hay que arreglar.
+            nombre_tipo = getattr(plantilla, "nombre_id", None) if payload.tipo_id else None
+            pista = (
+                f"La plantilla «{nombre_tipo}» no define la división: edítala en "
+                "Tipos de objetos y elige su división (por ejemplo 1 x 16)."
+                if nombre_tipo else
+                "Indica la división (por ejemplo 1x16) o elige una plantilla de "
+                "splitter que ya la defina."
+            )
+            raise HTTPException(400, f"No se puede materializar el splitter. {pista}")
+        # Limite del catalogo: 1x64 es el mayor splitter admitido.
+        if salidas > logica.MAX_SPLITTER_SALIDAS:
             raise HTTPException(
                 400,
-                "Indica la división del splitter (por ejemplo 1x8) o los puertos de salida. "
-                "También puedes elegir una plantilla de splitter que ya la defina.",
+                f"Un splitter no puede tener {salidas} salidas: "
+                f"el máximo es 1x{logica.MAX_SPLITTER_SALIDAS}.",
+            )
+        if entradas not in (1, 2):
+            raise HTTPException(
+                400,
+                f"Un splitter solo admite 1 o 2 entradas (se pidieron {entradas}).",
             )
         division = division or f"{entradas}x{salidas}"
     else:
-        # Adaptadores / WDM / pigtails / switches: puertos bidireccionales
+        # Adaptadores / WDM / pigtails / switches: puertos bidireccionales.
+        # Una fusión (manguito de empalme) NO tiene puertos: es el punto donde se
+        # unen dos hilos, así que 0 puertos es válido.
         entradas = 0
-        if not salidas:
+        if tipo in TIPOS_SIN_PUERTOS:
+            salidas = salidas or 0
+        elif not salidas:
             raise HTTPException(400, f"Indica cuántos puertos tiene el {tipo} (por ejemplo 12).")
 
     total = (entradas or 0) + (salidas or 0)
@@ -910,8 +954,10 @@ def crear_dispositivo(elem_id: int, payload: DispositivoCreate, db: Session = De
             advertencias.append(
                 f"No hay atenuación nominal conocida para «{division}»: se registrará sin pérdida y podrás ajustarla."
             )
-    if atenuacion is None and tipo in ("adaptador", "wdm"):
+    if atenuacion is None and tipo in ("adaptador", "wdm", "odf"):
         atenuacion = ATENUACION_ADAPTADOR_DB
+    if atenuacion is None and tipo in TIPOS_SIN_PUERTOS:
+        atenuacion = ATENUACION_FUSION_DB
 
     # ── Aviso si ya existe uno igual en el mismo nodo ─────────────────────
     repetidos = (
@@ -1093,6 +1139,13 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
         .order_by(logica.FtthPuerto.dispositivo_id, logica.FtthPuerto.direccion, logica.FtthPuerto.puerto_no)
         .all()
     )
+    # Orden guardado del lienzo (el que el usuario dejo con el disquete).
+    posiciones = {
+        p.dispositivo_id: {"x": p.x, "y": p.y}
+        for p in db.query(logica.FtthDiagramaPosicion)
+        .filter(logica.FtthDiagramaPosicion.elemento_id == elem_id)
+        .all()
+    }
 
     # ── Hilos que terminan en este nodo (extremos anclados aquí) ───────────
     extremos = (
@@ -1112,6 +1165,10 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
         if cable:
             tipo_cable = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == cable.tipo_id).first()
         numero_tubo = tubo.tubo_no if tubo else 0
+        # El TIPO del cable viaja con cada hilo: el diagrama necesita saber cuántos
+        # hilos tiene y qué plantilla visual le toca (con buffer / drop) para pintarlo
+        # tal como es. Sin esto, el frontend no tiene de dónde leerlo.
+        props_cable = dict(getattr(tipo_cable, "propiedades", None) or {})
         hilos.append({
             "fibra_id": fibra.id,
             "extremo": ext.extremo,
@@ -1119,6 +1176,15 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
             "holgura_m": ext.holgura_m,
             "cable_id": fibra.elemento_id,
             "cable": _nombre_cable(cable, tipo_cable),
+            "cable_tipo": {
+                "id": getattr(tipo_cable, "id", None),
+                "nombre": getattr(tipo_cable, "nombre_id", None),
+                "plantilla_visual": props_cable.get("plantilla_visual"),
+                "estructura": props_cable.get("estructura"),
+                "fibras": props_cable.get("fibras"),
+                "looses": props_cable.get("looses"),
+                "fibrasLoose": props_cable.get("fibrasLoose"),
+            },
             "tubo_no": tubo.tubo_no if tubo else None,
             "hilo_no_en_tubo": fibra.hilo_no_en_tubo,
             "hilo_global_no": fibra.hilo_global_no,
@@ -1151,11 +1217,20 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
         )
 
     return _dto_nodo(elemento, tipo, props, categoria, capacidad, bandejas_db, dispositivos_db,
-                     puertos_db, hilos, puertos_libres, advertencias)
+                     puertos_db, hilos, puertos_libres, advertencias, posiciones=posiciones)
+
+
+def _posicion_diagrama(
+    posiciones: Optional[Dict[int, Dict[str, Any]]], dispositivo_id: int
+) -> Dict[str, Optional[float]]:
+    """x/y guardados del aparato; None mientras el diagrama no se haya guardado."""
+    p = (posiciones or {}).get(dispositivo_id) or {}
+    return {"x": p.get("x"), "y": p.get("y")}
 
 
 def _dto_nodo(elemento, tipo, props, categoria, capacidad, bandejas_db, dispositivos_db,
-              puertos_db, hilos, puertos_libres, advertencias) -> Dict[str, Any]:
+              puertos_db, hilos, puertos_libres, advertencias,
+              posiciones: Optional[Dict[int, Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Construye el DTO auto-contenido que pinta el diagrama del nodo."""
     return {
         "nodo": {
@@ -1197,6 +1272,8 @@ def _dto_nodo(elemento, tipo, props, categoria, capacidad, bandejas_db, disposit
                 "atenuacion_db": d.atenuacion_db,
                 "bandeja_id": d.bandeja_id,
                 "estado": d.estado,
+                # Orden del lienzo (None = aún sin mover: el frontend lo rejilla solo)
+                **_posicion_diagrama(posiciones, d.id),
             }
             for d in dispositivos_db
         ],
@@ -1229,4 +1306,277 @@ def _dto_nodo(elemento, tipo, props, categoria, capacidad, bandejas_db, disposit
     }
 
 
+
+
+# ── Orden del lienzo del diagrama ───────────────────────────────────────────
+# El usuario arrastra los aparatos (splitters, adaptadores...) para acomodarlos
+# y el disquete guarda ese orden; al reabrir el nodo se encuentra igual.
+# Es presentacion pura: no toca bandejas, puertos, hilos ni el mapa.
+
+
+class PosicionDiagrama(BaseModel):
+    dispositivo_id: int
+    x: float
+    y: float
+
+
+class PosicionesDiagrama(BaseModel):
+    posiciones: List[PosicionDiagrama] = []
+
+
+# Tope de cordura de una coordenada del lienzo (px). El diagrama es un lienzo
+# libre (los aparatos se pueden mover a cualquier lado, incluso con x/y
+# negativas), pero un arrastre desbocado no debe guardar un número absurdo:
+# 100.000 px es ~300 veces el ancho de una tarjeta.
+COORDENADA_MAX = 100000.0
+
+
+def _coordenada(valor: float, campo: str, dispositivo_id: int) -> float:
+    """Valida una coordenada del lienzo (finita y dentro del tope)."""
+    if not math.isfinite(valor):
+        raise HTTPException(
+            400, f"La coordenada {campo} del aparato #{dispositivo_id} no es un numero valido."
+        )
+    if abs(valor) > COORDENADA_MAX:
+        raise HTTPException(
+            400,
+            f"La coordenada {campo} del aparato #{dispositivo_id} se sale del lienzo "
+            f"(maximo {int(COORDENADA_MAX)} px).",
+        )
+    return round(float(valor), 2)
+
+
+@router.put(
+    "/elementos/{elem_id}/diagrama/posiciones",
+    summary="Guardar el orden de los aparatos en el diagrama del nodo",
+)
+def guardar_posiciones_diagrama(
+    elem_id: int, payload: PosicionesDiagrama, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    elemento = _nodo_para_conmutar(elem_id, db)
+
+    dispositivos = {
+        d.id: d
+        for d in db.query(logica.FtthDispositivo)
+        .filter(logica.FtthDispositivo.elemento_id == elem_id)
+        .all()
+    }
+    existentes = {
+        p.dispositivo_id: p
+        for p in db.query(logica.FtthDiagramaPosicion)
+        .filter(logica.FtthDiagramaPosicion.elemento_id == elem_id)
+        .all()
+    }
+
+    guardadas: List[Dict[str, Any]] = []
+    for item in payload.posiciones:
+        if item.dispositivo_id not in dispositivos:
+            raise HTTPException(
+                404,
+                f"El dispositivo #{item.dispositivo_id} no esta en el elemento #{elem_id}.",
+            )
+        x = _coordenada(item.x, "x", item.dispositivo_id)
+        y = _coordenada(item.y, "y", item.dispositivo_id)
+
+        fila = existentes.get(item.dispositivo_id)
+        if fila is None:
+            fila = logica.FtthDiagramaPosicion(
+                proyecto_id=elemento.proyecto_id,
+                elemento_id=elemento.id,
+                dispositivo_id=item.dispositivo_id,
+                x=x,
+                y=y,
+            )
+            db.add(fila)
+            existentes[item.dispositivo_id] = fila
+        else:
+            fila.x = x
+            fila.y = y
+
+        guardadas.append({"dispositivo_id": item.dispositivo_id, "x": x, "y": y})
+
+    db.commit()
+    return {
+        "status": "ok",
+        "elemento_id": elemento.id,
+        "guardadas": len(guardadas),
+        "posiciones": guardadas,
+    }
+
+
+@router.delete(
+    "/elementos/{elem_id}/diagrama/posiciones",
+    summary="Restablecer el orden del diagrama (borra las posiciones guardadas)",
+)
+def restablecer_posiciones_diagrama(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    elemento = _nodo_para_conmutar(elem_id, db)
+    borradas = (
+        db.query(logica.FtthDiagramaPosicion)
+        .filter(logica.FtthDiagramaPosicion.elemento_id == elem_id)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {
+        "status": "ok",
+        "elemento_id": elemento.id,
+        "posiciones_borradas": int(borradas or 0),
+    }
+
+
+# ── Bajas del diagrama (F3) ─────────────────────────────────────────────────
+# Quitar objetos de un nodo. Se limpia a mano lo que en PostgreSQL haria el
+# ON DELETE, porque en SQLite las claves foraneas no se aplican solas: asi no
+# quedan puertos ni referencias huerfanas.
+# Las reglas finas (que se puede borrar en cada fase) se decidiran aparte; estas
+# rutas solo garantizan que la baja es consistente.
+
+
+@router.delete(
+    "/elementos/{elem_id}/dispositivos/{dispositivo_id}",
+    summary="Quitar un dispositivo del nodo (y sus puertos)",
+)
+def eliminar_dispositivo(
+    elem_id: int, dispositivo_id: int, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    elemento = _nodo_para_conmutar(elem_id, db)
+
+    dispositivo = (
+        db.query(logica.FtthDispositivo)
+        .filter(
+            logica.FtthDispositivo.id == dispositivo_id,
+            logica.FtthDispositivo.elemento_id == elemento.id,
+        )
+        .first()
+    )
+    if not dispositivo:
+        raise HTTPException(
+            404, f"El dispositivo #{dispositivo_id} no esta en el elemento #{elem_id}."
+        )
+
+    puertos = (
+        db.query(logica.FtthPuerto)
+        .filter(logica.FtthPuerto.dispositivo_id == dispositivo.id)
+        .delete(synchronize_session=False)
+    )
+
+    # Su sitio en el lienzo se va con el: sin aparato no hay nada que ordenar.
+    db.query(logica.FtthDiagramaPosicion).filter(
+        logica.FtthDiagramaPosicion.dispositivo_id == dispositivo.id
+    ).delete(synchronize_session=False)
+
+    resumen = {
+        "status": "ok",
+        "elemento_id": elemento.id,
+        "dispositivo_id": dispositivo.id,
+        "tipo": dispositivo.tipo,
+        "division": dispositivo.division,
+        "puertos_eliminados": int(puertos or 0),
+    }
+    db.delete(dispositivo)
+    db.commit()
+    return resumen
+
+
+@router.delete(
+    "/elementos/{elem_id}/cables/{cable_id}",
+    summary="Quitar una fibra (cable) del nodo: desancla aquí sus hilos",
+)
+def quitar_cable_del_nodo(
+    elem_id: int, cable_id: int, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Baja de una FIBRA desde el diagrama del nodo.
+
+    Una fibra no es un aparato del nodo: lo que se quita es su anclaje aquí (los
+    extremos de sus hilos que apuntan a este nodo), no el cable del mapa. Antes el
+    diagrama mandaba el id del cable al endpoint de dispositivos y la API respondía,
+    con razón, «El dispositivo #N no esta en el elemento #M».
+    """
+    elemento = _nodo_para_conmutar(elem_id, db)
+
+    cable = (
+        db.query(fisicos.FtthElemento)
+        .filter(fisicos.FtthElemento.id == cable_id)
+        .first()
+    )
+    if not cable:
+        raise HTTPException(404, f"El elemento #{cable_id} no existe.")
+    if (cable.categoria or "").lower() not in CATEGORIAS_CON_HILOS:
+        raise HTTPException(
+            400,
+            f"El elemento #{cable_id} es de categoría '{cable.categoria}'. "
+            "Solo los cables de fibra se anclan a un nodo.",
+        )
+
+    ids_fibras = [
+        f.id
+        for f in db.query(logica.FtthCableFibra)
+        .filter(logica.FtthCableFibra.elemento_id == cable.id)
+        .all()
+    ]
+
+    consulta = db.query(logica.FtthFibraExtremo).filter(
+        logica.FtthFibraExtremo.nodo_id == elemento.id
+    )
+    if ids_fibras:
+        consulta = consulta.filter(logica.FtthFibraExtremo.fibra_id.in_(ids_fibras))
+    anclados = consulta.all()
+    if not anclados:
+        raise HTTPException(
+            404,
+            f"La fibra #{cable_id} no está anclada al nodo #{elem_id}.",
+        )
+
+    resumen = {
+        "status": "ok",
+        "elemento_id": elemento.id,
+        "cable_id": cable.id,
+        "nombre": _nombre_cable(cable, None),
+        "extremos_soltados": len(anclados),
+    }
+    for fila in anclados:
+        db.delete(fila)
+    db.commit()
+    return resumen
+
+
+@router.delete(
+    "/elementos/{elem_id}/bandejas/{bandeja_id}",
+    summary="Quitar una bandeja del nodo (sus aparatos quedan sin bandeja)",
+)
+def eliminar_bandeja(
+    elem_id: int, bandeja_id: int, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    elemento = _nodo_para_conmutar(elem_id, db)
+
+    bandeja = (
+        db.query(logica.FtthBandeja)
+        .filter(
+            logica.FtthBandeja.id == bandeja_id,
+            logica.FtthBandeja.elemento_id == elemento.id,
+        )
+        .first()
+    )
+    if not bandeja:
+        raise HTTPException(
+            404, f"La bandeja #{bandeja_id} no esta en el elemento #{elem_id}."
+        )
+
+    # Los aparatos montados en la bandeja no se borran: se desmontan.
+    desmontados = (
+        db.query(logica.FtthDispositivo)
+        .filter(logica.FtthDispositivo.bandeja_id == bandeja.id)
+        .update({"bandeja_id": None}, synchronize_session=False)
+    )
+
+    resumen = {
+        "status": "ok",
+        "elemento_id": elemento.id,
+        "bandeja_id": bandeja.id,
+        "bandeja_no": bandeja.bandeja_no,
+        "dispositivos_desmontados": int(desmontados or 0),
+    }
+    db.delete(bandeja)
+    db.commit()
+    return resumen
 

@@ -1,0 +1,192 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Panel derecho «Capas del Proyecto» — estructura MINIMALISTA
+   ---------------------------------------------------------------------------
+   Archivo nuevo y acotado a #folders-panel: no modifica style.css, ni el JS,
+   ni ninguna otra parte de la aplicación. Se carga después de style.css para
+   refinar el árbol de capas sin tocar lo que ya funcionaba.
+   Mantiene TODAS las clases e ids que usa ftth-carpetas.js:
+     .folders-header · #folders-tree · .folder-tree · .folder-node
+     .folder-node-header · .folder-vis-check · .folder-toggle · .folder-name
+     .folder-actions · .btn-icon · .folder-children · .folder-elemento-node
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Cabecera: etiqueta micro, sin ruido ─────────────────────────────────── */
+#folders-panel .folders-header {
+    padding: 12px 12px 8px;
+    border-bottom: 1px solid #ededf0;
+}
+
+#folders-panel .folders-header h3 {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #86868b;
+}
+
+#folders-panel .folders-header button {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: #1d1d1f;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+#folders-panel .folders-header button:hover { background: #f0f0f0; }
+
+/* ── Árbol: sin listas por defecto, jerarquía por una línea fina ──────────── */
+#folders-panel #folders-tree {
+    padding: 6px 6px 10px;
+}
+
+#folders-panel .folder-tree,
+#folders-panel .folder-children {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+#folders-panel .folder-children {
+    margin-left: 9px;
+    padding-left: 7px;
+    border-left: 1px solid #ededf0;   /* única línea que marca la profundidad */
+}
+
+#folders-panel .folder-node { margin: 0; }
+
+/* ── Fila: compacta, sin cajas ni sombras ─────────────────────────────────── */
+#folders-panel .folder-node-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #1d1d1f;
+    cursor: default;
+    transition: background 0.12s ease;
+}
+
+#folders-panel .folder-node-header:hover { background: #f5f5f7; }
+
+#folders-panel .folder-toggle {
+    width: 12px;
+    flex-shrink: 0;
+    font-size: 9px;
+    color: #b0b0b5;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+#folders-panel .folder-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+/* Ícono del elemento (lo inyecta FTTHIconos con un <img>) */
+#folders-panel .folder-name img,
+#folders-panel .folder-node-header img {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
+    vertical-align: -2px;
+    margin-right: 4px;
+    opacity: 0.85;
+}
+
+#folders-panel .folder-vis-check {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    accent-color: #1d1d1f;
+    opacity: 0.55;
+    transition: opacity 0.12s ease;
+}
+
+#folders-panel .folder-node-header:hover .folder-vis-check { opacity: 1; }
+
+/* ── Acciones: invisibles hasta pasar el ratón ────────────────────────────── */
+#folders-panel .folder-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+#folders-panel .folder-node-header:hover .folder-actions,
+#folders-panel .folder-node-header:focus-within .folder-actions { opacity: 1; }
+
+#folders-panel .btn-icon {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: #86868b;
+    font-size: 12px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+#folders-panel .btn-icon:hover { background: #ececf0; color: #1d1d1f; }
+#folders-panel .btn-icon.btn-danger:hover { background: #fdecec; color: #c0392b; }
+
+/* ── Elementos dentro de una capa ─────────────────────────────────────────── */
+#folders-panel .folder-elemento-node > .folder-node-header {
+    color: #3f3f46;
+    font-weight: 400;
+}
+
+#folders-panel .folder-elemento-node > .folder-node-header:hover { background: #f5f5f7; }
+
+/* ── Formulario «crear carpeta»: en línea y discreto ──────────────────────── */
+#folders-panel #folder-form {
+    padding: 8px 10px 12px;
+    border-top: 1px solid #ededf0;
+}
+
+#folders-panel #folder-form input {
+    width: 100%;
+    font: inherit;
+    font-size: 12px;
+    padding: 6px 8px;
+    border: 1px solid #e3e3e3;
+    border-radius: 6px;
+    background: #fff;
+}
+
+#folders-panel #folder-form input:focus {
+    outline: none;
+    border-color: #1d1d1f;
+}
+
+#folders-panel #folder-form .btn-secondary {
+    font-size: 12px;
+    padding: 6px 10px !important;
+    border-radius: 6px;
+    border: 1px solid #e3e3e3;
+    background: #fafafa;
+    color: #1d1d1f;
+    cursor: pointer;
+}
+
+#folders-panel #folder-form .btn-secondary:hover { background: #f0f0f0; }

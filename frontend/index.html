@@ -9,11 +9,14 @@
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=8">
-    <link rel="stylesheet" href="css/prop-modal.css?v=20260915-prop-ui">
-    <link rel="stylesheet" href="css/hilos.css?v=20260918-hilos-v1">
-    <link rel="stylesheet" href="css/diagrama.css?v=diag-v3-1789788567137">
-    <link rel="stylesheet" href="css/tipos-pro.css?v=20260917-tipos-v4">
+    <link rel="stylesheet" href="css/style.css?v=v1790245621000">
+    <link rel="stylesheet" href="css/prop-modal.css?v=v1790245621000">
+    <link rel="stylesheet" href="css/hilos.css?v=v1790245621000">
+    <link rel="stylesheet" href="css/diagrama.css?v=v1790245621000">
+    <link rel="stylesheet" href="css/lienzo-diagrama.css?v=v1790245621000">
+    <link rel="stylesheet" href="css/tipos-pro.css?v=v1790245621000">
+    <link rel="stylesheet" href="css/plantillas-visuales.css?v=v1790245621000">
+    <link rel="stylesheet" href="css/capas-minimal.css?v=v1790245621000">
     <style>
       /* --- Variables y Reset Global --------------------------- */
       :root {
@@ -1103,7 +1106,7 @@
         <!-- --- Panel Derecho (Carpetas / Capas Google Earth) --- -->
         <aside id="folders-panel">
             <div class="folders-header">
-                <h3>📚 Capas del Proyecto</h3>
+                <h3>Capas del Proyecto</h3>
                 <button type="button" id="btn-new-folder" title="Crear nueva carpeta/capa">+</button>
             </div>
             <div id="folders-tree"></div>
@@ -1382,8 +1385,12 @@
           <span class="diag-identity-code" id="diag-identity-code">—</span>
         </div>
         <div class="diag-identity-actions">
+          <span class="diag-identity-nota" id="diag-pendiente" style="display:none;">Sin guardar</span>
           <button class="diag-identity-btn" id="diag-btn-save" data-tooltip="Guardar diagrama">
             <i class="fa-solid fa-floppy-disk"></i>
+          </button>
+          <button class="diag-identity-btn" id="diag-btn-full" data-tooltip="Pantalla completa">
+            <i class="fa-solid fa-expand"></i>
           </button>
           <button class="diag-identity-btn" id="diag-btn-back" data-tooltip="Volver al mapa">
             <i class="fa-solid fa-arrow-left"></i>
@@ -1421,9 +1428,19 @@
           <div id="diag-badge" style="display:none;"></div>
           <button id="diag-btn-reload" style="display:none;"></button>
           
-          <div id="diag-sub" style="width:100%; margin-bottom: 20px;"></div>
-          <div id="diag-body" style="width:100%;"></div>
-          <div id="diag-pie" style="width:100%; margin-top: 20px;"></div>
+          <div id="diag-sub" style="width:100%; margin-bottom: 8px;"></div>
+          <!-- Lienzo del diagrama: se navega con zoom y arrastre, sin barras -->
+          <div class="diag-viewport" id="diag-viewport">
+              <div id="diag-body" style="width:max-content;"></div>
+
+              <!-- Aviso del modo eliminar (los botones del diagrama actuan sobre el lienzo) -->
+              <div class="diag-modo" id="diag-modo" style="display:none;">
+                  <i class="fa-solid fa-trash"></i>
+                  <span id="diag-modo-texto">Modo eliminar: haz clic en el objeto que quieras borrar</span>
+                  <button class="diag-modo-salir" type="button" id="diag-modo-salir" title="Salir del modo eliminar"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+          </div>
+          <div id="diag-pie" style="width:100%; margin-top: 8px;"></div>
       </div>
 
       <div class="bottom-toolbar">
@@ -1505,17 +1522,25 @@
       <div style="flex:1;"></div>
       <button class="sidebar-btn" id="diag-btn-close" data-tooltip="Cerrar"><i class="fa-solid fa-times"></i></button>
     </div>
+    <!-- Agarre para redimensionar el panel del diagrama (como una ventana) -->
+    <div class="diag-resize" id="diag-resize" title="Arrastra para cambiar el tamaño del panel"></div>
   </div>
 </div>
 
 <!-- Scripts JS -->
 <script src="js/app.js"></script>
-<script src="js/ftth-iconos.js"></script>
+<script src="js/ftth-iconos.js?v=v1790245621000"></script>
+<script src="js/ftth-colores.js?v=v1790245621000"></script>
+<script src="js/ftth-plantillas.js?v=v1790245621000"></script>
 <script src="js/ftth-proyectos.js"></script>
-<script src="js/ftth-tipos.js?v=20260917-tipos-v6"></script>
-<script src="js/ftth-mapa.js?v=mapa-v3-1789788567137"></script>
-<script src="js/ftth-hilos.js?v=20260918-hilos-v1"></script>
-<script src="js/ftth-diagrama.js?v=diag-v3-1789788567137"></script>
+<script src="js/ftth-cable-reglas.js?v=v1790245621000"></script>
+<script src="js/ftth-tipos.js?v=v1790245621000"></script>
+<script src="js/ftth-mapa.js?v=v1790245621000"></script>
+<script src="js/ftth-hilos.js?v=v1790245621000"></script>
+<script src="js/plantillas-visuales/splitter.js?v=v1790245621000"></script>
+<script src="js/plantillas-visuales/fibra.js?v=v1790245621000"></script>
+<script src="js/ftth-fibra-inspector.js?v=v1790245621000"></script>
+<script src="js/ftth-diagrama.js?v=v1790245621000"></script>
 <script src="js/ftth-carpetas.js"></script>
 
 <script>

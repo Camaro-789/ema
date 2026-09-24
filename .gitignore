@@ -6,3 +6,10 @@ venv/
 database/
 postgres_data/
 .vscode/
+
+# Copias de seguridad de la base de datos (las crea scripts/limpiar_huerfanos.py)
+*_respaldo_*.db
+
+# Base vacía que aparece si se arranca el backend desde la carpeta ema\
+/tachira_maps.db
+backend/ftth.db

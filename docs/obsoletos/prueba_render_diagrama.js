@@ -217,7 +217,7 @@ async function main() {
   console.log('\n7) Pie de avisos');
   const pie = dom.elementos['diag-pie'].innerHTML;
   check(pie.includes('sin empalme registrado'), 'Muestra el aviso de hilos sin empalme');
-  check(pie.includes('OUT libres'), 'Muestra el aviso de puertos libres');
+  check(!pie.includes('OUT libres'), 'El aviso de puertos libres ya no se muestra (se pidio quitarlo)');
   check(pie.includes('capacidad para 16'), 'Muestra el aviso de capacidad excedida');
 
   console.log('\n8) Calidad del HTML generado');

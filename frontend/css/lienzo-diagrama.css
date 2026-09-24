@@ -1,0 +1,261 @@
+/* Lienzo navegable del diagrama: zoom y arrastre con el raton, SIN barras.
+   Archivo nuevo y aislado: no modifica diagrama.css ni el resto de la app.
+   Se carga DESPUES de diagrama.css para poder ajustar .diag-body-container,
+   que trae overflow:auto y padding:20px (el origen de la barra vertical). */
+
+/* 1) El contenedor deja de ser un area con scroll y pasa a ser el marco del lienzo */
+#ftth-diagrama-modal .diag-body-container {
+    overflow: hidden;
+    padding: 0;
+}
+
+/* 2) El diagrama es ~50% mas grande que la tarjeta original (780x480) */
+#ftth-diagrama-modal .app-card {
+    width: 1170px;
+    height: 720px;
+    max-width: 94vw;
+    max-height: 88vh;
+}
+
+/* 3) Ventana del lienzo: recorta el contenido y nunca muestra barras.
+   Sin cursor especial: no hay "modo paneo", se navega con el raton y punto. */
+#ftth-diagrama-modal .diag-viewport {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    overflow: hidden;
+    touch-action: none;
+}
+
+/* 4) EL LIENZO. Las columnas van EN FILA y con su ancho natural (antes se
+   apilaban en vertical porque #diag-body no tenia ninguna regla de layout: la
+   que existia usaba la clase .diag-body y el elemento no lleva esa clase).
+   Se mueve y escala con transform, y a proposito SIN will-change: forzar la
+   capa hacia que el navegador rasterizara una sola vez y el zoom se viera
+   borroso; sin el, vuelve a dibujarse nitido a cada escala. */
+#ftth-diagrama-modal #diag-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    width: max-content;
+    padding: 24px;
+    transform-origin: 0 0;
+}
+
+#ftth-diagrama-modal #diag-body > .diag-col {
+    flex: 0 0 320px;
+    width: 320px;
+}
+
+/* 5) MODO ELIMINAR: lo activa el boton de la basurita de la barra inferior.
+   Los objetos borrables llevan data-borrar="dispositivo:12" / "bandeja:7". */
+#ftth-diagrama-modal .diag-viewport.modo-eliminar {
+    cursor: crosshair;
+}
+
+#ftth-diagrama-modal .diag-viewport.modo-eliminar [data-borrar] {
+    outline: 1px dashed rgba(255, 59, 48, 0.55);
+    outline-offset: 2px;
+}
+
+#ftth-diagrama-modal .diag-viewport.modo-eliminar [data-borrar]:hover {
+    outline: 2px solid #ff3b30;
+    background: #fdeceb;
+}
+
+#ftth-diagrama-modal .diag-modo {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #ffffff;
+    border: 1px solid #ffd0cc;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.10);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #b42318;
+    z-index: 40;
+}
+
+#ftth-diagrama-modal .diag-modo i {
+    font-size: 11px;
+}
+
+#ftth-diagrama-modal .diag-modo-salir {
+    border: none;
+    background: transparent;
+    color: #b42318;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 6px;
+}
+
+#ftth-diagrama-modal .diag-modo-salir:hover {
+    background: #fdeceb;
+}
+
+/* 6) ÁREA LIBRE DE APARATOS (splitters/adaptadores).
+   Cada aparato vive en su propia caja, posicionada en px del lienzo, y se
+   arrastra con el ratón. El orden se guarda con el disquete del diagrama.
+   La columna de aparatos deja de medir 320px fijos: su ancho lo pone el área,
+   que crece con lo que el usuario coloque dentro. */
+#ftth-diagrama-modal #diag-body > .diag-col--libre {
+    flex: 0 0 auto;
+    width: auto;
+}
+
+#ftth-diagrama-modal .diag-col-nota {
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+#ftth-diagrama-modal .diag-area-dispositivos {
+    position: relative;
+    min-width: 320px;
+    min-height: 260px;
+}
+
+#ftth-diagrama-modal .diag-nodo-dispositivo {
+    position: absolute;
+    width: 340px;
+    cursor: move;
+}
+
+/* Los puertos siguen siendo clicables: el cursor lo anuncia */
+#ftth-diagrama-modal .diag-nodo-dispositivo .diag-puerto,
+#ftth-diagrama-modal .diag-nodo-dispositivo [data-puerto] {
+    cursor: pointer;
+}
+
+/* El agarre: por aquí se arrastra la tarjeta (cursor move, sin modo paneo) */
+#ftth-diagrama-modal .diag-nodo-agarre {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    border: 1px solid #e3e3e3;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    font-size: 11.5px;
+    color: #444;
+    cursor: move;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#ftth-diagrama-modal .diag-nodo-agarre:hover {
+    background: #f5f5f7;
+}
+
+#ftth-diagrama-modal .diag-nodo-agarre i {
+    color: #8f8f8f;
+    font-size: 11px;
+}
+
+#ftth-diagrama-modal .diag-nodo-agarre-nombre {
+    font-weight: 600;
+    color: #1d1d1f;
+}
+
+#ftth-diagrama-modal .diag-nodo-agarre-info {
+    margin-left: auto;
+    font-size: 10px;
+    color: #8f8f8f;
+}
+
+/* Mientras se arrastra: la tarjeta va por encima y el agarre se resalta */
+#ftth-diagrama-modal .diag-nodo-dispositivo--moviendo {
+    z-index: 30;
+}
+
+#ftth-diagrama-modal .diag-nodo-dispositivo--moviendo .diag-nodo-agarre {
+    background: #1d1d1f;
+    border-color: #1d1d1f;
+}
+
+#ftth-diagrama-modal .diag-nodo-dispositivo--moviendo .diag-nodo-agarre-nombre,
+#ftth-diagrama-modal .diag-nodo-dispositivo--moviendo .diag-nodo-agarre-info,
+#ftth-diagrama-modal .diag-nodo-dispositivo--moviendo .diag-nodo-agarre i {
+    color: #ffffff;
+}
+
+/* La tarjeta visual usa el ancho de su caja móvil (antes topaba en 400px) */
+#ftth-diagrama-modal .diag-nodo-dispositivo .pv-splitter {
+    max-width: none;
+}
+
+/* Aviso de cambios sin guardar, junto al disquete */
+#ftth-diagrama-modal .diag-identity-nota {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #b45309;
+}
+
+#ftth-diagrama-modal .diag-identity-btn--pendiente {
+    color: #b45309;
+    background: #fef3c7;
+}
+
+/* 7) BARRAS FLOTANTES Y VENTANA DEL DIAGRAMA.
+   - La barra superior se coloca JUSTO DEBAJO de la barra de identidad: antes
+     empezaba en top:16px y la de identidad (40px, z-index mayor) le tapaba la
+     mitad, asi que "Iluminar" no se veia completa.
+   - El lienzo arranca pegado a la barra de identidad (no 56px mas abajo): asi
+     desaparece esa linea invisible que cortaba la tarjeta al moverla.
+   - Mientras se arrastra un aparato, el lienzo pasa por encima de las barras:
+     la tarjeta nunca se ve cortada al moverla. */
+#ftth-diagrama-modal .top-toolbar {
+    top: 48px;
+    max-width: calc(100% - 24px);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+#ftth-diagrama-modal .diag-body-container {
+    top: 44px !important;
+}
+
+#ftth-diagrama-modal #diag-body.diag-body--arrastrando {
+    z-index: 40;
+}
+
+/* Ventana maximizada (como la opcion de las pestanas de Windows) */
+#ftth-diagrama-modal .app-card.app-card--max {
+    width: 96vw;
+    height: 92vh;
+    max-width: 96vw;
+    max-height: 92vh;
+}
+
+/* Agarre de la esquina: arrastra para dar mas espacio al diagrama */
+#ftth-diagrama-modal .diag-resize {
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    z-index: 60;
+    border-right: 2px solid #b8b8bd;
+    border-bottom: 2px solid #b8b8bd;
+    border-radius: 0 0 10px 0;
+}
+
+#ftth-diagrama-modal .diag-resize:hover {
+    border-color: #1d1d1f;
+}
+
+#ftth-diagrama-modal .app-card--max .diag-resize {
+    display: none;
+}

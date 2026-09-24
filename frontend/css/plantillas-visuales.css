@@ -1,0 +1,780 @@
+/* Estilos de las plantillas visuales de objetos del diagrama (splitter, buffer…).
+   Archivo nuevo y aislado: no modifica diagrama.css, hilos.css ni prop-modal.css.
+   Todo va acotado a #ftth-diagrama-modal y prefijado con .pv- para no chocar
+   con style.css / tipos-pro.css.
+
+   Origen: referencia visual Splitter1x8.htm, trasladando solo la piel.
+   Aquí NO hay ningún color de hilo: el hex de cada puerto llega por la
+   variable --pv-color, que inyecta la plantilla desde window.FTTHColores. */
+
+#ftth-diagrama-modal .pv-splitter {
+    --pv-ink: #1d1d1f;
+    --pv-gray: #86868b;
+    --pv-linea: #f0f0f2;
+    --pv-hover: #f5f5f7;
+    width: 100%;
+    max-width: 400px;
+    background: #ffffff;
+    border-radius: 20px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.04),
+        0 12px 40px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    color: var(--pv-ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                 "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Encabezado ── */
+#ftth-diagrama-modal .pv-splitter__cab {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--pv-linea);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: #ffffff;
+}
+#ftth-diagrama-modal .pv-splitter__cab-izq {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+#ftth-diagrama-modal .pv-splitter__icono {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: 8px;
+    background: #1d1d1f;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+}
+#ftth-diagrama-modal .pv-splitter__textos {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    min-width: 0;
+}
+#ftth-diagrama-modal .pv-splitter__titulo {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--pv-ink);
+    letter-spacing: -0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#ftth-diagrama-modal .pv-splitter__subtitulo {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--pv-gray);
+    letter-spacing: 0.02em;
+}
+#ftth-diagrama-modal .pv-splitter__badge {
+    flex: none;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--pv-hover);
+    color: var(--pv-ink);
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid #e5e5ea;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Cuerpo ── */
+#ftth-diagrama-modal .pv-splitter__cuerpo {
+    display: flex;
+    flex: 1;
+}
+
+/* Entrada (IN) */
+#ftth-diagrama-modal .pv-splitter__entrada {
+    width: 96px;
+    flex: none;
+    border-right: 1px solid var(--pv-linea);
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 10px;
+    gap: 8px;
+}
+#ftth-diagrama-modal .pv-splitter__nodo {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #1d1d1f;
+    border: 3px solid #ffffff;
+    box-shadow: 0 0 0 1.5px #1d1d1f, 0 2px 6px rgba(0, 0, 0, 0.15);
+    margin-bottom: 2px;
+}
+#ftth-diagrama-modal .pv-splitter__in-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--pv-gray);
+    letter-spacing: 0.08em;
+}
+#ftth-diagrama-modal .pv-splitter__in-val {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--pv-ink);
+    background: #ffffff;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid #e5e5ea;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Salidas */
+#ftth-diagrama-modal .pv-splitter__salidas {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Cabecera de la tabla */
+#ftth-diagrama-modal .pv-splitter__thead {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr) 32px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--pv-linea);
+    align-items: center;
+    background: #ffffff;
+}
+#ftth-diagrama-modal .pv-splitter__th {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--pv-gray);
+    text-align: center;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+#ftth-diagrama-modal .pv-splitter__th i {
+    font-size: 9px;
+    margin-right: 3px;
+    opacity: 0.7;
+}
+#ftth-diagrama-modal .pv-splitter__th--accion {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Botón de paleta (norma ↔ neutro) */
+#ftth-diagrama-modal .pv-boton-paleta {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: 1px solid #e5e5ea;
+    background: #ffffff;
+    color: var(--pv-ink);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+#ftth-diagrama-modal .pv-boton-paleta:hover {
+    background: var(--pv-hover);
+    border-color: #d1d1d6;
+    transform: scale(1.05);
+}
+#ftth-diagrama-modal .pv-boton-paleta:active {
+    transform: scale(0.95);
+}
+
+/* Filas de puertos */
+#ftth-diagrama-modal .pv-splitter__filas {
+    display: flex;
+    flex-direction: column;
+}
+#ftth-diagrama-modal .pv-splitter__fila {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1fr) 32px;
+    padding: 8px 14px;
+    align-items: center;
+    border-bottom: 1px solid #f8f8fa;
+    transition: background-color 0.15s ease;
+}
+#ftth-diagrama-modal .pv-splitter__fila:last-child {
+    border-bottom: none;
+}
+#ftth-diagrama-modal .pv-splitter__fila:hover {
+    background-color: var(--pv-hover);
+}
+#ftth-diagrama-modal .pv-splitter__num {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--pv-ink);
+    text-align: center;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    border-radius: 50%;
+    background: var(--pv-hover);
+    margin: 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+#ftth-diagrama-modal .pv-splitter__val {
+    font-size: 12px;
+    font-weight: 500;
+    color: #424245;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#ftth-diagrama-modal .pv-splitter__def {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Círculo de color del puerto.
+   El hex NO está aquí: llega por --pv-color desde la plantilla (TIA-598-C).
+   El anillo interior blanco mantiene legible el color Blanco (B1). */
+#ftth-diagrama-modal .pv-splitter__color {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--pv-color, #d1d1d6);
+    background: var(--pv-color, transparent);
+    box-shadow:
+        inset 0 0 0 1.5px #fff,
+        0 0 0 1px rgba(0, 0, 0, 0.10);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Estado neutro: todos los círculos en gris, sin colores de norma */
+#ftth-diagrama-modal .pv-splitter.pv-neutro .pv-splitter__color {
+    border-color: #d1d1d6;
+    background: #ffffff;
+}
+
+#ftth-diagrama-modal .pv-splitter__vacio {
+    font-size: 11px;
+    color: var(--pv-gray);
+    padding: 12px 14px;
+    text-align: center;
+}
+
+/* ── Pie ── */
+#ftth-diagrama-modal .pv-splitter__pie {
+    padding: 12px 20px;
+    background: #fafafa;
+    border-top: 1px solid var(--pv-linea);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+#ftth-diagrama-modal .pv-splitter__pie-item {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--pv-gray);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+#ftth-diagrama-modal .pv-splitter__pie-item strong {
+    color: var(--pv-ink);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+#ftth-diagrama-modal .pv-splitter__pie-tag {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--pv-ink);
+    background: #ffffff;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid #e5e5ea;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+#ftth-diagrama-modal .pv-splitter__pie-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: #d1d1d6;
+}
+
+/* Hueco de la tarjeta visual: es la tarjeta del objeto, sin decoracion extra
+   (antes tenia fondo y borde porque convivia con la tarjeta clasica). */
+#ftth-diagrama-modal .diag-dispositivo-vista {
+    display: flex;
+    justify-content: center;
+}
+
+/* En columnas estrechas la entrada se apila sobre la tabla */
+@media (max-width: 900px) {
+    #ftth-diagrama-modal .pv-splitter__entrada {
+        width: 74px;
+        padding: 14px 6px;
+    }
+}
+
+/* ── Puertos clicables ──
+   La fila y la entrada llevan data-puerto, así que el enganche que ya existe
+   en #diag-body (bindClicks) las selecciona sin cambiar nada más. */
+#ftth-diagrama-modal .pv-splitter__fila,
+#ftth-diagrama-modal .pv-splitter__entrada {
+    cursor: pointer;
+}
+#ftth-diagrama-modal .pv-splitter__fila--sel {
+    background: #eef2ff;
+    box-shadow: inset 0 0 0 2px #93c5fd;
+}
+#ftth-diagrama-modal .pv-splitter__entrada--sel {
+    background: #eef2ff;
+    box-shadow: inset 0 0 0 2px #93c5fd;
+}
+
+/* ============================================================
+   PLANTILLA VISUAL — CABLE DE FIBRA ÓPTICA (.pv-fibra)
+   Misma familia de diseño que .pv-splitter.
+   ============================================================ */
+
+#ftth-diagrama-modal .pv-fibra {
+    --pv-ink: #1d1d1f;
+    --pv-gray: #86868b;
+    --pv-linea: #f0f0f2;
+    --pv-hover: #f5f5f7;
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 20px;
+    border: 1px solid rgba(0,0,0,0.06);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 12px 40px rgba(0,0,0,0.06);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    color: var(--pv-ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                 "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Cabecera ── */
+#ftth-diagrama-modal .pv-fibra__cab {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--pv-linea);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+#ftth-diagrama-modal .pv-fibra__cab-izq {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+#ftth-diagrama-modal .pv-fibra__icono {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: 8px;
+    background: #0071e3;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+}
+#ftth-diagrama-modal .pv-fibra__textos {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    min-width: 0;
+}
+#ftth-diagrama-modal .pv-fibra__titulo {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--pv-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#ftth-diagrama-modal .pv-fibra__subtitulo {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--pv-gray);
+}
+#ftth-diagrama-modal .pv-fibra__badge {
+    flex: none;
+    font-size: 10px;
+    font-weight: 700;
+    background: #e8f1fd;
+    color: #0071e3;
+    padding: 3px 9px;
+    border-radius: 8px;
+    border: 1px solid #bfd7f8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* ── SVG de la fibra ── */
+#ftth-diagrama-modal .pv-fibra__svg-wrap {
+    padding: 16px 20px;
+    background: #fafafa;
+    border-bottom: 1px solid var(--pv-linea);
+}
+
+/* /* Hover suave sobre hilos y dots del SVG */
+.strand { cursor: default; }
+.strand .strand-line { transition: stroke-width 0.15s ease; }
+.strand:hover .strand-line { stroke-width: 4.5px !important; }
+.strand .strand-dot { transition: r 0.15s ease, stroke-width 0.15s ease; }
+.strand:hover .strand-dot { r: 9px !important; stroke-width: 2px !important; }
+
+/* Tooltip flotante de color / potencia (dBm) */
+.fiber-tooltip {
+    position: fixed; left: 0; top: 0; z-index: 200000; pointer-events: none;
+    display: flex; align-items: center; gap: 7px;
+    background: #1d1d1f; color: #fff; font-size: 11px; font-weight: 600;
+    padding: 6px 11px; border-radius: 8px; white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.22);
+    opacity: 0; transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.fiber-tooltip.visible { opacity: 1; transform: translateY(0); }
+.tip-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; display: block; }
+.tip-name { color: #fff; }
+.tip-dbm { color: rgba(255,255,255,0.65); font-weight: 500; }
+.dbm-value { display: inline-block; min-width: 26px; text-align: right; color: rgba(255,255,255,0.65); }
+
+/* Menú Contextual */
+.context-menu {
+    position: fixed; z-index: 210000; min-width: 170px;
+    background: #ffffff; border: 1px solid #e5e5ea; border-radius: 9px;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.06);
+    padding: 5px; font-size: 12.5px;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transform: scale(0.95); transform-origin: top left;
+    transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+}
+.context-menu.visible { opacity: 1; visibility: visible; pointer-events: auto; transform: scale(1); }
+.context-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 11px; border-radius: 6px; cursor: pointer;
+    color: #1d1d1f; font-weight: 500; user-select: none;
+}
+.context-item:hover { background: #f0f0f2; }
+.context-item:active { background: #e8e8ec; }
+.context-item i { font-size: 12px; color: #1d1d1f; width: 14px; text-align: center; }
+
+/* ── Extremos (puntas A / B) ── */
+#ftth-diagrama-modal .pv-fibra__extremos {
+    padding: 8px 18px;
+    border-bottom: 1px solid var(--pv-linea);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+#ftth-diagrama-modal .pv-fibra__extremo {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--pv-gray);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+#ftth-diagrama-modal .pv-fibra__extremo i {
+    color: #0071e3;
+    font-size: 10px;
+}
+
+/* ── Pie ── */
+#ftth-diagrama-modal .pv-fibra__pie {
+    padding: 10px 18px;
+    background: #fafafa;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+#ftth-diagrama-modal .pv-fibra__chip {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 8px;
+    font-variant-numeric: tabular-nums;
+}
+#ftth-diagrama-modal .pv-fibra__chip--verde {
+    background: #dcfce7;
+    color: #16a34a;
+}
+#ftth-diagrama-modal .pv-fibra__chip--naranja {
+    background: #fff7ed;
+    color: #d97706;
+}
+#ftth-diagrama-modal .pv-fibra__chip--rojo {
+    background: #fee2e2;
+    color: #dc2626;
+}
+#ftth-diagrama-modal .pv-fibra__pie-item {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--pv-gray);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+#ftth-diagrama-modal .pv-fibra__pie-item strong {
+    color: var(--pv-ink);
+    font-weight: 700;
+}
+
+/* ============================================================
+   INSPECTOR FLOTANTE DE PROPIEDADES DE FIBRA (.inspector-root)
+   ============================================================ */
+
+.inspector-root {
+    position: fixed;
+    inset: 0;
+    z-index: 150000;
+    pointer-events: none;
+    visibility: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+.inspector-root.active { visibility: visible; }
+
+.inspector-backdrop {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right,
+        rgba(0,0,0,0) 45%,
+        rgba(0,0,0,0.06) 78%,
+        rgba(0,0,0,0.14) 100%);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+.inspector-root.active .inspector-backdrop { opacity: 1; pointer-events: auto; }
+
+.inspector {
+    position: absolute; top: 14px; right: 14px; bottom: 14px;
+    width: 430px; max-width: calc(100vw - 28px);
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow:
+        0 26px 70px rgba(0,0,0,0.18),
+        0 4px 14px rgba(0,0,0,0.06),
+        0 0 0 0.5px rgba(0,0,0,0.02);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    transform: translateX(calc(100% + 34px));
+    transition: transform 0.45s cubic-bezier(0.32,0.72,0,1);
+    pointer-events: auto;
+}
+.inspector-root.active .inspector { transform: translateX(0); }
+
+.inspector-header {
+    padding: 18px 20px 12px;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-shrink: 0;
+}
+.inspector-eyebrow {
+    font-size: 10.5px; font-weight: 600; color: #86868b;
+    text-transform: uppercase; letter-spacing: 0.6px;
+}
+.inspector-title {
+    font-size: 15px; font-weight: 700; color: #1d1d1f;
+    margin-top: 3px; letter-spacing: -0.2px; word-break: break-word; line-height: 1.25;
+}
+.inspector-close {
+    width: 28px; height: 28px; flex-shrink: 0;
+    border-radius: 8px; border: none; background: #f5f5f7; color: #1d1d1f;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s ease;
+}
+.inspector-close:hover { background: #e8e8ed; }
+
+/* Control segmentado (tabs horizontales) */
+.inspector-root .segmented {
+    display: flex; gap: 2px;
+    padding: 3px; margin: 0 20px 10px;
+    background: #f5f5f7; border-radius: 10px; flex-shrink: 0;
+}
+.inspector-root .segmented button {
+    flex: 1; padding: 7px 6px;
+    border: none; background: transparent; color: #1d1d1f;
+    font-family: inherit; font-size: 11.5px; font-weight: 500;
+    border-radius: 7px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: all 0.18s ease; white-space: nowrap;
+}
+.inspector-root .segmented button.active {
+    background: #ffffff; font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.02);
+}
+
+.inspector-body {
+    flex: 1; min-height: 0;
+    overflow-y: auto; padding: 8px 20px 20px;
+    scrollbar-width: thin;
+}
+.inspector-body::-webkit-scrollbar { width: 8px; }
+.inspector-body::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.12); border-radius: 4px; border: 2px solid #fff; background-clip: padding-box;
+}
+
+.inspector-footer {
+    padding: 12px 20px;
+    border-top: 1px solid #ededf0; background: #fafafa;
+    display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;
+}
+
+.inspector-root .panel { display: none; }
+.inspector-root .panel.active {
+    display: block;
+    animation: ffiPanelIn 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes ffiPanelIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.inspector-root .field-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.inspector-root .field-row label { width: 130px; flex-shrink: 0; font-size: 12px; font-weight: 500; color: #1d1d1f; letter-spacing: -0.05px; line-height: 1.3; }
+.inspector-root .field-row .control { flex: 1; display: flex; gap: 8px; align-items: center; min-width: 0; }
+.inspector-root .field-row select,
+.inspector-root .field-row input[type="text"],
+.inspector-root .field-row input[type="number"],
+.inspector-root .field-row textarea {
+    width: 100%; font-size: 12.5px; color: #1d1d1f; padding: 8px 11px;
+    border: 1px solid #d2d2d7; border-radius: 8px; background: #ffffff; font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.inspector-root .field-row select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M1 3l4 4 4-4' fill='none' stroke='%2386868b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-repeat: no-repeat; background-position: right 11px center; padding-right: 30px; }
+.inspector-root .field-row select:focus,
+.inspector-root .field-row input:focus,
+.inspector-root .field-row textarea:focus {
+    outline: none; border-color: #1d1d1f; box-shadow: 0 0 0 3px rgba(29, 29, 31, 0.10);
+}
+.inspector-root .field-row input[readonly] { background: #f5f5f7; color: #86868b; border-color: #e8e8ed; }
+
+.inspector-root .btn-sync {
+    width: 34px; height: 34px; flex-shrink: 0;
+    background: #1d1d1f; color: #fff; border: none; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: background 0.15s ease;
+}
+.inspector-root .btn-sync:hover { background: #000; }
+.inspector-root .color-swatch { width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; border: 1px solid #d2d2d7; background: #0071e3; }
+
+.inspector-root .checkbox-group { display: flex; align-items: center; gap: 18px; font-size: 12px; color: #1d1d1f; flex-wrap: wrap; }
+.inspector-root .checkbox-group label { display: flex; align-items: center; gap: 7px; width: auto; font-weight: 500; cursor: pointer; user-select: none; }
+.inspector-root .checkbox-group input[type="checkbox"] { width: 17px; height: 17px; cursor: pointer; accent-color: #1d1d1f; margin: 0; }
+
+.inspector-root .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.inspector-root .two-col .field-row { margin-bottom: 0; flex-direction: column; align-items: flex-start; gap: 6px; }
+.inspector-root .two-col .field-row .control { width: 100%; }
+
+.inspector-root .badge-readonly {
+    background: #f5f5f7; color: #1d1d1f; font-weight: 600;
+    padding: 8px 12px; border-radius: 8px; font-size: 12.5px; border: 1px solid #e8e8ed; display: inline-block;
+}
+.inspector-root .divider { height: 1px; background: #ededf0; margin: 16px 0; }
+.inspector-root .form-section-title {
+    font-size: 10.5px; font-weight: 700; color: #86868b;
+    text-transform: uppercase; letter-spacing: 0.6px; margin: 6px 0 12px;
+}
+
+.inspector-root .btn {
+    font-size: 12.5px; font-weight: 500; padding: 8px 18px; border-radius: 9px;
+    border: 1px solid #d2d2d7; background: #ffffff; color: #1d1d1f; cursor: pointer; transition: all 0.15s ease;
+}
+.inspector-root .btn:hover { background: #f5f5f7; }
+.inspector-root .btn-primary { background: #1d1d1f; color: #ffffff; border-color: #1d1d1f; }
+.inspector-root .btn-primary:hover { background: #000; border-color: #000; }
+
+/* Timeline Ruta de fibra */
+.inspector-root .route-summary {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; margin-bottom: 16px; background: #f5f5f7; border-radius: 10px; font-size: 11.5px; color: #1d1d1f;
+}
+.inspector-root .route-summary .rs-item { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.inspector-root .route { position: relative; padding-left: 6px; }
+.inspector-root .route-item { position: relative; display: flex; gap: 12px; padding-bottom: 14px; }
+.inspector-root .route-line {
+    position: relative; width: 22px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+}
+.inspector-root .route-line::before {
+    content: ""; position: absolute; top: 20px; bottom: -14px; left: 50%; width: 2px; margin-left: -1px; background: #e8e8ed;
+}
+.inspector-root .route-item:last-child .route-line::before { display: none; }
+.inspector-root .route-dot {
+    width: 20px; height: 20px; flex-shrink: 0; border-radius: 50%; background: #ffffff; border: 2px solid #d2d2d7;
+    display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #86868b;
+    position: relative; z-index: 1; transition: all 0.2s ease;
+}
+.inspector-root .route-item.start .route-dot { border-color: #1d1d1f; background: #1d1d1f; color: #ffffff; }
+.inspector-root .route-item.end .route-dot { border-color: #0071e3; background: #0071e3; color: #ffffff; }
+.inspector-root .route-item:hover .route-dot { transform: scale(1.12); box-shadow: 0 0 0 4px rgba(0,113,227,0.12); }
+.inspector-root .route-content { flex: 1; min-width: 0; padding: 2px 0 4px; }
+.inspector-root .route-name { font-size: 12.5px; font-weight: 600; color: #1d1d1f; line-height: 1.3; }
+.inspector-root .route-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 10.5px; color: #86868b; font-weight: 500; margin-top: 3px; }
+.inspector-root .route-meta .tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px; background: #f0f0f2; color: #1d1d1f; font-weight: 600; font-size: 10px; }
+.inspector-root .route-meta .tag.tag-start { background: #1d1d1f; color: #fff; }
+.inspector-root .route-meta .tag.tag-end { background: #e8f1fd; color: #0071e3; }
+.inspector-root .route-dist { flex-shrink: 0; align-self: flex-start; font-size: 10.5px; font-weight: 600; color: #86868b; padding: 3px 8px; border-radius: 6px; background: #fafafa; border: 1px solid #ededf0; white-space: nowrap; }
+
+/* Ruta de fibra: íconos oficiales de cada objeto (los SVG del panel izquierdo) */
+.inspector-root .route-name { display: flex; align-items: center; gap: 7px; }
+.inspector-root .route-name .route-ico,
+.inspector-root .route-summary .rs-item img.ftth-icono,
+.inspector-root .route-meta .tag img.ftth-icono {
+    flex-shrink: 0; object-fit: contain; display: inline-block;
+}
+.inspector-root .route-meta .tag.tag-anclado { background: #eef6ff; color: #0b4f9e; }
+.inspector-root .route-dist small { display: block; font-weight: 500; font-size: 9.5px; color: #a1a1a6; margin-top: 2px; white-space: nowrap; }
+.inspector-root .route-empty {
+    padding: 16px 14px; font-size: 12px; line-height: 1.55; color: #86868b;
+    text-align: center; background: #fafafa; border: 1px solid #ededf0; border-radius: 10px;
+}
+.inspector-root .route-empty b { color: #1d1d1f; }
+
+/* ============================================================
+   TARJETA DE FIBRA: hover de cada hilo + etiqueta de potencia (dBm)
+   ============================================================ */
+.pv-fibra-svg .strand { cursor: default; }
+.pv-fibra-svg .strand-line { transition: stroke-width 0.15s ease; }
+.pv-fibra-svg .strand:hover .strand-line { stroke-width: 4; }
+.pv-fibra-svg .strand-dot { transition: r 0.15s ease, stroke-width 0.15s ease; }
+.pv-fibra-svg .strand:hover .strand-dot { r: 9; stroke-width: 2; }
+/* La potencia de CADA hilo: oculta hasta que el cursor pasa por ese hilo */
+.pv-fibra-svg .strand-dbm {
+  opacity: 0; transition: opacity 0.15s ease; pointer-events: none;
+  font-size: 9.5px; font-weight: 700; fill: #1d1d1f;
+  paint-order: stroke; stroke: #ffffff; stroke-width: 3px; stroke-linejoin: round;
+}
+.pv-fibra-svg .strand:hover .strand-dbm { opacity: 1; }
+
+/* Aviso cuando el TIPO del cable no declara sus hilos (no se dibuja nada) */
+.pv-fibra__aviso {
+  padding: 16px 12px; font-size: 12px; line-height: 1.5;
+  color: #86868b; text-align: center;
+}
+

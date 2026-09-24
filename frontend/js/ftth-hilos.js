@@ -53,7 +53,6 @@ const FTTHHilos = (() => {
 
   // ── Referencias del modal existente ───────────────────────────────────────
   function btnTab() { return document.getElementById('prop-tab-btn-hilos'); }
-  function paginaTab() { return document.getElementById('prop-tab-hilos'); }
   function cuerpo() { return document.getElementById('prop-hilos-body'); }
   function contador() { return document.getElementById('prop-hilos-count'); }
 
@@ -121,6 +120,22 @@ const FTTHHilos = (() => {
     return `<span class="hilos-chip ${clase || ''}">${escapeHtml(texto)}</span>`;
   }
 
+  /** ¿Este cable es un DROP (sin buffer)? Lo declara la plantilla del tipo. */
+  function _esCableDrop() {
+    const props = (_datos && _datos.plantilla && _datos.plantilla.propiedades) || {};
+    const estructura = String(props.estructura || '').trim().toLowerCase();
+    if (estructura) return estructura === 'drop';
+    // Tipos antiguos sin el campo: un único contenedor marcado SIN BUFFER
+    const tubos = (_datos && _datos.tubos) || [];
+    return tubos.length === 1
+      && String(tubos[0].etiqueta || '').toUpperCase().includes('SIN BUFFER');
+  }
+
+  function _esContenedorSinBuffer(tubo, esDrop) {
+    return !!esDrop
+      || String((tubo && tubo.etiqueta) || '').toUpperCase().includes('SIN BUFFER');
+  }
+
   function pintar() {
     const c = cuerpo();
     if (!c || !_datos) return;
@@ -170,19 +185,29 @@ const FTTHHilos = (() => {
       html += '<div class="hilos-vacio">Este cable aún no tiene tubos ni hilos. Usa «Materializar hilos» para crearlos desde su plantilla.</div>';
     } else {
       html += '<div class="hilos-tubos">';
+      const esDrop = _esCableDrop();
       _datos.tubos.forEach((t) => {
+        const sinBuffer = _esContenedorSinBuffer(t, esDrop);
+        const titulo = sinBuffer ? 'Sin buffer' : `Tubo ${String(t.tubo_no).padStart(2, '0')}`;
+        const info = sinBuffer
+          ? `${(t.hilos || []).length} hilo(s) sueltos (salen directos del jacket)`
+          : `${escapeHtml(t.color || '')} · ${t.capacidad_fibras || 0} fibras`;
         html += '<div class="hilos-tubo">';
         html += '<div class="hilos-tubo-cab">'
           + `<span class="hilos-color" style="background:${escapeHtml(t.color_hex || '#888')}"></span>`
-          + `<strong>Tubo ${String(t.tubo_no).padStart(2, '0')}</strong>`
-          + `<span class="hilos-tubo-info">${escapeHtml(t.color || '')} · ${t.capacidad_fibras || 0} fibras</span>`
+          + `<strong>${escapeHtml(titulo)}</strong>`
+          + `<span class="hilos-tubo-info">${info}</span>`
           + '</div>';
         html += '<div class="hilos-lista">';
         (t.hilos || []).forEach((h) => {
           const sel = _hiloSel === h.id ? ' hilos-hilo--sel' : '';
+          // En un drop no hay tubo: el nombre del hilo se muestra sin la «T01-»
+          const etiquetaHilo = sinBuffer
+            ? `H${String(h.hilo_no_en_tubo).padStart(2, '0')}`
+            : h.nombre;
           html += `<button type="button" class="hilos-hilo${sel}" data-hilo="${h.id}" onclick="FTTHHilos.verHilo(${h.id})" title="${escapeHtml(h.nombre + ' · ' + h.estado + ' · global ' + h.hilo_global_no)}" style="--hilo-color:${escapeHtml(h.color_hex || '#888')}">`
             + `<span class="hilos-hilo-top" style="background:${escapeHtml(h.color_hex || '#888')}"></span>`
-            + `<span class="hilos-hilo-nombre">${escapeHtml(h.nombre)}</span>`
+            + `<span class="hilos-hilo-nombre">${escapeHtml(etiquetaHilo)}</span>`
             + `<span class="hilos-hilo-g">G${h.hilo_global_no}</span>`
             + `<span class="hilos-estado hilos-estado--${escapeHtml(h.estado)}">${escapeHtml((ETIQUETA_ESTADO[h.estado] || h.estado).charAt(0))}</span>`
             + '</button>';
@@ -235,8 +260,12 @@ const FTTHHilos = (() => {
       + `<span class="hilos-hilo-g">global ${hilo.hilo_global_no}</span>`
       + `<span class="hilos-estado hilos-estado--${escapeHtml(hilo.estado)}">${escapeHtml(ETIQUETA_ESTADO[hilo.estado] || hilo.estado)}</span>`
       + '</div>';
+    const sinBuffer = _esContenedorSinBuffer(tubo, _esCableDrop());
+    const ubicacion = sinBuffer
+      ? 'Sin buffer (fibra suelta del drop)'
+      : `${String(tubo.tubo_no).padStart(2, '0')} · ${escapeHtml(tubo.color || '')}`;
     html += '<div class="hilos-detalle-grid">'
-      + `<div><label>Tubo</label><span>${String(tubo.tubo_no).padStart(2, '0')} · ${escapeHtml(tubo.color || '')}</span></div>`
+      + `<div><label>Ubicación</label><span>${ubicacion}</span></div>`
       + `<div><label>Posición en tubo</label><span>hilo ${hilo.hilo_no_en_tubo}</span></div>`
       + `<div><label>Perfil</label><span>${escapeHtml(hilo.perfil || '—')}</span></div>`
       + `<div><label>Color</label><span>${escapeHtml(hilo.color || '—')}</span></div>`

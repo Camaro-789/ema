@@ -28,10 +28,23 @@ import json
 import os
 import sys
 
+# La consola de Windows suele estar en cp1252 y no soporta algunos caracteres
+# (por ejemplo la flecha → de los listados): se fuerza UTF-8 en la salida para
+# que la prueba NUNCA falle por un carácter. Esto era la causa de que los
+# scripts pasaran a mano (con PYTHONIOENCODING=utf-8) y fallaran dentro del
+# verificador.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import httpx  # noqa: E402
 from app.main import app  # noqa: E402
+from app.database import SessionLocal  # noqa: E402
+import app.models.ftth_logica as logica  # noqa: E402
 
 R = {"ok": 0, "fallos": []}
 
@@ -121,6 +134,14 @@ def main() -> int:
     )
     print(f"        plantilla: {dto['nodo']['tipo_nombre']} | capacidad: {dto['nodo']['capacidad_puertos']}")
     bandejas_previas = dto["resumen"]["bandejas"]
+    # Línea base: la prueba debe ser idempotente, así que se comparan DELTAS.
+    # Sin esto, cada ejecución acumulaba bandejas, un splitter y un adaptador en
+    # el nodo y las aserciones absolutas fallaban a la segunda corrida.
+    dispositivos_previos = dto["resumen"]["dispositivos"]
+    puertos_previos = dto["resumen"]["puertos"]
+    out_previos = sum(1 for p in dto["puertos"] if p.get("direccion") == "OUT")
+    bandejas_creadas = []
+    dispositivos_creados = []
     print(f"        bandejas: {bandejas_previas} | puertos: {dto['resumen']['puertos']} | hilos: {dto['resumen']['hilos_anclados']}")
     for a in dto["advertencias"]:
         print(f"        aviso: {a}")
@@ -139,6 +160,7 @@ def main() -> int:
     if r.status_code != 200:
         return 1
     b1 = r.json()
+    bandejas_creadas.append(b1["bandeja_no"] + 1)
     print(f"        bandeja #{b1['id']} → número {b1['bandeja_no']} ({b1['slots']} slots)")
     r = CLIENTE.post(f"/api/elementos/{nodo_id}/bandejas", json={"tipo": "splitter", "slots": 24})
     check(
@@ -163,6 +185,8 @@ def main() -> int:
     check(r.status_code == 200, "Se instaló el splitter 1x8", f"status={r.status_code} {r.text[:250]}")
     if r.status_code == 200:
         sp = r.json()
+        bandejas_creadas.append(b1["bandeja_no"])
+        dispositivos_creados.append(sp["id"])
         print(f"        dispositivo #{sp['id']} {sp['tipo']} {sp['division']} → {sp['puertos_creados']}")
         check(sp["puertos_creados"]["IN"] == 1, "Generó 1 puerto IN")
         check(sp["puertos_creados"]["OUT"] == 8, "Generó 8 puertos OUT")
@@ -177,6 +201,7 @@ def main() -> int:
     check(r.status_code == 200, "Se instaló el panel de adaptadores", f"status={r.status_code} {r.text[:200]}")
     if r.status_code == 200:
         ad = r.json()
+        dispositivos_creados.append(ad["id"])
         print(f"        dispositivo #{ad['id']} → {ad['puertos_creados']}")
         check(ad["puertos_creados"]["BIDI"] == 12, "Generó 12 puertos BIDI")
 
@@ -198,9 +223,17 @@ def main() -> int:
     check(r.status_code == 200, "El listado de puertos responde 200")
     puertos = r.json()
     print(f"        total: {puertos['total']} | libres: {puertos['libres']} | ocupados: {puertos['ocupados']}")
-    check(puertos["total"] >= 21, "Se ven al menos 21 puertos (1+8 del splitter y 12 BIDI)", str(puertos["total"]))
+    check(
+        puertos["total"] == puertos_previos + 21,
+        f"Se sumaron 21 puertos (1+8 del splitter y 12 BIDI): {puertos_previos} → {puertos['total']}",
+        str(puertos["total"]),
+    )
     r = CLIENTE.get(f"/api/elementos/{nodo_id}/puertos?direccion=OUT")
-    check(r.json()["total"] == 8, "Filtro por dirección OUT devuelve 8", str(r.json()["total"]))
+    check(
+        r.json()["total"] == out_previos + 8,
+        f"El filtro OUT sumó los 8 del splitter: {out_previos} → {r.json()['total']}",
+        str(r.json()["total"]),
+    )
 
     print("\n9) Hilos anclados al nodo")
     r = CLIENTE.get(f"/api/proyectos/{proyecto}/cables")
@@ -234,8 +267,8 @@ def main() -> int:
         str(dto2["resumen"]["bandejas"]),
     )
     check(
-        dto2["resumen"]["dispositivos"] == 2,
-        "El resumen cuenta los 2 dispositivos instalados",
+        dto2["resumen"]["dispositivos"] == dispositivos_previos + 2,
+        f"El resumen sumó los 2 dispositivos: {dispositivos_previos} → {dto2['resumen']['dispositivos']}",
         str(dto2["resumen"]["dispositivos"]),
     )
     for a in dto2["advertencias"]:
@@ -246,13 +279,41 @@ def main() -> int:
     check(len(r.json().get("features", [])) == n_base, f"El proyecto sigue con {n_base} elementos")
     check(firma_features(r.json()) == firma_base, "El contrato GeoJSON es idéntico a la línea base")
 
+    print("\n11) Limpieza: se borra lo creado por la prueba (el nodo queda como estaba)")
+    db = SessionLocal()
+    try:
+        for did in dispositivos_creados:
+            db.query(logica.FtthPuerto).filter(
+                logica.FtthPuerto.dispositivo_id == did
+            ).delete(synchronize_session=False)
+            db.query(logica.FtthDispositivo).filter(
+                logica.FtthDispositivo.id == did
+            ).delete(synchronize_session=False)
+        if bandejas_creadas:
+            db.query(logica.FtthBandeja).filter(
+                logica.FtthBandeja.elemento_id == nodo_id,
+                logica.FtthBandeja.bandeja_no.in_(bandejas_creadas),
+            ).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+    final = CLIENTE.get(f"/api/elementos/{nodo_id}/nodo").json()
+    check(
+        final["resumen"]["dispositivos"] == dispositivos_previos
+        and final["resumen"]["puertos"] == puertos_previos
+        and final["resumen"]["bandejas"] == bandejas_previas,
+        f"El nodo #{nodo_id} quedó como estaba ({bandejas_previas} bandejas, "
+        f"{dispositivos_previos} dispositivos, {puertos_previos} puertos)",
+        f"ahora {final['resumen']['bandejas']}/{final['resumen']['dispositivos']}/{final['resumen']['puertos']}",
+    )
+
     print("\n" + "=" * 74)
     print(f"RESULTADO: {R['ok']} comprobaciones OK, {len(R['fallos'])} fallos")
     for f in R["fallos"]:
         print(f"  - {f}")
     print("=" * 74)
-    print(f"NOTA: el nodo #{nodo_id} quedó con bandejas, 1 splitter 1x8, 1 panel de adaptadores"
-          + (f" y {hilos_anclados} hilo(s) anclados, para que puedas verlo en el diagrama." if hilos_anclados else "."))
+    print(f"NOTA: la prueba se limpió sola. El nodo #{nodo_id} conserva sus "
+          f"{bandejas_previas} bandeja(s) y {dispositivos_previos} dispositivo(s) originales.")
     return 1 if R["fallos"] else 0
 
 

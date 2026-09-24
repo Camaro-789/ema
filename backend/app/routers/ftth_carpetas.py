@@ -34,7 +34,9 @@ def _serialize_carpeta(c: Carpeta, db: Session) -> dict:
         if el:
             elems_data.append({
                 "elemento_id": e.elemento_id,
-                "elemento_tipo": el.categoria  # Se mantiene para frontend compatibility
+                "elemento_tipo": el.categoria,  # Se mantiene para frontend compatibility
+                # Número VISIBLE del objeto (el correlativo por tipo, no el id interno)
+                "numero": (el.propiedades_instancia or {}).get("numero"),
             })
 
     return {

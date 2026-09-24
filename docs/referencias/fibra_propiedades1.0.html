@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fibra Óptica · Minimalista</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+    * { box-sizing:border-box; margin:0; padding:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",sans-serif; -webkit-font-smoothing:antialiased; }
+    body { background:#f5f5f7; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:40px 20px; }
+
+    /* ============ TARJETA DE LA FIBRA (minimalista) ============ */
+    .fiber-card {
+        width: 640px; background:#ffffff; border-radius:20px;
+        border:1px solid rgba(0,0,0,0.06);
+        box-shadow:0 1px 2px rgba(0,0,0,0.04), 0 12px 40px rgba(0,0,0,0.06);
+        overflow:hidden;
+    }
+    .fiber-header{ padding:16px 20px; border-bottom:1px solid #f0f0f2; }
+    .fiber-title{ font-size:14px; font-weight:700; color:#1d1d1f; }
+    .fiber-subtitle{ font-size:11px; font-weight:500; color:#86868b; margin-top:2px; }
+
+    .fiber-canvas{
+        padding:30px 24px; transition:background-color 0.15s ease;
+        display:flex; align-items:center;
+    }
+    .fiber-canvas svg{ width:100%; height:auto; overflow:visible; }
+
+    #jacket, #buffer{ cursor:context-menu; }
+
+    .fiber-footer{ padding:10px 20px; background:#fafafa; border-top:1px solid #f0f0f2; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#86868b; }
+    .fiber-footer strong{ color:#1d1d1f; }
+    .click-hint{ display:flex; align-items:center; gap:6px; color:#86868b; font-weight:600; }
+
+    /* ============ HILOS: hover ============ */
+    .strand{ cursor:default; }
+    .strand .strand-line{ transition:stroke-width 0.15s ease; }
+    .strand:hover .strand-line{ stroke-width:4; }
+    .strand .strand-dot{ transition:r 0.15s ease, stroke-width 0.15s ease; }
+    .strand:hover .strand-dot{ r:9; stroke-width:2; }
+
+    /* ============ TOOLTIP DE COLOR / POTENCIA ============ */
+    .fiber-tooltip{
+        position:fixed; left:0; top:0; z-index:2000; pointer-events:none;
+        display:flex; align-items:center; gap:7px;
+        background:#1d1d1f; color:#fff; font-size:11px; font-weight:600;
+        padding:6px 11px; border-radius:8px; white-space:nowrap;
+        box-shadow:0 6px 18px rgba(0,0,0,0.22);
+        opacity:0; transform:translateY(4px);
+        transition:opacity 0.15s ease, transform 0.15s ease;
+    }
+    .fiber-tooltip.visible{ opacity:1; transform:translateY(0); }
+    .tip-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; display:block; }
+    .tip-name{ color:#fff; }
+    .tip-dbm{ color:rgba(255,255,255,0.65); font-weight:500; }
+    .dbm-value{ display:inline-block; min-width:26px; text-align:right; color:rgba(255,255,255,0.65); }
+
+    /* ============ MENÚ CONTEXTUAL ============ */
+    .context-menu{
+        position:fixed; z-index:3000; min-width:170px;
+        background:#ffffff; border:1px solid #e5e5ea; border-radius:9px;
+        box-shadow:0 10px 32px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.06);
+        padding:5px; font-size:12.5px;
+        opacity:0; visibility:hidden; pointer-events:none;
+        transform:scale(0.95); transform-origin:top left;
+        transition:opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+    }
+    .context-menu.visible{ opacity:1; visibility:visible; pointer-events:auto; transform:scale(1); }
+    .context-item{
+        display:flex; align-items:center; gap:9px;
+        padding:8px 11px; border-radius:6px; cursor:pointer;
+        color:#1d1d1f; font-weight:500; user-select:none;
+    }
+    .context-item:hover{ background:#f0f0f2; }
+    .context-item:active{ background:#e8e8ec; }
+    .context-item i{ font-size:12px; color:#1d1d1f; width:14px; text-align:center; }
+
+    /* ============ MODAL / VENTANA DE PROPIEDADES (Apple b/n) ============ */
+    .modal-backdrop{
+        position:fixed; inset:0; background:rgba(0,0,0,0.4); backdrop-filter:blur(8px);
+        display:flex; align-items:center; justify-content:center; padding:20px; z-index:1000;
+        opacity:0; visibility:hidden; pointer-events:none; transition:all 0.25s ease;
+    }
+    .modal-backdrop.active{ opacity:1; visibility:visible; pointer-events:auto; }
+
+    /* Tamaño fijo: no cambia al navegar entre paneles */
+    .window{
+        width:100%; max-width:700px;
+        height:min(640px, 88vh);
+        background:#ffffff; border-radius:14px;
+        border:1px solid rgba(0,0,0,0.08);
+        box-shadow:0 30px 80px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.08);
+        overflow:hidden; display:flex; flex-direction:column;
+        transform:scale(0.96) translateY(10px);
+        transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .modal-backdrop.active .window{ transform:scale(1) translateY(0); }
+
+    .window-titlebar{
+        background:#ffffff; color:#1d1d1f; padding:14px 18px;
+        display:flex; align-items:center; justify-content:space-between;
+        border-bottom:1px solid #ededf0;
+        flex-shrink:0;
+    }
+    .window-titlebar .title{ display:flex; align-items:center; gap:9px; font-size:13px; font-weight:600; color:#1d1d1f; letter-spacing:-0.1px; }
+    .window-titlebar .title i{ color:#1d1d1f; font-size:12.5px; }
+    .window-titlebar .controls{ display:flex; align-items:center; gap:16px; font-size:12.5px; color:#86868b; }
+    .window-titlebar .controls i{ cursor:pointer; transition:color 0.15s ease; }
+    .window-titlebar .controls i:hover{ color:#1d1d1f; }
+
+    .window-body{ display:flex; flex:1; min-height:0; background:#ffffff; }
+    .window-main{ flex:1; overflow-y:auto; padding:24px 26px; }
+
+    /* Campos estilo Apple */
+    .field-row{ display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+    .field-row label{ width:150px; flex-shrink:0; font-size:12.5px; font-weight:500; color:#1d1d1f; letter-spacing:-0.05px; }
+    .field-row .control{ flex:1; display:flex; gap:8px; align-items:center; }
+    .field-row select, .field-row input[type="text"], .field-row input[type="number"], .field-row textarea{
+        width:100%; font-size:12.5px; color:#1d1d1f; padding:8px 11px;
+        border:1px solid #d2d2d7; border-radius:8px; background:#ffffff;
+        font-family:inherit;
+        transition:border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .field-row select{ -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M1 3l4 4 4-4' fill='none' stroke='%2386868b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-repeat:no-repeat; background-position:right 11px center; padding-right:30px; }
+    .field-row select:focus, .field-row input:focus, .field-row textarea:focus{
+        outline:none; border-color:#1d1d1f; box-shadow:0 0 0 3px rgba(29,29,31,0.10);
+    }
+    .field-row input[readonly]{ background:#f5f5f7; color:#86868b; border-color:#e8e8ed; }
+    .field-row textarea{ resize:vertical; font-family:inherit; }
+
+    .btn-sync{
+        width:34px; height:34px; flex-shrink:0;
+        background:#1d1d1f; color:#fff; border:none; border-radius:8px;
+        display:flex; align-items:center; justify-content:center; cursor:pointer;
+        transition:background 0.15s ease;
+    }
+    .btn-sync:hover{ background:#000; }
+    .btn-sync i{ font-size:11.5px; }
+
+    .color-swatch{ width:34px; height:34px; flex-shrink:0; border-radius:8px; border:1px solid #d2d2d7; background:#0071e3; }
+
+    .checkbox-group{ display:flex; align-items:center; gap:22px; font-size:12.5px; color:#1d1d1f; }
+    .checkbox-group label{ display:flex; align-items:center; gap:8px; width:auto; font-weight:500; cursor:pointer; user-select:none; }
+    .checkbox-group input[type="checkbox"]{
+        width:17px; height:17px; cursor:pointer;
+        accent-color:#1d1d1f;
+        margin:0;
+    }
+
+    .two-col{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .two-col .field-row{ margin-bottom:0; }
+    .two-col .field-row label{ width:auto; min-width:0; }
+    .two-col .field-row{ flex-direction:column; align-items:flex-start; gap:6px; }
+    .two-col .field-row .control{ width:100%; }
+
+    .badge-readonly{
+        background:#f5f5f7; color:#1d1d1f; font-weight:600;
+        padding:8px 12px; border-radius:8px; font-size:12.5px; border:1px solid #e8e8ed;
+    }
+
+    .divider{ height:1px; background:#ededf0; margin:18px 0; }
+
+    .window-footer{
+        padding:14px 22px; border-top:1px solid #ededf0; background:#ffffff;
+        display:flex; justify-content:flex-end; gap:10px;
+        flex-shrink:0;
+    }
+    .btn{
+        font-size:12.5px; font-weight:500; padding:8px 18px; border-radius:9px;
+        border:1px solid transparent; cursor:pointer; transition:all 0.15s ease;
+        font-family:inherit;
+    }
+    .btn:not(.btn-primary){ background:#ffffff; color:#1d1d1f; border-color:#d2d2d7; }
+    .btn:not(.btn-primary):hover{ background:#f5f5f7; }
+    .btn-primary{ background:#1d1d1f; color:#ffffff; border-color:#1d1d1f; }
+    .btn-primary:hover{ background:#000; border-color:#000; }
+
+    /* ============ DOCK LATERAL ============ */
+    .sidebar-dock{ width:52px; background:#fafafa; border-left:1px solid #ededf0; display:flex; flex-direction:column; align-items:center; padding-top:16px; gap:10px; }
+    .sidebar-btn{ width:36px; height:36px; border-radius:9px; border:none; background:transparent; color:#1d1d1f; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease; }
+    .sidebar-btn:hover{ background:#eef0f3; }
+    .sidebar-btn.active{ background:#1d1d1f; color:#fff; }
+
+    .panel{ display:none; }
+    .panel.active{ display:block; }
+
+    .timeline-item{ position:relative; padding-left:16px; border-left:2px solid #ededf0; padding-bottom:16px; }
+    .timeline-item:last-child{ padding-bottom:0; }
+    .timeline-time{ font-size:10.5px; color:#86868b; }
+    .timeline-text{ font-size:12px; color:#1d1d1f; font-weight:600; margin-top:2px; }
+
+    .photo-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .photo-placeholder{ aspect-ratio:4/3; background:#f5f5f7; border:1px dashed #d2d2d7; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#b0b0b8; font-size:20px; }
+</style>
+</head>
+<body>
+
+<!-- ============ TARJETA (vista principal) ============ -->
+<div class="fiber-card">
+    <div class="fiber-header">
+        <div class="fiber-title">Fibra Óptica</div>
+        <div class="fiber-subtitle">1 Buffer (Azul) · 12 Hilos</div>
+    </div>
+
+    <div class="fiber-canvas">
+        <svg viewBox="0 0 580 300" xmlns="http://www.w3.org/2000/svg">
+            <rect id="jacket" x="0" y="118" width="60" height="44" rx="8" fill="#1d1d1f"/>
+
+            <path id="buffer" d="M62 110 H138 V170 H62 Q52 170 52 160 V120 Q52 110 62 110 Z" fill="#0071e3"/>
+            <text x="88" y="137" text-anchor="middle" font-size="8" font-weight="700" fill="#fff" letter-spacing="0.5" pointer-events="none">BUFFER</text>
+            <text x="88" y="149" text-anchor="middle" font-size="7.5" font-weight="600" fill="rgba(255,255,255,0.85)" pointer-events="none">AZUL</text>
+
+            <g id="strandsGroup"></g>
+
+            <g pointer-events="none">
+                <circle cx="140" cy="140" r="10" fill="#ffffff" stroke="#0071e3" stroke-width="3"/>
+                <circle cx="140" cy="140" r="3" fill="#0071e3"/>
+            </g>
+        </svg>
+    </div>
+
+    <div class="fiber-footer">
+        <span>Ocupación: <strong>4/12</strong></span>
+        <span class="click-hint"><i class="fa-solid fa-computer-mouse"></i> Clic derecho → Propiedades</span>
+    </div>
+</div>
+
+<div class="fiber-tooltip" id="fiberTooltip"></div>
+
+<div class="context-menu" id="contextMenu">
+    <div class="context-item" id="ctxProperties">
+        <i class="fa-solid fa-circle-info"></i> Propiedades
+    </div>
+</div>
+
+<!-- ============ MODAL DE PROPIEDADES ============ -->
+<div class="modal-backdrop" id="modalBackdrop">
+    <div class="window">
+        <div class="window-titlebar">
+            <div class="title"><i class="fa-solid fa-diagram-project"></i> C-GEN_1X8 4-GEN_1X8 5</div>
+            <div class="controls">
+                <i class="fa-solid fa-minus"></i>
+                <i class="fa-regular fa-square"></i>
+                <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+                <i class="fa-solid fa-xmark" id="closeModal"></i>
+            </div>
+        </div>
+
+        <div class="window-body">
+            <div class="window-main">
+
+                <!-- ===== PANEL: INFORMACIÓN ===== -->
+                <div class="panel active" id="panel-info">
+                    <div class="field-row">
+                        <label>Nombre:</label>
+                        <div class="control">
+                            <input type="text" value="C-GEN_1X8 4-GEN_1X8 5">
+                            <button class="btn-sync"><i class="fa-solid fa-arrows-rotate"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <label>Tipo de cable:</label>
+                        <div class="control">
+                            <select>
+                                <option>Cable ASU 12 HILOS</option>
+                                <option>Cable Drop 2 HILOS</option>
+                                <option>Cable Drop 4 HILOS</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <label>Nivel:</label>
+                        <div class="control">
+                            <select>
+                                <option>Primario</option>
+                                <option>Secundario</option>
+                                <option>Terciario</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="field-row">
+                        <label>Etiquetas:</label>
+                        <div class="control"><select><option></option></select></div>
+                    </div>
+
+                    <div class="field-row">
+                        <label>Color:</label>
+                        <div class="control">
+                            <div class="color-swatch"></div>
+                            <select><option></option></select>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="field-row">
+                        <label>Estado de implantación:</label>
+                        <div class="control checkbox-group">
+                            <label><input type="checkbox" id="chkImplantado"> Implantado</label>
+                            <label><input type="checkbox" id="chkNoImplantado" checked> No implantado</label>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="two-col" style="margin-bottom:16px;">
+                        <div class="field-row"><label>Primera punta:</label><div class="control"><select><option>GEN_1X8 4</option></select></div></div>
+                        <div class="field-row"><label>Segunda punta:</label><div class="control"><select><option>GEN_1X8 5</option></select></div></div>
+                    </div>
+
+                    <div class="two-col" style="margin-bottom:16px;">
+                        <div class="field-row"><label>Cantidad de Looses:</label><div class="control"><input type="text" value="1" readonly></div></div>
+                        <div class="field-row"><label>Ocupación:</label><div class="control"><span class="badge-readonly">4 / 12</span></div></div>
+                    </div>
+
+                    <div class="two-col" style="margin-bottom:16px;">
+                        <div class="field-row">
+                            <label>Longitud plana:</label>
+                            <div class="control">
+                                <input type="text" value="88.46">
+                                <select style="max-width:70px;"><option>m</option><option>km</option></select>
+                                <button class="btn-sync"><i class="fa-solid fa-location-crosshairs"></i></button>
+                            </div>
+                        </div>
+                        <div class="field-row">
+                            <label>Longitud 3D:</label>
+                            <div class="control">
+                                <input type="text" value="—" readonly>
+                                <button class="btn-sync"><i class="fa-solid fa-location-crosshairs"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="field-row" style="align-items:flex-start;">
+                        <label>Observaciones:</label>
+                        <div class="control"><textarea rows="3" placeholder="Notas sobre esta fibra..."></textarea></div>
+                    </div>
+                </div>
+
+                <!-- ===== PANEL: HISTORIAL ===== -->
+                <div class="panel" id="panel-historial">
+                    <div class="timeline-item"><div class="timeline-time">20/08/2026 12:40</div><div class="timeline-text">Ocupación actualizada a 4/12</div></div>
+                    <div class="timeline-item"><div class="timeline-time">02/06/2026 16:05</div><div class="timeline-text">Longitud plana verificada en campo</div></div>
+                    <div class="timeline-item"><div class="timeline-time">18/05/2026 09:28</div><div class="timeline-text">Fibra creada en el sistema</div></div>
+                </div>
+
+                <!-- ===== PANEL: FOTOS ===== -->
+                <div class="panel" id="panel-fotos">
+                    <div class="photo-grid">
+                        <div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>
+                        <div class="photo-placeholder"><i class="fa-solid fa-image"></i></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="sidebar-dock">
+                <button class="sidebar-btn active" data-panel="panel-info" title="Información"><i class="fa-solid fa-circle-info"></i></button>
+                <button class="sidebar-btn" data-panel="panel-historial" title="Historial"><i class="fa-regular fa-clock"></i></button>
+                <button class="sidebar-btn" data-panel="panel-fotos" title="Fotos"><i class="fa-regular fa-image"></i></button>
+            </div>
+        </div>
+
+        <div class="window-footer">
+            <button class="btn" id="cancelModal">Cancelar</button>
+            <button class="btn btn-primary">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* ============ Código de colores TIA-598 (12 hilos) ============ */
+    const FIBER_COLORS = [
+        { id:1, name:'Azul',     hex:'#00A2FF', dbm:'' },
+        { id:2, name:'Naranja',  hex:'#FF9500', dbm:'' },
+        { id:3, name:'Verde',    hex:'#2ECC71', dbm:'' },
+        { id:4, name:'Marrón',   hex:'#8B5A2B', dbm:'' },
+        { id:5, name:'Pizarra',  hex:'#95A5A6', dbm:'' },
+        { id:6, name:'Blanco',   hex:'#FFFFFF', border:'#c7c7cc', dbm:'' },
+        { id:7, name:'Rojo',     hex:'#E74C3C', dbm:'' },
+        { id:8, name:'Negro',    hex:'#1C1C1E', dbm:'' },
+        { id:9, name:'Amarillo', hex:'#F1C40F', dbm:'' },
+        { id:10,name:'Violeta',  hex:'#9B59B6', dbm:'' },
+        { id:11,name:'Rosa',     hex:'#FF69B4', dbm:'' },
+        { id:12,name:'Turquesa', hex:'#00C9C8', dbm:'' }
+    ];
+
+    const NS = 'http://www.w3.org/2000/svg';
+
+    /* ============ Geometría ============ */
+    const NODE_X  = 140;
+    const NODE_Y  = 140;
+    const BEND_X  = 250;
+    const END_X   = 317;   // tramo horizontal reducido a la mitad otra vez (antes 385)
+    const TOP_Y   = 30;
+    const SPACING = 20;
+
+    /* ============ Tooltip ============ */
+    const tip = document.getElementById('fiberTooltip');
+
+    function showTip(e, c){
+        const dotStyle = (c.hex === '#FFFFFF')
+            ? 'background:#fff;box-shadow:inset 0 0 0 1px #c7c7cc;'
+            : 'background:' + c.hex + ';';
+
+        const dbmValue = (c.dbm !== undefined && c.dbm !== null) ? c.dbm : '';
+
+        tip.innerHTML =
+            '<span class="tip-dot" style="' + dotStyle + '"></span>' +
+            '<span class="tip-name">' + c.name + '</span>' +
+            '<span class="tip-dbm">(<span class="dbm-value">' + dbmValue + '</span> dBm)</span>';
+
+        tip.classList.add('visible');
+        moveTip(e);
+    }
+    function moveTip(e){
+        const off = 16;
+        let x = e.clientX + off;
+        let y = e.clientY + off;
+        const r = tip.getBoundingClientRect();
+        if (x + r.width  > window.innerWidth  - 8) x = e.clientX - r.width  - off;
+        if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - off;
+        tip.style.left = x + 'px';
+        tip.style.top  = y + 'px';
+    }
+    function hideTip(){ tip.classList.remove('visible'); }
+
+    /* ============ Render de los 12 hilos ============ */
+    function renderStrands(){
+        const g = document.getElementById('strandsGroup');
+        g.innerHTML = '';
+
+        FIBER_COLORS.forEach((c, i) => {
+            const y = TOP_Y + i * SPACING;
+            const strokeColor = c.border || c.hex;
+
+            const d = 'M' + NODE_X + ',' + NODE_Y + ' L' + BEND_X + ',' + y + ' L' + END_X + ',' + y;
+
+            const group = document.createElementNS(NS, 'g');
+            group.setAttribute('class', 'strand');
+
+            const hit = document.createElementNS(NS, 'path');
+            hit.setAttribute('d', d);
+            hit.setAttribute('fill', 'none');
+            hit.setAttribute('stroke', 'transparent');
+            hit.setAttribute('stroke-width', '16');
+            hit.setAttribute('stroke-linecap', 'round');
+            hit.setAttribute('stroke-linejoin', 'round');
+            hit.setAttribute('pointer-events', 'stroke');
+            group.appendChild(hit);
+
+            const line = document.createElementNS(NS, 'path');
+            line.setAttribute('class', 'strand-line');
+            line.setAttribute('d', d);
+            line.setAttribute('fill', 'none');
+            line.setAttribute('stroke', strokeColor);
+            line.setAttribute('stroke-width', '2.5');
+            line.setAttribute('stroke-linecap', 'round');
+            line.setAttribute('stroke-linejoin', 'round');
+            group.appendChild(line);
+
+            const dot = document.createElementNS(NS, 'circle');
+            dot.setAttribute('class', 'strand-dot');
+            dot.setAttribute('cx', END_X);
+            dot.setAttribute('cy', y);
+            dot.setAttribute('r', '6.5');
+            dot.setAttribute('fill', c.hex);
+            dot.setAttribute('stroke', strokeColor);
+            dot.setAttribute('stroke-width', '1.4');
+            group.appendChild(dot);
+
+            group.addEventListener('mouseenter', (e) => showTip(e, c));
+            group.addEventListener('mousemove', moveTip);
+            group.addEventListener('mouseleave', hideTip);
+
+            g.appendChild(group);
+        });
+    }
+    renderStrands();
+
+    /* ============ Checkboxes mutuamente excluyentes ============ */
+    const chkImplantado   = document.getElementById('chkImplantado');
+    const chkNoImplantado = document.getElementById('chkNoImplantado');
+
+    chkImplantado.addEventListener('change', () => {
+        if (chkImplantado.checked) chkNoImplantado.checked = false;
+        if (!chkImplantado.checked && !chkNoImplantado.checked) chkNoImplantado.checked = true;
+    });
+    chkNoImplantado.addEventListener('change', () => {
+        if (chkNoImplantado.checked) chkImplantado.checked = false;
+        if (!chkNoImplantado.checked && !chkImplantado.checked) chkImplantado.checked = true;
+    });
+
+    /* ============ Modal ============ */
+    const backdrop = document.getElementById('modalBackdrop');
+
+    function resetToInfoPanel(){
+        document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        const infoBtn = document.querySelector('.sidebar-btn[data-panel="panel-info"]');
+        if (infoBtn) infoBtn.classList.add('active');
+        const infoPanel = document.getElementById('panel-info');
+        if (infoPanel) infoPanel.classList.add('active');
+    }
+
+    function openModal(){
+        resetToInfoPanel();
+        backdrop.classList.add('active');
+    }
+    function closeModal(){ backdrop.classList.remove('active'); }
+
+    document.getElementById('closeModal').addEventListener('click', closeModal);
+    document.getElementById('cancelModal').addEventListener('click', closeModal);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
+
+    /* ============ Menú contextual ============ */
+    const ctxMenu = document.getElementById('contextMenu');
+    const fiberCard = document.querySelector('.fiber-card');
+    const jacketEl = document.getElementById('jacket');
+    const bufferEl = document.getElementById('buffer');
+
+    function showContextMenu(x, y){
+        ctxMenu.classList.add('visible');
+        const r = ctxMenu.getBoundingClientRect();
+        if (x + r.width  > window.innerWidth  - 8) x = window.innerWidth  - r.width  - 8;
+        if (y + r.height > window.innerHeight - 8) y = window.innerHeight - r.height - 8;
+        ctxMenu.style.left = x + 'px';
+        ctxMenu.style.top  = y + 'px';
+    }
+    function hideContextMenu(){ ctxMenu.classList.remove('visible'); }
+
+    fiberCard.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const onJacket = e.target === jacketEl || e.target.closest('#jacket');
+        const onBuffer = e.target === bufferEl || e.target.closest('#buffer');
+
+        if (onJacket || onBuffer) {
+            showContextMenu(e.clientX, e.clientY);
+        } else {
+            hideContextMenu();
+        }
+    });
+
+    document.getElementById('ctxProperties').addEventListener('click', () => {
+        hideContextMenu();
+        openModal();
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        if (!ctxMenu.contains(e.target)) hideContextMenu();
+    });
+    window.addEventListener('blur', hideContextMenu);
+    window.addEventListener('resize', hideContextMenu);
+
+    /* ============ ESC: cierra menú y modal ============ */
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            hideContextMenu();
+            if (backdrop.classList.contains('active')) closeModal();
+        }
+    });
+
+    /* ============ Dock lateral: cambiar de panel ============ */
+    document.querySelectorAll('.sidebar-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(btn.dataset.panel).classList.add('active');
+        });
+    });
+</script>
+
+</body>
+</html>

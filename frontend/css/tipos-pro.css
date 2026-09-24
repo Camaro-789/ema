@@ -53,7 +53,12 @@
 }
 
 /* Toast Notificación (global: vive fuera del overlay para que también
-   funcione cuando el panel de Tipos está cerrado) */
+   funcione cuando el panel de Tipos está cerrado).
+   IMPORTANTE (z-index): tiene que quedar POR ENCIMA de cualquier modal abierto.
+   El modal del diagrama usa 99999 inline y sus selectores (splitter/aparatos)
+   120000; con el 99999 anterior el toast quedaba al mismo nivel pero ANTES en el
+   DOM, así que el overlay lo tapaba (se veía borroso, al fondo). Se deja en el
+   tope práctico para que ninguna ventana emergente lo vuelva a tapar. */
 #toast.toast {
   position: fixed;
   top: 20px;
@@ -65,7 +70,7 @@
   font-size: 13px;
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 99999;
+  z-index: 2147483000;
   transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -666,3 +671,27 @@
   #ftth-tipos-modal .tipos-modal-body { padding: 14px 16px 20px; }
   #ftth-tipos-modal .row-3col { flex-wrap: wrap; }
 }
+
+/* ── Formulario de cable: «fibras por loose» calculado y resumen del envase ── */
+.campo-calculado {
+  background: #f5f5f7;
+  color: #1d1d1f;
+  font-weight: 600;
+  cursor: not-allowed;
+}
+.cable-preview {
+  margin: 2px 0 14px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #eef6ff;
+  border: 1px solid #d5e6fb;
+  color: #0b4f9e;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.cable-preview--error {
+  background: #fdecec;
+  border-color: #f6c9c9;
+  color: #a12020;
+}
+

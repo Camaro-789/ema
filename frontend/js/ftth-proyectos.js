@@ -18,7 +18,7 @@ const FTTHProyectos = (() => {
 
     async function loadProjects() {
         try {
-            const res = await fetch(apiUrl('/api/v1/maps/projects'));
+            const res = await fetch(apiUrl(`/api/v1/maps/projects?_t=${Date.now()}`), { cache: 'no-store' });
             const data = await res.json();
             renderSelector(data);
         } catch (err) {

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Splitter AF 1x8 · Minimal</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background: #f5f5f7;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    /* ── Tarjeta principal ── */
+    .splitter-card {
+      width: 400px;
+      background: #ffffff;
+      border-radius: 20px;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.04),
+        0 12px 40px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Encabezado ── */
+    .splitter-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #f0f0f2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #ffffff;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: #1d1d1f;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+
+    .header-texts {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+
+    .splitter-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1d1d1f;
+      letter-spacing: -0.01em;
+    }
+
+    .splitter-subtitle {
+      font-size: 10px;
+      font-weight: 500;
+      color: #86868b;
+      letter-spacing: 0.02em;
+    }
+
+    .badge-ratio {
+      font-size: 11px;
+      font-weight: 700;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid #e5e5ea;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Cuerpo ── */
+    .splitter-body {
+      display: flex;
+      flex: 1;
+    }
+
+    /* ── Entrada (IN) ── */
+    .input-section {
+      width: 96px;
+      border-right: 1px solid #f0f0f2;
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 10px;
+      gap: 8px;
+    }
+
+    .input-node {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #1d1d1f;
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 0 1.5px #1d1d1f, 0 2px 6px rgba(0,0,0,0.15);
+      margin-bottom: 2px;
+    }
+
+    .input-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #86868b;
+      letter-spacing: 0.08em;
+    }
+
+    .input-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: #1d1d1f;
+      background: #ffffff;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid #e5e5ea;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Sección de salidas ── */
+    .output-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Cabecera de tabla */
+    .table-head {
+      display: grid;
+      grid-template-columns: 30px 1fr 1fr 36px;
+      padding: 10px 14px;
+      border-bottom: 1px solid #f0f0f2;
+      align-items: center;
+      background: #ffffff;
+    }
+
+    .head-col {
+      font-size: 9px;
+      font-weight: 700;
+      color: #86868b;
+      text-align: center;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .head-col i {
+      font-size: 9px;
+      margin-right: 3px;
+      opacity: 0.7;
+    }
+
+    /* Botón de paleta */
+    .toggle-color-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      border: 1px solid #e5e5ea;
+      background: #ffffff;
+      color: #1d1d1f;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      margin: 0 auto;
+    }
+
+    .toggle-color-btn:hover {
+      background: #f5f5f7;
+      border-color: #d1d1d6;
+      transform: scale(1.05);
+    }
+
+    .toggle-color-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Filas de puertos */
+    .output-row {
+      display: grid;
+      grid-template-columns: 30px 1fr 1fr 36px;
+      padding: 8px 14px;
+      align-items: center;
+      border-bottom: 1px solid #f8f8fa;
+      transition: background-color 0.15s ease;
+    }
+
+    .output-row:last-child {
+      border-bottom: none;
+    }
+
+    .output-row:hover {
+      background-color: #f5f5f7;
+    }
+
+    .port-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1d1d1f;
+      text-align: center;
+      width: 22px;
+      height: 22px;
+      line-height: 22px;
+      border-radius: 50%;
+      background: #f5f5f7;
+      margin: 0 auto;
+    }
+
+    .val-cell {
+      font-size: 12px;
+      font-weight: 500;
+      color: #424245;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+    }
+
+    .port-circle-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .port-circle {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #1d1d1f;
+      background: transparent;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: inset 0 0 0 1.5px #fff;
+    }
+
+    /* ── Colores norma FTTH ── */
+    .colored .color-1 { border-color: #007aff; background: #007aff; }
+    .colored .color-2 { border-color: #ff9500; background: #ff9500; }
+    .colored .color-3 { border-color: #34c759; background: #34c759; }
+    .colored .color-4 { border-color: #a2845e; background: #a2845e; }
+    .colored .color-5 { border-color: #8e8e93; background: #8e8e93; }
+    .colored .color-6 { border-color: #d1d1d6; background: #ffffff; }
+    .colored .color-7 { border-color: #ff3b30; background: #ff3b30; }
+    .colored .color-8 { border-color: #1d1d1f; background: #1d1d1f; }
+
+    /* ── Estado neutro ── */
+    .neutral .port-circle {
+      border-color: #d1d1d6 !important;
+      background: #ffffff !important;
+      box-shadow: inset 0 0 0 1.5px #fff !important;
+    }
+
+    /* ── Pie ── */
+    .splitter-footer {
+      padding: 12px 20px;
+      background: #fafafa;
+      border-top: 1px solid #f0f0f2;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-item {
+      font-size: 11px;
+      font-weight: 500;
+      color: #86868b;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .footer-item strong {
+      color: #1d1d1f;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .footer-tag {
+      font-size: 10px;
+      font-weight: 700;
+      color: #1d1d1f;
+      background: #ffffff;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid #e5e5ea;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .footer-dot {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: #d1d1d6;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="splitter-card">
+
+    <!-- Encabezado -->
+    <div class="splitter-header">
+      <div class="header-left">
+        <div class="header-icon"><i class="fa-solid fa-code-branch"></i></div>
+        <div class="header-texts">
+          <span class="splitter-title">Splitter AF</span>
+          <span class="splitter-subtitle">Fibra hasta el hogar · FTTH</span>
+        </div>
+      </div>
+      <span class="badge-ratio">1 : 8</span>
+    </div>
+
+    <!-- Cuerpo -->
+    <div class="splitter-body">
+
+      <!-- Entrada -->
+      <div class="input-section">
+        <div class="input-node"></div>
+        <span class="input-label">IN</span>
+        <span class="input-val">— dBm</span>
+      </div>
+
+      <!-- Salidas -->
+      <div class="output-section">
+        <div class="table-head">
+          <div class="head-col">#</div>
+          <div class="head-col"><i class="fa-solid fa-calculator"></i>Teórica</div>
+          <div class="head-col"><i class="fa-solid fa-wave-square"></i>OTDR</div>
+          <div class="head-col">
+            <button class="toggle-color-btn" id="toggleColorsBtn" title="Alternar colores norma / neutro">
+              <i class="fa-solid fa-palette"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="portsContainer" class="colored">
+
+          <div class="output-row">
+            <span class="port-num">1</span>
+            <span class="val-cell">— dBm</span>
+            <span class="val-cell">— dBm</span>
+            <div class="port-circle-container"><div class="port-circle color-1"></div></div>
+          </div>
+
+          <div class="output-row">
+            <span class="port-num">2</span>
+            <span class="val-cell">— dBm</span>
+            <span class="val-cell">— dBm</span>
+            <div class="port-circle-container"><div class="port-circle color-2"></div></div>
+          </div>
+
+          <div class="output-row">
+            <span class="port-num">3</span>
+            <span class="val-cell">— dBm</span>
+            <span class="val-cell">— dBm</span>
+            <div class="port-circle-container"><div class="port-circle color-3"></div></div>
+          </div>
+
+          <div class="output-row">
+            <span class="port-num">4</span>
+            <span class="val-cell">— dBm</span>
+            <span class="val-cell">— dBm</span>
+            <div class="port-circle-container"><div class="port-circle color-4"></div></div>
+          </div>
+
+          <div class="output-row">
+            <span class="port-num">5</span>
+            <span class="val-cell">— dBm</span>
+            <span class="val-cell">— dBm</span>
+            <div class="port-circle-container"><div class="port-circle color-5"></div></div>
+          </div>
+
+          <div class="output-row">
+            <span class="port-num">6</span>
+            <span class="val-cell">— dBm</span>
+            <span class="val-cell">— dBm</span>
+            <div class="port-circle-container"><div class="port-circle color-6"></div></div>
+          </div>
+
+          <div class="output-row">
+            <span class="port-num">7</span>
+            <span class="val-cell">— dBm</span>
+            <span class="val-cell">— dBm</span>
+            <div class="port-circle-container"><div class="port-circle color-7"></div></div>
+          </div>
+
+          <div class="output-row">
+            <span class="port-num">8</span>
+            <span class="val-cell">— dBm</span>
+            <span class="val-cell">— dBm</span>
+            <div class="port-circle-container"><div class="port-circle color-8"></div></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Pie -->
+    <div class="splitter-footer">
+      <span class="footer-tag">Splitter AF</span>
+      <span class="footer-item">Atenuación <strong>−10.00 dB</strong></span>
+      <span class="footer-dot"></span>
+      <span class="footer-item"><strong>8</strong> puertos</span>
+    </div>
+
+  </div>
+
+  <script>
+    const toggleBtn = document.getElementById('toggleColorsBtn');
+    const container = document.getElementById('portsContainer');
+    const icon = toggleBtn.querySelector('i');
+
+    toggleBtn.addEventListener('click', () => {
+      const isColored = container.classList.contains('colored');
+      container.classList.toggle('colored', !isColored);
+      container.classList.toggle('neutral', isColored);
+
+      icon.className = isColored
+        ? 'fa-solid fa-eye-slash'
+        : 'fa-solid fa-palette';
+
+      toggleBtn.style.opacity = isColored ? '0.5' : '1';
+    });
+  </script>
+
+</body>
+</html>

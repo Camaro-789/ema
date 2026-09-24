@@ -71,7 +71,7 @@ const FTTHCarpetas = (() => {
     try {
       const [carpetas, elementosGeojson] = await Promise.all([
         api('/api/carpetas'),
-        fetch(apiUrl(`/api/elementos/todos?proyecto_id=${window.currentProjectId}`))
+        fetch(apiUrl(`/api/elementos/todos?proyecto_id=${window.currentProjectId}&_t=${Date.now()}`), { cache: 'no-store' })
           .then(r => r.json())
       ]);
       _carpetasData = carpetas;
@@ -162,11 +162,11 @@ const FTTHCarpetas = (() => {
       <input type="checkbox" class="folder-vis-check" ${carpeta.visible ? 'checked' : ''}
              title="Mostrar/ocultar en mapa">
       <span class="folder-toggle">${carpeta.subcarpetas.length || carpeta.elementos.length ? '▾' : '·'}</span>
-      <span class="folder-name">📁 ${escapeHTML(carpeta.nombre)}</span>
+      <span class="folder-name">${escapeHTML(carpeta.nombre)}</span>
       <div class="folder-actions">
-        <button class="btn-icon" data-action="add-sub" title="Nueva subcarpeta">＋</button>
-        <button class="btn-icon" data-action="rename"  title="Renombrar">✏️</button>
-        <button class="btn-icon btn-danger" data-action="delete" title="Eliminar">🗑️</button>
+        <button class="btn-icon" data-action="add-sub" title="Nueva subcarpeta">+</button>
+        <button class="btn-icon" data-action="rename"  title="Renombrar">✎</button>
+        <button class="btn-icon btn-danger" data-action="delete" title="Eliminar">✕</button>
       </div>`;
     li.appendChild(header);
 
@@ -233,7 +233,7 @@ const FTTHCarpetas = (() => {
 
     li.innerHTML = `
       <span class="elem-icon" aria-hidden="true">${icono}</span>
-      <span class="elem-label" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${etiqueta} #${el.elemento_id}</span>
+      <span class="elem-label" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${etiqueta} #${el.numero || el.elemento_id}</span>
       <div style="display:flex; gap:4px; margin-left:auto; align-items:center;">
         ${unlinkBtn}
         ${deleteBtn}
@@ -248,7 +248,6 @@ const FTTHCarpetas = (() => {
 
     li.querySelector('[data-action="delete-elem"]')?.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!confirm(`¿Eliminar definitivamente ${el.elemento_tipo} #${el.elemento_id} de la red y del mapa?`)) return;
       try {
         if (window.FTTHMapa && FTTHMapa.eliminarElementoDirecto) {
           await FTTHMapa.eliminarElementoDirecto(el.elemento_id);
@@ -260,6 +259,14 @@ const FTTHCarpetas = (() => {
         if (window.FTTHTipos) FTTHTipos.showToast('Elemento eliminado ✓', 'success');
       } catch (err) {
         if (window.FTTHTipos) FTTHTipos.showToast('Error al eliminar: ' + err.message, 'error');
+      }
+    });
+
+    // Doble clic: volar y enfocar el elemento en el mapa
+    li.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      if (window.FTTHMapa && FTTHMapa.irAElemento) {
+        FTTHMapa.irAElemento(el.elemento_id);
       }
     });
 
@@ -337,7 +344,7 @@ const FTTHCarpetas = (() => {
     function collectHidden(nodos) {
       nodos.forEach(c => {
         if (!c.visible) {
-          c.elementos.forEach(el => allHidden.add(el.elemento_id));
+          c.elementos.forEach(el => allHidden.add(Number(el.elemento_id)));
         }
         if (c.subcarpetas) collectHidden(c.subcarpetas);
       });
@@ -345,19 +352,22 @@ const FTTHCarpetas = (() => {
     collectHidden(_carpetasData);
 
     const filterBaseDuctos = ['==', ['get', 'categoria'], 'ducto'];
-    const filterBasePuntos = ['!=', ['get', 'categoria'], 'ducto'];
+    const filterBaseCables = ['==', ['get', 'categoria'], 'cables'];
+    const filterBasePuntos = ['all', ['!=', ['get', 'categoria'], 'ducto'], ['!=', ['get', 'categoria'], 'cables']];
 
     if (!allHidden.size) {
       if (map.getLayer('ftth-ductos-layer')) map.setFilter('ftth-ductos-layer', filterBaseDuctos);
+      if (map.getLayer('ftth-cables-layer')) map.setFilter('ftth-cables-layer', filterBaseCables);
       if (map.getLayer('ftth-puntos-layer')) map.setFilter('ftth-puntos-layer', filterBasePuntos);
       if (map.getLayer('ftth-labels-layer')) map.setFilter('ftth-labels-layer', filterBasePuntos);
       return;
     }
 
-    const hiddenIds = [...allHidden];
+    const hiddenIds = Array.from(allHidden).map(id => Number(id));
     const hideCondition = ['!', ['in', ['get', 'id'], ['literal', hiddenIds]]];
 
     if (map.getLayer('ftth-ductos-layer')) map.setFilter('ftth-ductos-layer', ['all', filterBaseDuctos, hideCondition]);
+    if (map.getLayer('ftth-cables-layer')) map.setFilter('ftth-cables-layer', ['all', filterBaseCables, hideCondition]);
     if (map.getLayer('ftth-puntos-layer')) map.setFilter('ftth-puntos-layer', ['all', filterBasePuntos, hideCondition]);
     if (map.getLayer('ftth-labels-layer')) map.setFilter('ftth-labels-layer', ['all', filterBasePuntos, hideCondition]);
   }
@@ -469,7 +479,7 @@ const FTTHCarpetas = (() => {
     loadCarpetas();
   }
 
-  return { init, loadCarpetas };
+  return { init, loadCarpetas, updateMapFilter };
 
 })();
 
