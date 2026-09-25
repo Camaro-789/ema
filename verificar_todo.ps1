@@ -9,6 +9,9 @@
       1. Busca un Python que tenga FastAPI (el .venv de la carpeta está vacío).
       2. Comprueba que la aplicación ARRANCA (crea las tablas que falten).
       3. Corre las 14 pruebas (8 de backend y 6 de frontend) y resume OK / fallos.
+         Las de backend van dentro de una transacción que NUNCA se commitea
+         (scripts/ejecutar_prueba.py), así que no dejan ningún objeto de prueba en
+         la base real: ni al terminar bien ni si se caen a la mitad.
 
     Si todo sale en verde, el servidor arranca sano y nada está roto.
 #>
@@ -69,7 +72,10 @@ foreach ($t in $pruebasPy) {
     $ruta = Join-Path $backend (Join-Path 'scripts' $t)
     if (-not (Test-Path $ruta)) { Write-Host "  [--]  $t (no existe, se omite)" -ForegroundColor DarkGray; continue }
     Push-Location $backend
-    $salida = & $py "scripts\$t" 2>&1 | Out-String
+    # Cada prueba se ejecuta DENTRO de una transacción que nunca se commitea
+    # (scripts/ejecutar_prueba.py): los objetos que crea desaparecen al terminar,
+    # aunque la prueba falle a la mitad. La base real nunca queda con residuo.
+    $salida = & $py "scripts\ejecutar_prueba.py" "scripts\$t" 2>&1 | Out-String
     $code = $LASTEXITCODE
     Pop-Location
     $resumen = (($salida -split "`n") | Select-String -Pattern 'RESULTADO' | Select-Object -Last 1)
