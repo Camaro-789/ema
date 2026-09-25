@@ -1,0 +1,46 @@
+# Reglas de trabajo — FiberMap Táchira
+
+## Verificación y pruebas
+- No crees un script de prueba nuevo para cada cambio pequeño. Si ya existe un
+  script relevante (ej. prueba_render_hilos.py, prueba_frontend_diagrama.py),
+  amplíalo o reutilízalo — no generes uno nuevo con otro nombre.
+- Para bugs simples o cambios de una sola función, verifica con un comando puntual
+  o un print/log específico, no con una suite completa de pruebas.
+- Nunca declares algo "arreglado" o "verificado" solo por una prueba en seco
+  (transacción deshecha, datos simulados). Si la verificación real requiere que yo
+  pruebe en el navegador o en producción, dilo explícitamente y dame los pasos
+  exactos para comprobarlo yo mismo (qué hacer y qué log buscar).
+
+## Datos y base de datos
+- Nunca crees datos, objetos o registros de prueba (postes, cables, clientes,
+  tipos) directamente en la base de datos real del proyecto. Si necesitas probar
+  algo, usa una transacción que puedas deshacer, una base de datos aparte, o
+  pregúntame primero.
+- Nunca inventes ni "rellenes" un valor que no existe (potencia, atenuación,
+  cantidad de hilos, etc.). Si un dato falta, muéstralo como pendiente/vacío o
+  lanza un aviso — no generes un valor por defecto silencioso.
+
+## Antes de escribir código
+- Cuando reporte un bug, explícame primero la causa raíz exacta (archivo y línea
+  si aplica) y espera mi confirmación antes de escribir la corrección — no vayas
+  directo a "arreglar y verificar".
+- Si hay más de una forma razonable de resolver algo (por ejemplo, decisiones de
+  diseño como borrado en cascada sí/no), pregúntame cuál prefiero en vez de elegir
+  una por tu cuenta y avisarme después.
+
+## Plantillas y catálogo (arquitectura ya definida del proyecto)
+- Todo objeto del diagrama (splitter, buffer, caja, manga, ODF) se dibuja con una
+  función de plantilla parametrizada — nunca con valores fijos (número de hilos,
+  colores, cantidades) escritos directamente en el código. Si necesitas ajustar
+  una plantilla, hazla más genérica, no crees una plantilla nueva por cada caso.
+- Los colores de hilo siempre salen de una sola constante compartida con el
+  código TIA-598 — no la repitas ni la reinventes en otro archivo.
+- El ID interno de cada objeto en la base de datos nunca cambia ni se reutiliza.
+  El número visible al usuario se maneja aparte, por tipo de objeto.
+
+## Comunicación
+- Al terminar una tarea, dame un resumen corto (5 líneas máximo): qué cambiaste,
+  por qué, y qué necesitas que yo verifique. No un reporte extenso de todos los
+  archivos tocados a menos que te lo pida.
+- Si algo no se pudo verificar de verdad, dilo con esas palabras — no lo des por
+  cerrado.
