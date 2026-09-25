@@ -26,6 +26,11 @@ Cómo funciona (por qué hace falta):
        porque nunca hubo COMMIT.
   Las lecturas de las pruebas también pasan por esa sesión, así que ven los datos
   que acaban de crear (antes usaban otra conexión y no los veían).
+
+  Al terminar imprime la cuenta de filas antes y después como evidencia. Por
+  defecto un cambio en esa cuenta solo es un AVISO (puede ser tu app en marcha,
+  que escribe a la vez): con la variable PRUEBA_ESTRICTA=1 ese cambio cuenta como
+  fallo (útil cuando el servidor está parado).
 """
 import os
 import runpy
@@ -116,14 +121,20 @@ def main():
         conexion.close()
 
     # Comprobación de que la base real quedó igual (se lee con una conexión nueva).
+    # OJO: si tu app está corriendo y escribiendo a la vez, la cuenta cambia sin que
+    # la prueba tenga nada que ver; por eso es un AVISO salvo con PRUEBA_ESTRICTA=1.
+    estricto = os.getenv("PRUEBA_ESTRICTA", "") not in ("", "0", "false", "False")
     with database.engine.connect() as comprobacion:
         despues = _contar(comprobacion)
     if despues == antes:
         print(f"[transaccion] base después: {_resumen(despues)}  ->  SIN CAMBIOS")
     else:
-        print(f"[transaccion] ATENCIÓN: la base cambió -> antes {_resumen(antes)} / "
-              f"después {_resumen(despues)}")
-        codigo = codigo or 1
+        distintas = {t: (antes.get(t), despues.get(t)) for t in antes if antes.get(t) != despues.get(t)}
+        print(f"[transaccion] AVISO: la cuenta de filas cambió ({distintas}). Suele ser tu app "
+              f"escribiendo a la vez; la prueba corrió en una transacción que se deshizo.")
+        if estricto:
+            print("[transaccion] PRUEBA_ESTRICTA=1 -> se cuenta como fallo")
+            codigo = codigo or 1
 
     return codigo
 

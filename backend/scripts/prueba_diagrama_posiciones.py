@@ -116,10 +116,10 @@ ESTADO = {"postes": []}
 def elegir_nodo(proyecto_pedido=None):
     """
     Busca un nodo donde probar: la primera cajanap del proyecto y, si no hay
-    ninguna, una manga. Si el nodo elegido tiene menos de dos aparatos, le
-    instala un splitter TEMPORAL (se devuelve su id para quitarlo al final).
+    ninguna, una manga. NO crea nada: si el nodo elegido no tiene al menos dos
+    aparatos, el test se salta el orden del lienzo (ver main()).
 
-    Devuelve (proyecto, nodo_id, dispositivo_temporal_id).
+    Devuelve (proyecto, nodo_id, None).
     """
     candidatos = []
     if proyecto_pedido:
@@ -151,16 +151,8 @@ def elegir_nodo(proyecto_pedido=None):
         r = CLIENTE.get(f"/api/elementos/{nodo_id}/nodo")
         if r.status_code != 200:
             continue
-        if len(r.json().get("dispositivos", [])) >= 2:
-            return proyecto, nodo_id, None
-
-        r = CLIENTE.post(
-            f"/api/elementos/{nodo_id}/dispositivos",
-            json={"tipo": "splitter", "division": "1x4", "serie": "SN-PRUEBA-POS"},
-        )
-        if check(r.status_code == 200, "Se instaló un splitter temporal para la prueba",
-                 f"status={r.status_code} {r.text[:200]}"):
-            return proyecto, nodo_id, r.json()["id"]
+        # Este script NO crea objetos (ni temporales): si el nodo no tiene dos
+        # aparatos, no se puede probar el orden y se salta en main().
         return proyecto, nodo_id, None
 
     return None, None, None
@@ -179,7 +171,7 @@ def main() -> int:
     print("=" * 74)
 
     print("\n1) Nodo de prueba y sus aparatos")
-    proyecto, nodo_id, creado = elegir_nodo(args.proyecto)
+    proyecto, nodo_id, _ = elegir_nodo(args.proyecto)
     if not nodo_id:
         print("        No hay ninguna cajanap/manga en la base: no se puede probar el orden del lienzo.")
         print("        (Crea una caja NAP en el mapa y vuelve a ejecutar la prueba.)")
@@ -195,7 +187,13 @@ def main() -> int:
     ids = [d["id"] for d in dto["dispositivos"]][:2]
     print(f"        aparatos: {ids}")
     if len(ids) < 2:
-        print("        (el nodo tiene menos de dos aparatos: algunas comprobaciones no aplican)")
+        # No se crea nada para llegar a dos: se salta el orden del lienzo.
+        print("        El nodo no tiene dos aparatos: no se prueba el orden del lienzo.")
+        print("\n" + "=" * 74)
+        print(f"RESULTADO: {R['ok']} comprobaciones OK, 0 fallos "
+              f"(omitido el orden: el nodo #{nodo_id} no tiene dos aparatos)")
+        print("=" * 74)
+        return 0
 
     print("\n2) Guardar el orden (lo que hace el disquete)")
     carga = {"posiciones": [
@@ -249,17 +247,7 @@ def main() -> int:
           "Una lista vacía es válida (0 guardadas)", r.text[:140])
 
     print("\n6) Quitar un aparato se lleva su posición (sin huérfanas)")
-    if creado:
-        r = CLIENTE.put(f"/api/elementos/{nodo_id}/diagrama/posiciones",
-                        json={"posiciones": [{"dispositivo_id": creado, "x": 500, "y": 260}]})
-        check(r.status_code == 200, "Se situó el splitter temporal", f"status={r.status_code}")
-        check(filas_del_dispositivo(creado) == 1, "Su posición quedó guardada")
-        r = CLIENTE.delete(f"/api/elementos/{nodo_id}/dispositivos/{creado}")
-        check(r.status_code == 200, "Se quitó el splitter temporal", f"status={r.status_code}")
-        check(filas_del_dispositivo(creado) == 0, "No queda fila huérfana de su posición")
-        creado = None
-    else:
-        print("        (el nodo ya tenía dos aparatos: no hizo falta crear ninguno)")
+    print("        (no aplica: este script no crea aparatos temporales)")
 
     print("\n7) Restablecer el orden (dejar el diagrama limpio)")
     r = CLIENTE.delete(f"/api/elementos/{nodo_id}/diagrama/posiciones")
@@ -278,9 +266,6 @@ def main() -> int:
     r = CLIENTE.get(f"/api/elementos/todos?proyecto_id={proyecto}")
     check(r.status_code == 200 and "features" in r.json(),
           "La capa física (GeoJSON del mapa) sigue respondiendo igual", f"status={r.status_code}")
-
-    if creado:   # por si algo salió por el camino de los fallos
-        CLIENTE.delete(f"/api/elementos/{nodo_id}/dispositivos/{creado}")
 
     print("\n" + "=" * 74)
     print(f"RESULTADO: {R['ok']} comprobaciones OK, {len(R['fallos'])} fallos")

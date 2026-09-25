@@ -303,7 +303,9 @@ def main() -> int:
             # diagrama no sabe cuántos hilos tiene ni qué plantilla dibujar.
             nodo_dto = CLIENTE.get(f"/api/elementos/{nodo}/nodo").json()
             terminan = nodo_dto.get("hilos_que_terminan", [])
-            primero = terminan[0] if terminan else {}
+            # El nodo puede tener anclados hilos de cables REALES: se busca el NUESTRO
+            # (el que se acaba de anclar), no el primero de la lista.
+            primero = next((h for h in terminan if h.get("fibra_id") == hilos[0]), {})
             tipo_cable = primero.get("cable_tipo") or {}
             check(bool(tipo_cable), "El DTO del nodo trae el tipo del cable (cable_tipo)",
                   str(list(primero.keys())))

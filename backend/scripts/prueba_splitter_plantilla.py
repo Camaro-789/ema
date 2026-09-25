@@ -128,6 +128,10 @@ def main() -> int:
     ]
     if not nodos:
         print("        No hay nodos en el proyecto: nada que probar.")
+        print("\n" + "=" * 74)
+        print(f"RESULTADO: {R['ok']} comprobaciones OK, 0 fallos "
+              f"(omitida la parte end-to-end: el proyecto {args.proyecto} no tiene nodos)")
+        print("=" * 74)
         return 0
 
     nodo_id = nodos[0]
