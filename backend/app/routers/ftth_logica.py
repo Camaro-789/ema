@@ -496,9 +496,15 @@ def actualizar_extremo(
         nodo = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == payload.nodo_id).first()
         if not nodo:
             raise HTTPException(404, f"El nodo #{payload.nodo_id} no existe.")
+
+        # Regla Global de Validación: Si el extremo B ya está asignado a otro nodo, rechazar con HTTP 400
+        if letra == "B" and fila.nodo_id is not None and fila.nodo_id != payload.nodo_id:
+            raise HTTPException(
+                400,
+                f"El hilo #{fibra_id} ya se encuentra sangrado/terminado en el nodo #{fila.nodo_id}."
+            )
         fila.nodo_id = payload.nodo_id
     # Desanclar explícitamente: si el cliente envía "nodo_id": null, se limpia el anclaje.
-    # (Antes no había forma de desanclar un extremo por API.)
     enviados = getattr(payload, "model_fields_set", None)
     if enviados is None:
         enviados = getattr(payload, "__fields_set__", set()) or set()
@@ -1147,54 +1153,125 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
         .all()
     }
 
-    # ── Hilos que terminan en este nodo (extremos anclados aquí) ───────────
-    extremos = (
+    # ── Hilos que terminan o pasan por este nodo (Sangrado vs De Paso) ───────────
+    pole_id = elemento.poste_ref_id or elem_id
+
+    # 1. Hilos directamente anclados a este nodo (extremo A o B en elem_id)
+    extremos_directos = (
         db.query(logica.FtthFibraExtremo)
         .filter(logica.FtthFibraExtremo.nodo_id == elem_id)
-        .order_by(logica.FtthFibraExtremo.fibra_id)
         .all()
     )
-    hilos: List[Dict[str, Any]] = []
-    for ext in extremos:
-        fibra = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == ext.fibra_id).first()
-        if not fibra:
+    cable_ids_anclados = set()
+    for ext in extremos_directos:
+        fib = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == ext.fibra_id).first()
+        if fib:
+            cable_ids_anclados.add(fib.elemento_id)
+
+    # 2. Buscar cables del proyecto que pasen por este poste/nodo o tengan hilos anclados aquí
+    cables_proyecto = (
+        db.query(fisicos.FtthElemento)
+        .filter(
+            fisicos.FtthElemento.proyecto_id == elemento.proyecto_id,
+            fisicos.FtthElemento.categoria.in_(["cables", "ductos", "ducto"])
+        )
+        .all()
+    )
+
+    cables_relacionados = []
+    for c in cables_proyecto:
+        if c.id in cable_ids_anclados:
+            cables_relacionados.append(c)
             continue
-        tubo = db.query(logica.FtthCableTubo).filter(logica.FtthCableTubo.id == fibra.tubo_id).first()
-        cable = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == fibra.elemento_id).first()
-        tipo_cable = None
-        if cable:
-            tipo_cable = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == cable.tipo_id).first()
-        numero_tubo = tubo.tubo_no if tubo else 0
-        # El TIPO del cable viaja con cada hilo: el diagrama necesita saber cuántos
-        # hilos tiene y qué plantilla visual le toca (con buffer / drop) para pintarlo
-        # tal como es. Sin esto, el frontend no tiene de dónde leerlo.
+
+        props_c = dict(c.propiedades_instancia or {})
+        postes_c = props_c.get("postes_intermedios") or []
+        ruta_c = props_c.get("trazado_ruta") or []
+        p_set = set()
+        if isinstance(postes_c, list):
+            p_set.update([_to_int(x) for x in postes_c if _to_int(x)])
+        if isinstance(ruta_c, list):
+            for paso in ruta_c:
+                if isinstance(paso, dict) and paso.get("poste") is not None:
+                    p_set.add(_to_int(paso.get("poste")))
+
+        if pole_id in p_set or elem_id in p_set:
+            cables_relacionados.append(c)
+
+    hilos: List[Dict[str, Any]] = []
+    hilos_ids_vistos = set()
+
+    for cable in cables_relacionados:
+        tipo_cable = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == cable.tipo_id).first()
         props_cable = dict(getattr(tipo_cable, "propiedades", None) or {})
-        hilos.append({
-            "fibra_id": fibra.id,
-            "extremo": ext.extremo,
-            "extremo_id": ext.id,
-            "holgura_m": ext.holgura_m,
-            "cable_id": fibra.elemento_id,
-            "cable": _nombre_cable(cable, tipo_cable),
-            "cable_tipo": {
-                "id": getattr(tipo_cable, "id", None),
-                "nombre": getattr(tipo_cable, "nombre_id", None),
-                "plantilla_visual": props_cable.get("plantilla_visual"),
-                "estructura": props_cable.get("estructura"),
-                "fibras": props_cable.get("fibras"),
-                "looses": props_cable.get("looses"),
-                "fibrasLoose": props_cable.get("fibrasLoose"),
-            },
-            "tubo_no": tubo.tubo_no if tubo else None,
-            "hilo_no_en_tubo": fibra.hilo_no_en_tubo,
-            "hilo_global_no": fibra.hilo_global_no,
-            "nombre": f"T{numero_tubo:02d}-H{fibra.hilo_no_en_tubo:02d}",
-            "color": fibra.color,
-            "color_hex": fibra.color_hex,
-            "estado": fibra.estado,
-            "perfil": fibra.perfil,
-            "empalme": None,   # se completará en la fase de empalmes (F4)
-        })
+
+        fibras_cable = (
+            db.query(logica.FtthCableFibra)
+            .filter(logica.FtthCableFibra.elemento_id == cable.id)
+            .order_by(logica.FtthCableFibra.hilo_global_no)
+            .all()
+        )
+
+        for fibra in fibras_cable:
+            if fibra.id in hilos_ids_vistos:
+                continue
+
+            tubo = db.query(logica.FtthCableTubo).filter(logica.FtthCableTubo.id == fibra.tubo_id).first()
+            numero_tubo = tubo.tubo_no if tubo else 0
+
+            extA = db.query(logica.FtthFibraExtremo).filter(
+                logica.FtthFibraExtremo.fibra_id == fibra.id,
+                logica.FtthFibraExtremo.extremo == 'A'
+            ).first()
+
+            extB = db.query(logica.FtthFibraExtremo).filter(
+                logica.FtthFibraExtremo.fibra_id == fibra.id,
+                logica.FtthFibraExtremo.extremo == 'B'
+            ).first()
+
+            nodoB_id = extB.nodo_id if extB else None
+
+            # Reglas de Visibilidad:
+            # 1. extB.nodo_id == elem_id -> Sangrado aquí (editable, de_paso: False)
+            # 2. extB.nodo_id != None y != elem_id -> OMITIR completamente (ya terminó en otro nodo)
+            # 3. extB.nodo_id == None -> De paso (de_paso: True, editable: False)
+            if nodoB_id is not None and nodoB_id != elem_id:
+                continue
+
+            es_sangrado_aqui = (nodoB_id == elem_id)
+            es_de_paso = not es_sangrado_aqui
+            ext_ref = extB if extB else extA
+
+            hilos_ids_vistos.add(fibra.id)
+            hilos.append({
+                "fibra_id": fibra.id,
+                "extremo": ext_ref.extremo if ext_ref else 'B',
+                "extremo_id": ext_ref.id if ext_ref else None,
+                "holgura_m": ext_ref.holgura_m if ext_ref else None,
+                "cable_id": fibra.elemento_id,
+                "cable": _nombre_cable(cable, tipo_cable),
+                "cable_tipo": {
+                    "id": getattr(tipo_cable, "id", None),
+                    "nombre": getattr(tipo_cable, "nombre_id", None),
+                    "plantilla_visual": props_cable.get("plantilla_visual"),
+                    "estructura": props_cable.get("estructura"),
+                    "fibras": props_cable.get("fibras"),
+                    "looses": props_cable.get("looses"),
+                    "fibrasLoose": props_cable.get("fibrasLoose"),
+                },
+                "tubo_no": tubo.tubo_no if tubo else None,
+                "hilo_no_en_tubo": fibra.hilo_no_en_tubo,
+                "hilo_global_no": fibra.hilo_global_no,
+                "nombre": f"T{numero_tubo:02d}-H{fibra.hilo_no_en_tubo:02d}",
+                "color": fibra.color,
+                "color_hex": fibra.color_hex,
+                "estado": fibra.estado,
+                "perfil": fibra.perfil,
+                "de_paso": es_de_paso,
+                "sangrado_aqui": es_sangrado_aqui,
+                "editable": es_sangrado_aqui,
+                "empalme": None,
+            })
 
     # ── Advertencias útiles (la UI no calcula reglas de negocio) ───────────
     puertos_libres = sum(1 for p in puertos_db if p.estado == "libre")
@@ -1299,7 +1376,8 @@ def _dto_nodo(elemento, tipo, props, categoria, capacidad, bandejas_db, disposit
             "dispositivos": len(dispositivos_db),
             "puertos": len(puertos_db),
             "puertos_libres": puertos_libres,
-            "hilos_anclados": len(hilos),
+            "hilos_anclados": sum(1 for h in hilos if h.get("sangrado_aqui") or not h.get("de_paso")),
+            "hilos_de_paso": sum(1 for h in hilos if h.get("de_paso")),
             "empalmes": 0,
         },
         "advertencias": advertencias,
@@ -1579,4 +1657,70 @@ def eliminar_bandeja(
     db.delete(bandeja)
     db.commit()
     return resumen
+
+
+class SangrarPayload(BaseModel):
+    hilos: List[int]
+
+
+@router.post(
+    "/elementos/{nodo_id}/cables/{cable_id}/sangrar",
+    summary="Sangrar hilos específicos de un cable en un nodo",
+)
+def sangrar_hilos_cable(
+    nodo_id: int,
+    cable_id: int,
+    payload: SangrarPayload,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    nodo = _nodo_para_conmutar(nodo_id, db)
+    cable = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == cable_id).first()
+    if not cable:
+        raise HTTPException(404, f"El cable #{cable_id} no existe.")
+
+    hilos_solicitados = payload.hilos or []
+    if not hilos_solicitados:
+        raise HTTPException(400, "Debe enviar al menos un id de hilo para sangrar.")
+
+    sangrados = []
+    for fid in hilos_solicitados:
+        fibra = db.query(logica.FtthCableFibra).filter(
+            logica.FtthCableFibra.id == fid,
+            logica.FtthCableFibra.elemento_id == cable.id
+        ).first()
+        if not fibra:
+            raise HTTPException(400, f"El hilo #{fid} no pertenece al cable #{cable_id}.")
+
+        extB = db.query(logica.FtthFibraExtremo).filter(
+            logica.FtthFibraExtremo.fibra_id == fid,
+            logica.FtthFibraExtremo.extremo == 'B'
+        ).first()
+
+        if not extB:
+            extB = logica.FtthFibraExtremo(
+                proyecto_id=cable.proyecto_id,
+                fibra_id=fid,
+                extremo='B',
+                nodo_id=nodo.id
+            )
+            db.add(extB)
+        else:
+            if extB.nodo_id is not None and extB.nodo_id != nodo.id:
+                raise HTTPException(
+                    400,
+                    f"El hilo #{fid} ya se encuentra sangrado/terminado en el nodo #{extB.nodo_id}."
+                )
+            extB.nodo_id = nodo.id
+
+        fibra.estado = "empalmado"
+        sangrados.append(fid)
+
+    db.commit()
+    return {
+        "status": "ok",
+        "nodo_id": nodo.id,
+        "cable_id": cable.id,
+        "hilos_sangrados": len(sangrados),
+        "ids": sangrados,
+    }
 

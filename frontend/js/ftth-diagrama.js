@@ -231,7 +231,7 @@ const FTTHDiagrama = (() => {
   }
 
   function colHilos(d) {
-    const hilos = d.hilos_que_terminan || [];
+    const hilos = d.hilos_que_terminan || d.hilos || [];
     if (!hilos.length) return '';
     let h = `<div class="diag-col-title">Hilos <span>(${hilos.length})</span></div>`;
     const porCable = new Map();
@@ -240,8 +240,6 @@ const FTTHDiagrama = (() => {
         porCable.set(x.cable_id, {
           cable_id: x.cable_id,
           nombre: x.cable,
-          // El tipo REAL del cable (lo manda el backend en cada hilo): de aquí salen
-          // el número de hilos, el envase (looses/fibrasLoose) y su plantilla visual.
           tipo: x.cable_tipo || null,
           items: [],
         });
@@ -250,34 +248,39 @@ const FTTHDiagrama = (() => {
     });
 
     porCable.forEach((g) => {
-      // Plantilla que DECLARA el tipo (fibra_cable con buffer / fibra_cable_drop).
-      // Nada de claves fijas: si el tipo no la declara, se cae al respaldo por categoría.
       const propsTipo = g.tipo || {};
       const clave = window.FTTHPlantillas.resolverTipo({ categoria: 'cables', propiedades: propsTipo });
+      const hayDePaso = g.items.some(x => x.de_paso);
+
       if (window.FTTHPlantillas && typeof window.FTTHPlantillas.render === 'function' && clave) {
         const datosVisuales = window.FTTHPlantillas.datosFibra(
           { id: g.cable_id, tipo: 'cables', nombre: g.nombre, propiedades_tipo: propsTipo },
           [],
           g.nombre
         );
-        // Los hilos anclados a este nodo, para pintar sus colores/estados reales
         datosVisuales.hilosReales = g.items;
         const cardHtml = window.FTTHPlantillas.render(clave, datosVisuales);
         if (cardHtml) {
           h += '<div class="diag-grupo" style="margin-bottom:12px;">';
           h += cardHtml;
           h += `<button type="button" onclick="if(window.showPropertiesModalById) window.showPropertiesModalById(${g.cable_id})" style="margin-top:6px;width:100%;padding:6px 12px;background:#f5f5f7;color:#1d1d1f;border:1px solid #d1d1d6;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">🔍 Propiedades de ${escapeHtml(g.nombre)}</button>`;
-          
+          if (hayDePaso) {
+            h += `<button type="button" class="btn-sangrar-cable" data-cable-id="${g.cable_id}" data-cable-nombre="${escapeHtml(g.nombre)}" style="margin-top:6px;width:100%;padding:6px 12px;background:#e0f2fe;color:#0284c7;border:1px solid #bae6fd;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fa-solid fa-scissors"></i> Sangrar hilos de este cable aquí</button>`;
+          }
+
           h += '<div class="diag-items" style="margin-top:8px;">';
           g.items.forEach((x) => {
             const sel = (_sel && _sel.tipo === 'hilo' && _sel.id === x.fibra_id) ? ' sel' : '';
-            const titulo = `${x.nombre} · extremo ${x.extremo} · ${x.estado}`;
-            h += `<button type="button" class="diag-hilo${sel}" data-hilo="${x.fibra_id}" title="${escapeHtml(titulo)}">`
+            const dePasoBadge = x.de_paso ? ' <span style="font-size:9px;background:#f1f5f9;color:#64748b;padding:1px 5px;border-radius:4px;border:1px solid #cbd5e1;font-weight:600;margin-left:4px;">De paso</span>' : '';
+            const estadoTexto = x.de_paso ? 'De paso' : (ETIQUETA_ESTADO[x.estado] || x.estado);
+            const titulo = `${x.nombre} · ${x.de_paso ? 'De paso (no sangrado)' : 'Sangrado aquí'} · ${x.estado}`;
+
+            h += `<button type="button" class="diag-hilo${sel}" data-hilo="${x.fibra_id}" data-de-paso="${x.de_paso ? '1' : '0'}" title="${escapeHtml(titulo)}" style="${x.de_paso ? 'opacity:0.85;' : ''}">`
               + `<span class="diag-hilo-franja" style="background:${escapeHtml(x.color_hex || '#888')}"></span>`
-              + `<span class="diag-hilo-nombre">${escapeHtml(x.nombre)}</span>`
+              + `<span class="diag-hilo-nombre">${escapeHtml(x.nombre)}${dePasoBadge}</span>`
               + `<span class="diag-hilo-ext">${escapeHtml(x.extremo)}</span>`
               + `<span class="diag-estado diag-estado--${escapeHtml(x.estado)}">`
-              + `${escapeHtml(ETIQUETA_ESTADO[x.estado] || x.estado)}</span>`
+              + `${escapeHtml(estadoTexto)}</span>`
               + '</button>';
           });
           h += '</div></div>';
@@ -285,20 +288,26 @@ const FTTHDiagrama = (() => {
         }
       }
 
-      // Fallback si no hay plantilla visual
+      // Fallback
       h += '<div class="diag-grupo">';
       h += `<div class="diag-grupo-cab">🔌 <strong onclick="if(window.showPropertiesModalById) window.showPropertiesModalById(${g.cable_id})" style="cursor:pointer;text-decoration:underline;">${escapeHtml(g.nombre)}</strong>`
         + `<span class="diag-grupo-info">${g.items.length} hilo(s)</span></div>`;
+      if (hayDePaso) {
+        h += `<button type="button" class="btn-sangrar-cable" data-cable-id="${g.cable_id}" data-cable-nombre="${escapeHtml(g.nombre)}" style="margin-top:6px;margin-bottom:6px;width:100%;padding:6px 12px;background:#e0f2fe;color:#0284c7;border:1px solid #bae6fd;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fa-solid fa-scissors"></i> Sangrar hilos de este cable aquí</button>`;
+      }
       h += '<div class="diag-items">';
       g.items.forEach((x) => {
         const sel = (_sel && _sel.tipo === 'hilo' && _sel.id === x.fibra_id) ? ' sel' : '';
-        const titulo = `${x.nombre} · extremo ${x.extremo} · ${x.estado}`;
-        h += `<button type="button" class="diag-hilo${sel}" data-hilo="${x.fibra_id}" title="${escapeHtml(titulo)}">`
+        const dePasoBadge = x.de_paso ? ' <span style="font-size:9px;background:#f1f5f9;color:#64748b;padding:1px 5px;border-radius:4px;border:1px solid #cbd5e1;font-weight:600;margin-left:4px;">De paso</span>' : '';
+        const estadoTexto = x.de_paso ? 'De paso' : (ETIQUETA_ESTADO[x.estado] || x.estado);
+        const titulo = `${x.nombre} · ${x.de_paso ? 'De paso (no sangrado)' : 'Sangrado aquí'} · ${x.estado}`;
+
+        h += `<button type="button" class="diag-hilo${sel}" data-hilo="${x.fibra_id}" data-de-paso="${x.de_paso ? '1' : '0'}" title="${escapeHtml(titulo)}" style="${x.de_paso ? 'opacity:0.85;' : ''}">`
           + `<span class="diag-hilo-franja" style="background:${escapeHtml(x.color_hex || '#888')}"></span>`
-          + `<span class="diag-hilo-nombre">${escapeHtml(x.nombre)}</span>`
+          + `<span class="diag-hilo-nombre">${escapeHtml(x.nombre)}${dePasoBadge}</span>`
           + `<span class="diag-hilo-ext">${escapeHtml(x.extremo)}</span>`
           + `<span class="diag-estado diag-estado--${escapeHtml(x.estado)}">`
-          + `${escapeHtml(ETIQUETA_ESTADO[x.estado] || x.estado)}</span>`
+          + `${escapeHtml(estadoTexto)}</span>`
           + '</button>';
       });
       h += '</div></div>';
@@ -472,6 +481,99 @@ const FTTHDiagrama = (() => {
         _sel = (_sel && _sel.tipo === 'puerto' && _sel.id === id) ? null : { tipo: 'puerto', id };
         pintar();
       });
+    });
+    c.querySelectorAll('.btn-sangrar-cable').forEach((b) => {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cableId = Number(b.dataset.cableId);
+        const cableNombre = b.dataset.cableNombre;
+        abrirModalSangrarCable(cableId, cableNombre);
+      });
+    });
+  }
+
+  async function abrirModalSangrarCable(cableId, cableNombre) {
+    if (!cableId || !_boxId || !_datos) return;
+    const hilosCable = (_datos.hilos || _datos.hilos_que_terminan || []).filter(h => h.cable_id === Number(cableId) && h.de_paso);
+    if (!hilosCable.length) {
+      aviso('Todos los hilos disponibles de este cable ya están sangrados en este u otro nodo.', 'info');
+      return;
+    }
+
+    let modal = document.getElementById('diag-modal-sangrar');
+    if (modal) modal.remove();
+
+    modal = document.createElement('div');
+    modal.id = 'diag-modal-sangrar';
+    modal.style.cssText = [
+      'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:130000;',
+      'background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.35);',
+      'padding:20px 24px;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;',
+      'display:flex;flex-direction:column;gap:14px;width:380px;max-width:92vw;max-height:85vh;overflow:hidden;',
+    ].join('');
+
+    const itemsHtml = hilosCable.map(h => `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #f0f0f2;cursor:pointer;">
+        <input type="checkbox" class="chk-sangrar-hilo" value="${h.fibra_id}" checked style="width:16px;height:16px;">
+        <span style="width:14px;height:14px;border-radius:3px;background:${escapeHtml(h.color_hex || '#888')};display:inline-block;"></span>
+        <span style="font-size:13px;font-weight:600;color:#1d1d1f;flex:1;">${escapeHtml(h.nombre)}</span>
+        <span style="font-size:11px;color:#86868b;">Pos. ${h.hilo_global_no}</span>
+      </label>
+    `).join('');
+
+    modal.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f0f0f2;padding-bottom:10px;">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#1d1d1f;">✂️ Sangrar hilos de fibra</div>
+          <div style="font-size:11px;color:#86868b;margin-top:2px;">Cable: ${escapeHtml(cableNombre)}</div>
+        </div>
+        <button id="modal-sangrar-close" style="border:none;background:#f5f5f7;border-radius:6px;width:26px;height:26px;cursor:pointer;">✕</button>
+      </div>
+      <div style="font-size:12px;color:#86868b;">
+        Selecciona los hilos que deseas acceder/empalmar en este nodo:
+      </div>
+      <div style="overflow-y:auto;max-height:40vh;border:1px solid #e5e5ea;border-radius:8px;">
+        ${itemsHtml}
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button id="modal-sangrar-cancel" style="padding:8px 14px;background:#f5f5f7;color:#1d1d1f;border:1px solid #d1d1d6;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">Cancelar</button>
+        <button id="modal-sangrar-save" style="padding:8px 14px;background:#0071e3;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">Confirmar Sangrado</button>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const close = () => { if (modal.parentNode) modal.remove(); };
+    modal.querySelector('#modal-sangrar-close').addEventListener('click', close);
+    modal.querySelector('#modal-sangrar-cancel').addEventListener('click', close);
+
+    modal.querySelector('#modal-sangrar-save').addEventListener('click', async () => {
+      const selected = Array.from(modal.querySelectorAll('.chk-sangrar-hilo:checked')).map(c => Number(c.value));
+      if (!selected.length) {
+        aviso('Selecciona al menos un hilo para sangrar', 'warning');
+        return;
+      }
+      close();
+      aviso('Sangrando hilos en este nodo...', 'info');
+      try {
+        const res = await fetch(apiUrl(`/api/elementos/${_boxId}/cables/${cableId}/sangrar`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hilos: selected })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          aviso(err.detail || 'Error al sangrar hilos', 'error');
+          return;
+        }
+        aviso(`✓ ${selected.length} hilo(s) sangrado(s) exitosamente en este nodo`, 'success');
+        await cargar();
+        encuadrar();
+        marcarCambio();
+      } catch (e) {
+        console.error('Error sangrando hilos:', e);
+        aviso('Error de red al sangrar hilos', 'error');
+      }
     });
   }
 
