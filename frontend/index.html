@@ -9,14 +9,14 @@
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=v1790245621000">
-    <link rel="stylesheet" href="css/prop-modal.css?v=v1790245621000">
-    <link rel="stylesheet" href="css/hilos.css?v=v1790245621000">
-    <link rel="stylesheet" href="css/diagrama.css?v=v1790245621000">
-    <link rel="stylesheet" href="css/lienzo-diagrama.css?v=v1790245621000">
-    <link rel="stylesheet" href="css/tipos-pro.css?v=v1790245621000">
-    <link rel="stylesheet" href="css/plantillas-visuales.css?v=v1790245621000">
-    <link rel="stylesheet" href="css/capas-minimal.css?v=v1790245621000">
+    <link rel="stylesheet" href="css/style.css?v=v1790298614447">
+    <link rel="stylesheet" href="css/prop-modal.css?v=v1790298614447">
+    <link rel="stylesheet" href="css/hilos.css?v=v1790298614447">
+    <link rel="stylesheet" href="css/diagrama.css?v=v1790298614447">
+    <link rel="stylesheet" href="css/lienzo-diagrama.css?v=v1790298614447">
+    <link rel="stylesheet" href="css/tipos-pro.css?v=v1790298614447">
+    <link rel="stylesheet" href="css/plantillas-visuales.css?v=v1790298614447">
+    <link rel="stylesheet" href="css/capas-minimal.css?v=v1790298614447">
     <style>
       /* --- Variables y Reset Global --------------------------- */
       :root {
@@ -258,135 +258,114 @@
         margin: 6px 4px;
       }
 
-      /* -- Burbujas del "+" (flotan sobre el mapa, fuera de la barra) -- */
-      #add-obj-dock {
-        position: absolute;
-        top: 64px;
-        left: 26px;
-        z-index: 25;
-        display: flex;
-        align-items: flex-start;
-        gap: 52px;
-      }
 
-      .bubble-wrapper {
-        position: relative;
-        width: 50px;
-        height: 50px;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .bubble {
-        position: absolute;
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        background: #ffffff;
-        color: #141414;
-        font-family: inherit;
-        font-size: 19px;
-        font-weight: 700;
-        line-height: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-        transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-      }
-
-      .bubble:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16); }
-      .bubble:active { transform: scale(0.95); }
-
-      .bubble-main { z-index: 10; background: #141414; color: #ffffff; border-color: transparent; }
-      .bubble-main span { display: block; transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-      .bubble-wrapper.active .bubble-main span { transform: rotate(45deg); }
-
-      .bubble-sub { opacity: 0; pointer-events: none; z-index: 5; transform: translate(0, 0) scale(0.5); }
-      .bubble-wrapper.active .bubble-diag-up { opacity: 1; pointer-events: auto; transform: translate(45px, -45px) scale(1); }
-      .bubble-wrapper.active .bubble-diag-up:hover { transform: translate(45px, -45px) scale(1.08); }
-      .bubble-wrapper.active .bubble-diag-down { opacity: 1; pointer-events: auto; transform: translate(45px, 45px) scale(1); }
-      .bubble-wrapper.active .bubble-diag-down:hover { transform: translate(45px, 45px) scale(1.08); }
-
-      .bubble-sub.bubble-active { background: #141414; color: #ffffff; border-color: transparent; }
-
-      /* Tooltips minimalistas */
-      .bubble::after {
-        content: attr(data-tooltip);
-        position: absolute;
-        left: calc(100% + 10px);
-        top: 50%;
-        transform: translateY(-50%) translateX(-6px);
-        background: #141414;
-        color: #ffffff;
-        padding: 6px 10px;
-        border-radius: 8px;
-        font-size: 11.5px;
-        font-weight: 600;
-        white-space: nowrap;
-        pointer-events: none;
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.2s ease;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      }
-
-      .bubble:hover::after {
-        opacity: 1;
-        visibility: visible;
-        transform: translateY(-50%) translateX(0);
-      }
-
-      /* Panel: lista de tipos + guardar (se abre con la burbuja principal) */
-      #add-obj-dock .dock-panel {
-        display: none;
-        flex-direction: column;
-        gap: 8px;
-        width: 210px;
-        padding: 10px;
-        background: rgba(255, 255, 255, 0.86);
-        backdrop-filter: blur(18px);
-        -webkit-backdrop-filter: blur(18px);
-        border: 1px solid rgba(255, 255, 255, 0.7);
-        border-radius: 16px;
-        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
-      }
-
-      #add-obj-dock.open .dock-panel { display: flex; }
-      #add-obj-dock.open .objects-submenu { display: flex; }
-
-      #add-obj-dock .objects-submenu {
-        display: none;
-        flex-direction: column;
-        gap: 2px;
-        width: 100%;
-        padding: 4px;
-        background: transparent;
-      }
-
-      #add-obj-dock .objects-submenu.open { display: flex; }
-      #add-obj-dock .sub-obj-btn { width: 100%; }
-
-      #add-obj-dock .dock-save {
-        width: 100%;
-        padding: 9px;
-        border: none;
-        border-radius: 10px;
-        background: #141414;
-        color: #ffffff;
-        font-family: inherit;
-        font-size: 12.5px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-
-      #add-obj-dock .dock-save:hover { opacity: 0.85; }
       /* Submen� desplegable de Objetos */
+      /* --- Panel tecnico rectangular de agregar objetos ---------------------
+         Vive DENTRO del area del mapa (#map-container), pegado al borde derecho
+         del sidebar izquierdo: fijo, ni flotante ni centrado. Reglas del diseno:
+         sin curvas, blanco/negro, gap:0 con separadores grises, sombra dura sin
+         blur y tipografia pequena. */
+      .tech-panel {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        z-index: 30;
+        display: flex;
+        align-items: stretch;
+        background: #ffffff;
+        border: 1px solid #000000;
+        box-shadow: 5px 5px 0 #000000;
+      }
+
+      /* Regla 1: sin bordes redondeados, ni en el panel ni en sus hijos */
+      .tech-panel,
+      .tech-panel * { border-radius: 0; }
+
+      /* Regla 3: gap 0; las celdas se separan con linea vertical gris */
+      .tech-panel .cell {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        width: 52px;
+        padding: 8px 4px;
+        border-right: 1px solid #E5E5EA;
+        background: #ffffff;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.1s ease;
+      }
+
+      .tech-panel .cell:last-child { border-right: none; }
+      .tech-panel .cell:hover { background: #F5F5F5; }
+      .tech-panel .cell img { width: 15px; height: 15px; display: block; filter: brightness(0); }
+      .tech-panel .cell i { font-size: 15px; color: #000000; }
+      .tech-panel .cell span {
+        font-size: 10px;
+        font-weight: 600;
+        color: #000000;
+        letter-spacing: 0.01em;
+      }
+
+      /* Regla 2: activo = negro solido; icono (SVG oscuro) a blanco */
+      .tech-panel .cell.active { background: #000000; }
+      .tech-panel .cell.active span { color: #ffffff; }
+      .tech-panel .cell.active img { filter: brightness(0) invert(1); }
+      .tech-panel .cell.active i { color: #ffffff; }
+
+      .tech-panel .group { display: flex; }
+
+      /* Separador de seccion: linea recta (sin blur ni curva) */
+      .tech-panel .section-gap {
+        width: 6px;
+        background: #FAFAFA;
+        border-left: 1px solid #E5E5EA;
+        border-right: 1px solid #E5E5EA;
+      }
+
+      /* GUARDAR: mismo sistema, apagado hasta que haya algo pendiente */
+      .tech-panel .cell.guardar { width: 66px; }
+      .tech-panel .cell.guardar.disabled { cursor: not-allowed; }
+      .tech-panel .cell.guardar.disabled i,
+      .tech-panel .cell.guardar.disabled span { color: #B0B0B0; }
+      .tech-panel .cell.guardar.ready { background: #000000; }
+      .tech-panel .cell.guardar.ready i,
+      .tech-panel .cell.guardar.ready span { color: #ffffff; }
+      .tech-panel .cell.guardar.ready:hover { background: #1a1a1a; }
+
+      .tech-panel .badge-count {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000000;
+        color: #ffffff;
+        font-size: 9px;
+        font-weight: 700;
+        border: 1px solid #ffffff;
+      }
+
+      .tech-hint {
+        position: absolute;
+        top: 76px;
+        left: 16px;
+        z-index: 30;
+        max-width: 320px;
+        padding: 6px 10px;
+        background: #ffffff;
+        border: 1px solid #000000;
+        box-shadow: 3px 3px 0 #000000;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: #000000;
+      }
+
       .objects-submenu {
         display: none;
         padding: 4px 0 6px 12px;
@@ -1021,78 +1000,45 @@
             </div>
         </aside>
 
-        <!-- --- Burbujas del "+" para agregar objetos (flotan sobre el mapa) --- -->
-        <div id="add-obj-dock">
-            <div class="bubble-wrapper" id="addBubbleWrapper">
-                <!-- Diagonal superior: un solo objeto -->
-                <button type="button" class="bubble bubble-sub bubble-diag-up" id="btn-add-single" onclick="setModoColocacion(true)" data-tooltip="Un solo objeto"><span>+</span></button>
-
-                <!-- Burbuja principal (abre/cierra) -->
-                <button type="button" class="bubble bubble-main" id="btn-add-fab" onclick="toggleAddDock()" data-tooltip="Agregar objetos al mapa"><span>+</span></button>
-
-                <!-- Diagonal inferior: modo m�ltiple (activo por defecto) -->
-                <button type="button" class="bubble bubble-sub bubble-diag-down bubble-active" id="btn-add-multi" onclick="setModoColocacion(false)" data-tooltip="Modo m�ltiple activo">&#8734;</button>
-            </div>
-
-            <div class="dock-panel">
-    <div class="objects-submenu" id="submenu-agregar">
-                        <button type="button" class="sub-obj-btn" data-cat="poste" onclick="FTTHMapa.seleccionarObjeto('poste')">
-                            <span class="sub-obj-ico"><img src="assets/icons/poste.svg" alt="Poste" width="16" height="16"></span>
-                            <span>Poste</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="cajanap" onclick="FTTHMapa.seleccionarObjeto('cajanap')">
-                            <span class="sub-obj-ico"><img src="assets/icons/cajanap.svg" alt="Caja NAP" width="16" height="16"></span>
-                            <span>Caja NAP</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="manga" onclick="FTTHMapa.seleccionarObjeto('manga')">
-                            <span class="sub-obj-ico"><img src="assets/icons/manga.svg" alt="Manga" width="16" height="16"></span>
-                            <span>Manga</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="ducto" onclick="FTTHMapa.seleccionarObjeto('ducto')">
-                            <span class="sub-obj-ico"><img src="assets/icons/ducto.svg" alt="Ducto" width="16" height="16"></span>
-                            <span>Ducto</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="luminaria" onclick="FTTHMapa.seleccionarObjeto('luminaria')">
-                            <span class="sub-obj-ico"><img src="assets/icons/luminaria.svg" alt="Luminaria" width="16" height="16"></span>
-                            <span>Luminaria</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="odf" onclick="FTTHMapa.seleccionarObjeto('odf')">
-                            <span class="sub-obj-ico"><img src="assets/icons/odf.svg" alt="ODF" width="16" height="16"></span>
-                            <span>ODF</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="olt" onclick="FTTHMapa.seleccionarObjeto('olt')">
-                            <span class="sub-obj-ico"><img src="assets/icons/olt.svg" alt="OLT" width="16" height="16"></span>
-                            <span>OLT</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="splitter" onclick="FTTHMapa.seleccionarObjeto('splitter')">
-                            <span class="sub-obj-ico"><img src="assets/icons/splitter.svg" alt="Splitter" width="16" height="16"></span>
-                            <span>Splitter</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="armario" onclick="FTTHMapa.seleccionarObjeto('armario')">
-                            <span class="sub-obj-ico"><img src="assets/icons/armario.svg" alt="Armario" width="16" height="16"></span>
-                            <span>Armario</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="cables" onclick="FTTHMapa.seleccionarObjeto('cables')">
-                            <span class="sub-obj-ico"><img src="assets/icons/cables.svg" alt="Cable de Fibra" width="16" height="16"></span>
-                            <span>Cable</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="switches" onclick="FTTHMapa.seleccionarObjeto('switches')">
-                            <span class="sub-obj-ico"><img src="assets/icons/switches.svg" alt="Switch" width="16" height="16"></span>
-                            <span>Switch</span>
-                        </button>
-                        <button type="button" class="sub-obj-btn" data-cat="fusion" onclick="FTTHMapa.seleccionarObjeto('fusion')">
-                            <span class="sub-obj-ico"><img src="assets/icons/fusion.svg" alt="Fusi�n" width="16" height="16"></span>
-                            <span>Fusi�n</span>
-                        </button>
-                    </div>
-
-                <button type="button" class="dock-save" id="btn-add-save" onclick="guardarObjetosDock()">Guardar</button>
-            </div>
-        </div>
 
         <!-- --- Mapa Central --- -->
         <div id="map-container">
             <div id="map"></div>
+
+            <!-- --- Panel tecnico de agregar objetos (fijo, dentro del mapa) --- -->
+            <div class="tech-panel" id="techPanel">
+                <div class="group" id="objectGroup">
+                    <div class="cell" data-cat="poste" onclick="elegirObjetoPanel('poste')"><img src="assets/icons/poste.svg" alt=""><span>POSTE</span></div>
+                    <div class="cell" data-cat="cajanap" onclick="elegirObjetoPanel('cajanap')"><img src="assets/icons/cajanap.svg" alt=""><span>CAJA</span></div>
+                    <div class="cell" data-cat="manga" onclick="elegirObjetoPanel('manga')"><img src="assets/icons/manga.svg" alt=""><span>MANGA</span></div>
+                    <div class="cell" data-cat="ducto" onclick="elegirObjetoPanel('ducto')"><img src="assets/icons/ducto.svg" alt=""><span>DUCTO</span></div>
+                    <div class="cell" data-cat="splitter" onclick="elegirObjetoPanel('splitter')"><img src="assets/icons/splitter.svg" alt=""><span>SPLIT</span></div>
+                    <div class="cell" data-cat="switches" onclick="elegirObjetoPanel('switches')"><img src="assets/icons/switches.svg" alt=""><span>SWITCH</span></div>
+                    <div class="cell" data-cat="odf" onclick="elegirObjetoPanel('odf')"><img src="assets/icons/odf.svg" alt=""><span>ODF</span></div>
+                    <div class="cell" data-cat="fusion" onclick="elegirObjetoPanel('fusion')"><img src="assets/icons/fusion.svg" alt=""><span>FUSION</span></div>
+                    <div class="cell" data-cat="luminaria" onclick="elegirObjetoPanel('luminaria')"><img src="assets/icons/luminaria.svg" alt=""><span>LUMIN.</span></div>
+                    <div class="cell" data-cat="armario" onclick="elegirObjetoPanel('armario')"><img src="assets/icons/armario.svg" alt=""><span>ARMARIO</span></div>
+                    <div class="cell" data-cat="olt" onclick="elegirObjetoPanel('olt')"><img src="assets/icons/olt.svg" alt=""><span>OLT</span></div>
+                    <div class="cell" data-cat="cables" onclick="elegirObjetoPanel('cables')"><img src="assets/icons/cables.svg" alt=""><span>CABLE</span></div>
+                </div>
+
+                <div class="section-gap"></div>
+
+                <div class="group" id="modeGroup">
+                    <div class="cell" data-mode="single" onclick="setModoColocacion(true)" title="Colocar uno y soltar el tipo"><i class="fa-solid fa-plus"></i><span>UNO</span></div>
+                    <div class="cell active" data-mode="chain" onclick="setModoColocacion(false)" title="Seguir colocando el mismo tipo"><i class="fa-solid fa-infinity"></i><span>VARIOS</span></div>
+                </div>
+
+                <div class="section-gap"></div>
+
+                <div class="cell guardar disabled" id="techGuardar" onclick="guardarObjetosDock()">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>GUARDAR</span>
+                    <span class="badge-count" id="techBadge" style="display:none;">0</span>
+                </div>
+            </div>
+
+            <div class="tech-hint" id="techHint">Elige un tipo de objeto y haz clic en el mapa</div>
             <div id="map-quick-controls" class="map-quick-controls">
                 <button type="button" id="btn-map-layers" class="map-quick-button">📚 Capas</button>
                 <button type="button" id="btn-map-zoom-out" class="map-quick-button">- Zoom</button>
@@ -1529,18 +1475,18 @@
 
 <!-- Scripts JS -->
 <script src="js/app.js"></script>
-<script src="js/ftth-iconos.js?v=v1790245621000"></script>
-<script src="js/ftth-colores.js?v=v1790245621000"></script>
-<script src="js/ftth-plantillas.js?v=v1790245621000"></script>
+<script src="js/ftth-iconos.js?v=v1790298614447"></script>
+<script src="js/ftth-colores.js?v=v1790298614447"></script>
+<script src="js/ftth-plantillas.js?v=v1790298614447"></script>
 <script src="js/ftth-proyectos.js"></script>
-<script src="js/ftth-cable-reglas.js?v=v1790245621000"></script>
-<script src="js/ftth-tipos.js?v=v1790245621000"></script>
-<script src="js/ftth-mapa.js?v=v1790245621000"></script>
-<script src="js/ftth-hilos.js?v=v1790245621000"></script>
-<script src="js/plantillas-visuales/splitter.js?v=v1790245621000"></script>
-<script src="js/plantillas-visuales/fibra.js?v=v1790245621000"></script>
-<script src="js/ftth-fibra-inspector.js?v=v1790245621000"></script>
-<script src="js/ftth-diagrama.js?v=v1790245621000"></script>
+<script src="js/ftth-cable-reglas.js?v=v1790298614447"></script>
+<script src="js/ftth-tipos.js?v=v1790298614447"></script>
+<script src="js/ftth-mapa.js?v=v1790298614447"></script>
+<script src="js/ftth-hilos.js?v=v1790298614447"></script>
+<script src="js/plantillas-visuales/splitter.js?v=v1790298614447"></script>
+<script src="js/plantillas-visuales/fibra.js?v=v1790298614447"></script>
+<script src="js/ftth-fibra-inspector.js?v=v1790298614447"></script>
+<script src="js/ftth-diagrama.js?v=v1790298614447"></script>
 <script src="js/ftth-carpetas.js"></script>
 
 <script>
@@ -1577,71 +1523,48 @@
     }
   }
 
-  // -- Burbujas del "+": abrir/cerrar, modos y guardado --------------
-  // Cierra todo: burbujas, men� de objetos y modo de colocaci�n
-  function cerrarBurbujas() {
-    const dock = document.getElementById('add-obj-dock');
-    const wrap = document.getElementById('addBubbleWrapper');
-    const sub = document.getElementById('submenu-agregar');
-    if (dock) dock.classList.remove('open');
-    if (wrap) wrap.classList.remove('active');
-    if (sub) sub.classList.remove('open');
-    if (window.FTTHMapa && FTTHMapa.desactivarModoColocacion) FTTHMapa.desactivarModoColocacion();
+
+  // -- Panel tecnico de objetos: modos, aviso de pendientes y GUARDAR --------
+  function techHint(msg) {
+    const el = document.getElementById('techHint');
+    if (el) el.textContent = msg;
   }
 
-  // Primer clic: SOLO despliega las 2 burbujas (sin abrir el men�).
-  // El men� de objetos lo despliegan las burbujas secundarias ("+" y "8").
-  function toggleAddDock() {
-    const dock = document.getElementById('add-obj-dock');
-    const wrap = document.getElementById('addBubbleWrapper');
-    if (!dock || !wrap) return;
-    if (wrap.classList.contains('active')) { cerrarBurbujas(); return; }
-    wrap.classList.add('active');
-    dock.classList.remove('open');
-    const sub = document.getElementById('submenu-agregar');
-    if (sub) sub.classList.remove('open');
+  // Elegir tipo: el resaltado negro de la celda lo hace FTTHMapa.seleccionarObjeto
+  function elegirObjetoPanel(categoria) {
+    if (window.FTTHMapa && FTTHMapa.seleccionarObjeto) FTTHMapa.seleccionarObjeto(categoria);
   }
 
-  // "+" = un solo objeto � "8" = cantidades ilimitadas (despliega el men�)
+  // "UNO" = un objeto y se suelta el tipo · "VARIOS" = sigue colocando el mismo
   function setModoColocacion(soloUno) {
     if (window.FTTHMapa && FTTHMapa.setModoSimple) FTTHMapa.setModoSimple(soloUno);
-    const dock = document.getElementById('add-obj-dock');
-    const wrap = document.getElementById('addBubbleWrapper');
-    const sub = document.getElementById('submenu-agregar');
-    const bSolo = document.getElementById('btn-add-single');
-    const bVar = document.getElementById('btn-add-multi');
-    if (dock) dock.classList.add('open');
-    if (wrap) wrap.classList.add('active');
-    if (sub) sub.classList.add('open');
-    if (bSolo) bSolo.classList.toggle('bubble-active', soloUno);
-    if (bVar) {
-      bVar.classList.toggle('bubble-active', !soloUno);
-      bVar.setAttribute('data-tooltip', soloUno ? 'Modo �nico activo' : 'Modo m�ltiple activo');
-    }
+    document.querySelectorAll('#modeGroup .cell').forEach(c => {
+      c.classList.toggle('active', (c.dataset.mode === 'single') === !!soloUno);
+    });
+    techHint(soloUno
+      ? 'Modo UNO: elige un tipo y coloca un objeto'
+      : 'Modo VARIOS: sigue colocando el mismo tipo');
   }
 
-  // Guardar (modo m�ltiple): guarda y luego se cierra la burbuja
+  // GUARDAR: manda al servidor TODO lo que quedo pendiente en esta sesion
   function guardarObjetosDock() {
     if (window.FTTHMapa && FTTHMapa.guardarObjetos) FTTHMapa.guardarObjetos();
-    else if (window.FTTHTipos) FTTHTipos.showToast('? Objetos guardados correctamente', 'success');
-    cerrarBurbujas();
   }
 
-  // Modo "+" (un solo objeto): al colocarlo se guarda y la burbuja se cierra sola
-  document.addEventListener('ftth-objeto-colocado', () => cerrarBurbujas());
-
-  // Cerrar las burbujas al hacer clic fuera, SIN cancelar el modo de colocaci�n
-  // cuando el clic forma parte del flujo de "agregar objetos al mapa":
-  // el mapa (#map-container) y el selector de tipos (#ftth-type-picker-modal)
-  // se usan con el dock abierto, as� que un clic ah� no debe cerrar ni cancelar.
-  document.addEventListener('click', ev => {
-    const dock = document.getElementById('add-obj-dock');
-    if (!dock) return;
-    if (dock.contains(ev.target)) return;
-    const objetivo = ev.target;
-    if (objetivo && typeof objetivo.closest === 'function' &&
-        (objetivo.closest('#map-container') || objetivo.closest('#ftth-type-picker-modal'))) return;
-    cerrarBurbujas();
+  // El mapa avisa cuantos objetos estan pendientes: badge y boton encendido
+  document.addEventListener('ftth-pendientes', (ev) => {
+    const n = Number(ev.detail && ev.detail.n) || 0;
+    const boton = document.getElementById('techGuardar');
+    const badge = document.getElementById('techBadge');
+    if (badge) {
+      badge.textContent = String(n);
+      badge.style.display = n > 0 ? 'flex' : 'none';
+    }
+    if (boton) {
+      boton.classList.toggle('ready', n > 0);
+      boton.classList.toggle('disabled', n === 0);
+    }
+    if (n > 0) techHint(`${n} objeto(s) sin guardar · pulsa GUARDAR`);
   });
 
   function toggleSubmenuTipos() {

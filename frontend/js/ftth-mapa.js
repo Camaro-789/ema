@@ -7,7 +7,8 @@ const FTTHMapa = (() => {
 
   // ── Estado ────────────────────────────────────────────────────────────────
   let _modoActivo = null;        // { categoria, tipoId, tipoNombre, color }
-  let _modoSimple = false;       // true = se coloca UN solo objeto (modo "+" del dock)
+  let _modoSimple = false;       // true = se coloca UN solo objeto (modo "UNO" del panel)
+  let _pendientesGuardar = [];   // objetos colocados que AUN no se han mandado al servidor
   let _pendingLine = [];         // puntos de ducto en progreso
   let _currentFeatures = [];     // Features en memoria local del proyecto activo
   let _ctxMenu = null;
@@ -430,6 +431,15 @@ const FTTHMapa = (() => {
         _contextMenuHandled = true;
         _ctxFeature = e.features && e.features[0];
 
+        // Un objeto que TODAVÍA no se ha guardado no existe en el servidor (su id
+        // es provisional): no se puede mover ni borrar. Se avisa y no se abre menú.
+        if (_ctxFeature && _ctxFeature.properties && _ctxFeature.properties.pendiente === true) {
+          if (window.FTTHTipos) {
+            FTTHTipos.showToast('Ese objeto aún no está guardado: pulsa GUARDAR antes de moverlo o borrarlo', 'warning');
+          }
+          return;
+        }
+
         // ── Modo trazado de cables activo ─────────────────────────────────
         if (_modoActivo && _modoActivo.categoria === 'cables' && _pendingLine.length > 0) {
           const cat = (_ctxFeature && _ctxFeature.properties && _ctxFeature.properties.categoria)
@@ -766,6 +776,27 @@ const FTTHMapa = (() => {
     }
   }
 
+  // ── Cola de objetos pendientes ────────────────────────────────────────────
+  // Lo que se coloca NO se manda al servidor al momento: queda en esta cola
+  // pintado como provisional (`pendiente: true`) y el POST real lo hace el
+  // boton GUARDAR del panel, con TODO lo de la sesion. `alGuardar` es el
+  // trabajo extra que solo se puede hacer cuando el objeto ya existe
+  // (materializar hilos de un cable y anclar sus extremos).
+  function _encolarPendiente(tempId, body, etiqueta, alGuardar = null) {
+    _pendientesGuardar.push({ tempId, body, etiqueta, alGuardar });
+    _avisarPendientes();
+  }
+
+  function _avisarPendientes() {
+    document.dispatchEvent(new CustomEvent('ftth-pendientes', {
+      detail: { n: _pendientesGuardar.length },
+    }));
+  }
+
+  function pendientesCount() {
+    return _pendientesGuardar.length;
+  }
+
   // Feature provisional para pintar el objeto en el mismo clic,
   // sin esperar la respuesta del servidor (se sustituye al confirmarse).
   function _featureProvisional(categoria, tipoId, tipoNombre, color, geometry) {
@@ -837,6 +868,11 @@ const FTTHMapa = (() => {
     // Resaltar botón activo en la barra lateral
     document.querySelectorAll('.sub-obj-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.cat === categoria);
+    });
+
+    // Resaltar la misma celda en el panel técnico del mapa
+    document.querySelectorAll('#techPanel .cell[data-cat]').forEach(c => {
+      c.classList.toggle('active', c.dataset.cat === categoria);
     });
 
     let tipos = [];
@@ -991,6 +1027,8 @@ const FTTHMapa = (() => {
     if (map) map.getCanvas().style.cursor = '';
     hidePlacementHint();
     document.querySelectorAll('.sub-obj-btn').forEach(b => b.classList.remove('active'));
+    // Se suelta también la celda marcada en el panel técnico
+    document.querySelectorAll('#techPanel .cell[data-cat]').forEach(c => c.classList.remove('active'));
   }
 
   function showPlacementHint(msg, iconCat) {
@@ -1428,45 +1466,16 @@ const FTTHMapa = (() => {
     const tempId = provisional.properties.id;
     _addFeatureToMap(provisional);
 
-    try {
-      const res = await fetch(apiUrl('/api/elementos/'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Error de red' }));
-        console.error('Error de servidor al colocar:', err);
-        throw new Error(err.detail || err.message || `Error ${res.status}`);
-      }
-
-      // 2) Confirmación del servidor: se sustituye la provisional (misma posición)
-      const feature = await res.json();
-      _replaceFeature(tempId, feature);
-
-      // Recargar árbol de capas en el panel derecho inmediatamente
-      if (window.FTTHCarpetas && FTTHCarpetas.loadCarpetas) {
-        FTTHCarpetas.loadCarpetas();
-      }
-
-      const ancladoMsg = posteRefId ? ` (Anclado al poste #${posteRefId})` : '';
-      if (window.FTTHTipos) {
-        FTTHTipos.showToast(`✓ ${tipoNombre} agregado al mapa${ancladoMsg}`, 'success');
-      }
-
-      // Modo "+" (un solo objeto): se cierra la burbuja sin recargar todo de nuevo
-      if (_modoSimple) {
-        document.dispatchEvent(new CustomEvent('ftth-objeto-colocado', { detail: { modoSimple: true } }));
-        desactivarModoColocacion();
-        _modoSimple = false;
-      }
-    } catch (err) {
-      // 3) Si falla el guardado se retira el objeto provisional (no queda pintado)
-      _quitarFeature(tempId);
-      console.error('Error al colocar elemento:', err);
-      if (window.FTTHTipos) FTTHTipos.showToast('Error al colocar: ' + err.message, 'error');
+    // 2) QUEDA PENDIENTE: se pinta como provisional y el POST real lo hace el
+    //    boton GUARDAR, con TODOS los objetos de esta sesion.
+    _encolarPendiente(tempId, body, tipoNombre);
+    const ancladoMsg = posteRefId ? ` (anclado al poste #${posteRefId})` : '';
+    if (window.FTTHTipos) {
+      FTTHTipos.showToast(`✓ ${tipoNombre} colocado${ancladoMsg} · pendiente de guardar`, 'success');
     }
+
+    // Modo "UNO": se suelta el tipo (el panel es fijo, no se cierra)
+    if (_modoSimple) desactivarModoColocacion();
   }
 
   async function colocarDucto(tipoId, tipoNombre, coords, color, cat_override = 'ducto',
@@ -1515,32 +1524,13 @@ const FTTHMapa = (() => {
     const tempId = provisional.properties.id;
     _addFeatureToMap(provisional);
 
-    try {
-      const res = await fetch(apiUrl('/api/elementos/'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || `Error ${res.status}`);
-      }
-
-      const feature = await res.json();
-      _replaceFeature(tempId, feature);
-
-      if (window.FTTHCarpetas && FTTHCarpetas.loadCarpetas) {
-        FTTHCarpetas.loadCarpetas();
-      }
-
-      if (window.FTTHTipos) {
-        FTTHTipos.showToast(`✓ ${cat_override === 'cables' ? 'Cable' : 'Ducto'} "${tipoNombre}" agregado`, 'success');
-      }
-
-      // Si es un cable de fibra, materializar sus hilos y anclar si corresponde
-      if (cat_override === 'cables') {
-        try {
+    // QUEDA PENDIENTE: el trazo se pinta ya, pero el POST lo hace GUARDAR (igual
+    // que los objetos del modo UNO/VARIOS). Lo que hay que hacer DESPUES de que
+    // el cable exista en el servidor (materializar sus hilos y anclar extremos)
+    // se guarda como `alGuardar` y se ejecuta en ese momento.
+    const alGuardar = cat_override === 'cables'
+      ? async (feature) => {
+      try {
           const mRes = await fetch(apiUrl(`/api/cables/${feature.properties.id}/materializar-hilos`), {
             method: 'POST'
           });
@@ -1578,17 +1568,16 @@ const FTTHMapa = (() => {
           console.warn("Error materializando o anclando", e);
         }
       }
+    : null;
 
-      // Modo "+" (un solo objeto): se cierra la burbuja
-      if (_modoSimple) {
-        document.dispatchEvent(new CustomEvent('ftth-objeto-colocado', { detail: { modoSimple: true } }));
-        desactivarModoColocacion();
-        _modoSimple = false;
-      }
-    } catch (err) {
-      _quitarFeature(tempId);
-      if (window.FTTHTipos) FTTHTipos.showToast('Error al colocar ducto: ' + err.message, 'error');
+    _encolarPendiente(tempId, body,
+      `${cat_override === 'cables' ? 'Cable' : 'Ducto'} "${tipoNombre}"`, alGuardar);
+    if (window.FTTHTipos) {
+      FTTHTipos.showToast(`✓ ${cat_override === 'cables' ? 'Cable' : 'Ducto'} "${tipoNombre}" colocado · pendiente de guardar`, 'success');
     }
+
+    // Modo "UNO": se suelta el tipo (el panel es fijo, no se cierra)
+    if (_modoSimple) desactivarModoColocacion();
   }
 
   // ── Menú Contextual (Clic Derecho) ────────────────────────────────────────
@@ -2219,23 +2208,88 @@ const FTTHMapa = (() => {
     }
   }
 
-  // ── Modo de colocación del dock ("+" = uno solo · "∞" = ilimitados) ──────
+  // ── Modo de colocación del panel ("UNO" = uno solo · "VARIOS" = ilimitados) ─
   function setModoSimple(soloUno) {
     _modoSimple = !!soloUno;
   }
 
-  // Botón "Guardar" del dock: refresca desde el servidor, cierra el modo y anuncia
+  // Botón "Guardar" del panel: manda al servidor TODOS los objetos pendientes de
+  // esta sesión (modo UNO y VARIOS, y también los trazados de cable/ducto), en el
+  // orden en que se colocaron. Lo que el servidor confirma sustituye a la feature
+  // provisional; lo que falla se retira del mapa y se avisa con el motivo.
+  function _resolverTemporales(body, idsReales) {
+    // Un cable trazado por postes que todavía estaban pendientes apunta a ids
+    // `tmp-…`: aquí se cambian por los ids reales (los postes se guardan antes).
+    const props = body && body.propiedades_instancia;
+    if (!props || !idsReales.size) return body;
+    const cambio = (v) => (typeof v === 'string' && idsReales.has(v)) ? idsReales.get(v) : v;
+    if (Array.isArray(props.postes_intermedios)) {
+      props.postes_intermedios = props.postes_intermedios.map(cambio);
+    }
+    if (Array.isArray(props.trazado_ruta)) {
+      props.trazado_ruta = props.trazado_ruta.map(p => (p && typeof p === 'object' && 'poste' in p)
+        ? { ...p, poste: cambio(p.poste) } : p);
+    }
+    return body;
+  }
+
   async function guardarObjetos() {
+    const enCola = _pendientesGuardar.slice();
+    if (!enCola.length) {
+      if (window.FTTHTipos) FTTHTipos.showToast('No hay objetos pendientes de guardar', 'info');
+      return 0;
+    }
+    _pendientesGuardar = [];
+    _avisarPendientes();     // el panel apaga GUARDAR mientras se está guardando
+
+    let guardados = 0;
+    const fallos = [];
+    const idsReales = new Map();   // tempId -> id real (para remapear los cables)
+
+    for (const item of enCola) {
+      try {
+        const res = await fetch(apiUrl('/api/elementos/'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(_resolverTemporales(item.body, idsReales)),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Error de red' }));
+          throw new Error(err.detail || err.message || `Error ${res.status}`);
+        }
+        const feature = await res.json();
+        _replaceFeature(item.tempId, feature);   // la provisional pasa a ser la real
+        if (item.tempId) idsReales.set(item.tempId, feature.properties.id);
+        console.log('[guardar] guardado:', feature.properties.id, item.etiqueta);
+        if (item.alGuardar) {
+          try { await item.alGuardar(feature); } catch (e) { console.warn('[guardar] pos-proceso:', e); }
+        }
+        guardados++;
+      } catch (err) {
+        _quitarFeature(item.tempId);   // no se queda pintado algo que no existe
+        console.error('[guardar] falló', item.etiqueta, err);
+        fallos.push(`${item.etiqueta}: ${err.message}`);
+      }
+    }
+
     try {
       if (window.FTTHCarpetas && FTTHCarpetas.loadCarpetas) FTTHCarpetas.loadCarpetas();
       await cargarTodosElementos();
-      _updateStats();
-      desactivarModoColocacion();
-      _modoSimple = false;
-      if (window.FTTHTipos) FTTHTipos.showToast('✓ Objetos guardados correctamente', 'success');
-    } catch (err) {
-      if (window.FTTHTipos) FTTHTipos.showToast('Error al guardar: ' + err.message, 'error');
+    } catch (e) {
+      console.warn('[guardar] no se pudo refrescar del servidor:', e);
     }
+    _updateStats();
+    desactivarModoColocacion();
+    console.log(`[guardar] pendientes guardados=${guardados} fallos=${fallos.length}`);
+
+    if (window.FTTHTipos) {
+      if (fallos.length) {
+        FTTHTipos.showToast(`Guardados ${guardados} · ${fallos.length} con error: ${fallos[0]}`, 'error');
+      } else {
+        FTTHTipos.showToast(`✓ ${guardados} objeto(s) guardado(s)`, 'success');
+      }
+    }
+    return guardados;
   }
 
   async function eliminarElementoDirecto(id) {
@@ -2319,6 +2373,7 @@ const FTTHMapa = (() => {
     desactivarModoColocacion,
     setModoSimple,
     guardarObjetos,
+    pendientesCount,
     cerrarPickerModal,
     mostrarPickerDeTipos,
     eliminarElementoDirecto,
