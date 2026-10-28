@@ -139,7 +139,150 @@ def _generar_puertos(db, elemento, equipo, tipo: str, salidas: int) -> List[Dict
     return [{"id": p.id, "puerto": p.etiqueta, "direccion": p.direccion} for p in creados]
 
 
+def cables_del_proyecto(db: Session, contenedor_id: int) -> Dict[str, Any]:
+    """Cables REALES del proyecto y si se pueden anclar a este contenedor.
+
+    Devuelve, por cable, sus dos extremos, cuáles están libres y si ya está
+    anclado aquí. El frontend NO inventa cables: solo ofrece esta lista.
+    """
+    elemento = contenedor(db, contenedor_id)
+    cables = (
+        db.query(fisicos.FtthElemento)
+        .filter(fisicos.FtthElemento.proyecto_id == elemento.proyecto_id,
+                fisicos.FtthElemento.categoria == "cables")
+        .order_by(fisicos.FtthElemento.id)
+        .all()
+    )
+    tipo_ids = {cable.tipo_id for cable in cables if cable.tipo_id}
+    tipos = {}
+    if tipo_ids:
+        tipos = {
+            tipo.id: tipo
+            for tipo in db.query(fisicos.FtthTipo)
+            .filter(fisicos.FtthTipo.id.in_(tipo_ids)).all()
+        }
+    hilos = {}
+    if cables:
+        from sqlalchemy import func
+        filas = (
+            db.query(logica.FtthCableFibra.elemento_id, func.count(logica.FtthCableFibra.id))
+            .filter(logica.FtthCableFibra.elemento_id.in_([cable.id for cable in cables]))
+            .group_by(logica.FtthCableFibra.elemento_id)
+            .all()
+        )
+        hilos = {fila[0]: int(fila[1]) for fila in filas}
+
+    lista = []
+    for cable in cables:
+        tipo = tipos.get(cable.tipo_id)
+        props = getattr(tipo, "propiedades", None) or {}
+        aqui = ("A" if cable.extremo_A_id == elemento.id
+                else "B" if cable.extremo_B_id == elemento.id else None)
+        lista.append({
+            "id": cable.id,
+            "nombre": getattr(tipo, "nombre_id", None) or f"Cable #{cable.id}",
+            "estructura": props.get("estructura"),
+            "hilos": hilos.get(cable.id, 0),
+            "extremo_a_id": cable.extremo_A_id,
+            "extremo_b_id": cable.extremo_B_id,
+            "libre_a": cable.extremo_A_id is None,
+            "libre_b": cable.extremo_B_id is None,
+            "anclado_aqui": aqui,
+            "anclable": bool(aqui is None and (cable.extremo_A_id is None
+                                               or cable.extremo_B_id is None)),
+        })
+    return {"contenedor_id": elemento.id, "cables": lista,
+            "revision": revision(elemento)}
+
+
+def anclar_cable(db: Session, contenedor_id: int, datos: Dict[str, Any]) -> Dict[str, Any]:
+    """Ancla un cable EXISTENTE al contenedor (no crea cables).
+
+    · el cable debe ser del mismo proyecto y de categoría `cables`;
+    · no puede estar ya anclado en este contenedor;
+    · el extremo (A/B) tiene que estar libre. Si no se indica, se usa el libre.
+    """
+    elemento = contenedor(db, contenedor_id)
+    cable_id = int(datos.get("cable_id") or 0)
+    cable = (
+        db.query(fisicos.FtthElemento)
+        .filter(fisicos.FtthElemento.id == cable_id)
+        .first()
+    )
+    if not cable:
+        raise ErrorNoEncontrado(f"El cable #{cable_id} no existe.")
+    if (cable.categoria or "").lower() != "cables":
+        raise ErrorRegla(
+            f"El elemento #{cable_id} es «{cable.categoria}», no un cable.",
+            codigo="no_es_cable",
+        )
+    if cable.proyecto_id != elemento.proyecto_id:
+        raise ErrorRegla(
+            f"El cable #{cable_id} es de otro proyecto ({cable.proyecto_id}).",
+            codigo="cable_de_otro_proyecto",
+        )
+    if elemento.id in (cable.extremo_A_id, cable.extremo_B_id):
+        raise ErrorConflicto(
+            f"El cable #{cable_id} ya está anclado a este contenedor.",
+            {"cable_id": cable_id},
+        )
+
+    extremo = str(datos.get("extremo") or "").upper()
+    if extremo not in ("A", "B"):
+        if cable.extremo_A_id is None:
+            extremo = "A"
+        elif cable.extremo_B_id is None:
+            extremo = "B"
+        else:
+            raise ErrorConflicto(
+                f"El cable #{cable_id} ya tiene sus dos extremos ocupados "
+                f"(A=#{cable.extremo_A_id}, B=#{cable.extremo_B_id}).",
+                {"cable_id": cable_id},
+            )
+    if getattr(cable, f"extremo_{extremo}_id") is not None:
+        raise ErrorConflicto(
+            f"El extremo {extremo} del cable #{cable_id} ya está ocupado por el "
+            f"elemento #{getattr(cable, f'extremo_{extremo}_id')}.",
+            {"cable_id": cable_id, "extremo": extremo},
+        )
+
+    setattr(cable, f"extremo_{extremo}_id", elemento.id)
+    db.flush()
+    return {
+        "cable": {"id": cable.id, "extremo": extremo,
+                  "extremo_a_id": cable.extremo_A_id,
+                  "extremo_b_id": cable.extremo_B_id},
+        "revision": revision(elemento),
+    }
+
+
+def _validar_tipo_equipo(db: Session, elemento, tipo_id, tipo: str) -> None:
+    """El `tipo_id` debe existir, ser del MISMO proyecto y de la categoría correcta."""
+    if tipo_id is None:
+        return
+    plantilla = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == int(tipo_id)).first()
+    if not plantilla:
+        raise ErrorRegla(f"El tipo #{tipo_id} no existe en el catálogo.",
+                         codigo="tipo_no_existe")
+    if plantilla.proyecto_id != elemento.proyecto_id:
+        raise ErrorRegla(
+            f"El tipo #{tipo_id} es de otro proyecto ({plantilla.proyecto_id}).",
+            codigo="tipo_de_otro_proyecto",
+        )
+    esperada = "switches" if tipo == "switch" else tipo
+    if (plantilla.categoria or "").lower() != esperada:
+        raise ErrorRegla(
+            f"El tipo #{tipo_id} es de «{plantilla.categoria}» y el equipo es «{tipo}».",
+            codigo="tipo_de_otra_categoria",
+        )
+
+
 def crear_dispositivo(db: Session, contenedor_id: int, datos: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea un equipo dentro del contenedor y genera sus puertos según el tipo.
+
+    Si llega `tipo_id`, se usa la plantilla del catálogo (propiedades, división,
+    atenuación, clase AF/AC) y se valida que sea del proyecto y de la categoría.
+    """
     elemento = contenedor(db, contenedor_id)
     tipo = str(datos.get("tipo") or "").lower()
     if tipo not in TIPOS_EQUIPO:
@@ -147,6 +290,9 @@ def crear_dispositivo(db: Session, contenedor_id: int, datos: Dict[str, Any]) ->
             f"Tipo de equipo no válido: «{tipo}». Usa {', '.join(TIPOS_EQUIPO)}.",
             codigo="tipo_equipo_invalido",
         )
+    # El catálogo manda: si viene `tipo_id`, tiene que existir, ser del proyecto
+    # y de la categoría correcta (así «+ EQUIPO» solo ofrece lo que hay en Tipos).
+    _validar_tipo_equipo(db, elemento, datos.get("tipo_id"), tipo)
     division = _division(datos.get("division")) if tipo == "splitter" else None
     if tipo == "splitter" and not division:
         raise ErrorRegla("El splitter necesita su división (1x8, 1x16…).",

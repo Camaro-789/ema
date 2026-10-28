@@ -104,6 +104,11 @@ class PosicionesNuevas(_Comando):
     posiciones: List[Posicion] = []
 
 
+class CableAncla(_Comando):
+    cable_id: int
+    extremo: Optional[str] = None   # 'A' | 'B' | None = el primero libre
+
+
 def _ejecutar(db: Session, comando: _Comando, contenedor_id: int, tipo: str, accion):
     """Una transacción, idempotente por `operation_id` y con control de revisión.
 
@@ -346,6 +351,23 @@ def guardar_posiciones(contenedor_id: int, datos: PosicionesNuevas,
     resultado, repetida = _ejecutar(
         db, datos, contenedor_id, "guardar_posiciones",
         lambda: servicios.guardar_posiciones(db, contenedor_id, posiciones))
+    return {**resultado, "idempotente": repetida}
+
+
+@router.get("/{contenedor_id}/cables",
+            summary="Cables reales del proyecto y si se pueden anclar")
+def listar_cables(contenedor_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    return servicios.cables_del_proyecto(db, contenedor_id)
+
+
+@router.post("/{contenedor_id}/cables",
+             summary="Anclar un cable EXISTENTE al contenedor (no crea cables)")
+def anclar_cable(contenedor_id: int, datos: CableAncla,
+                 db: Session = Depends(get_db)) -> Dict[str, Any]:
+    carga = datos.model_dump(exclude={"operation_id", "base_revision"})
+    resultado, repetida = _ejecutar(
+        db, datos, contenedor_id, "anclar_cable",
+        lambda: servicios.anclar_cable(db, contenedor_id, carga))
     return {**resultado, "idempotente": repetida}
 
 
