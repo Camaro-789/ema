@@ -125,23 +125,20 @@ def test_lo_guardado_por_el_puente_se_ve_igual():
         fibra = db.execute(text(
             "SELECT f.id FROM ftth_cable_fibras f "
             "JOIN ftth_elementos c ON c.id = f.elemento_id "
-            "WHERE c.categoria = 'cables' ORDER BY f.hilo_global_no LIMIT 1")).scalar()
-        assert fibra, "falta el cable de la base sintética"
-        ya = db.execute(text(
+            "WHERE c.categoria = 'cables' "
+            "  AND f.id NOT IN (SELECT fibra_a_id FROM ftth_empalmes WHERE fibra_a_id IS NOT NULL) "
+            "  AND f.id NOT IN (SELECT fibra_b_id FROM ftth_empalmes WHERE fibra_b_id IS NOT NULL) "
+            "ORDER BY f.hilo_global_no LIMIT 1")).scalar()
+        assert fibra, "no quedan hilos libres en el cable de la base sintética"
+        db.execute(text(
+            "INSERT INTO ftth_empalmes (proyecto_id, nodo_id, fibra_a_id, tipo, "
+            "extremo_a, extremo_b, propiedades) "
+            "VALUES (1, :n, :f, 'sangrado', 'entrada', 'salida', "
+            "'{\"origen\": \"pop_gestor_v25\"}')"), {"n": contenedor, "f": fibra})
+        db.commit()
+        empalme_id = int(db.execute(text(
             "SELECT id FROM ftth_empalmes WHERE nodo_id = :n AND fibra_a_id = :f"),
-            {"n": contenedor, "f": fibra}).scalar()
-        if ya:
-            empalme_id = int(ya)
-        else:
-            db.execute(text(
-                "INSERT INTO ftth_empalmes (proyecto_id, nodo_id, fibra_a_id, tipo, "
-                "extremo_a, extremo_b, propiedades) "
-                "VALUES (1, :n, :f, 'sangrado', 'entrada', 'salida', "
-                "'{\"origen\": \"pop_gestor_v25\"}')"), {"n": contenedor, "f": fibra})
-            db.commit()
-            empalme_id = int(db.execute(text(
-                "SELECT id FROM ftth_empalmes WHERE nodo_id = :n AND fibra_a_id = :f"),
-                {"n": contenedor, "f": fibra}).scalar())
+            {"n": contenedor, "f": fibra}).scalar())
 
     diagrama = peticion("GET", f"/api/contenedores/{contenedor}/diagrama").json()
     conexion = next((c for c in diagrama["conexiones"] if c["id"] == empalme_id), None)
