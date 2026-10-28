@@ -131,9 +131,10 @@ def validar_conexion(a: dict, b: dict, contexto: Optional[dict] = None) -> dict:
         for splitter in splitters:
             otro = b if splitter is a else a
             es_entrada = str(splitter.get("puerto", "")).upper() == "IN"
-            if _kind(otro) in ("PON", "HILO") and otro["tipo"] == "CABLE":
-                if not es_entrada:
-                    raise _error("splitter_entrada_in")
+            # Igual que el HTML: si al splitter le llega una PON o un cable de
+            # calle, tiene que entrar por IN.
+            if _kind(otro) in ("PON", "HILO") and not es_entrada:
+                raise _error("splitter_entrada_in")
             if _kind(otro) == "PON":
                 clase = (contexto.get("clase_splitter") or {}).get(clave(splitter), "AF")
                 if str(clase).upper() == "AC":
@@ -146,16 +147,43 @@ def validar_conexion(a: dict, b: dict, contexto: Optional[dict] = None) -> dict:
             if primera == segunda:
                 raise _error("splitter_out_a_in")
 
-    if kb == "PON" and not contexto.get("vista_subida"):
-        raise _error("pon_solo_subida")
+    if kb == "PON":
+        # El HTML permite PON como DESTINO solo en "vista de subida": cuando la
+        # traza nace en un hilo de cable marcado como señal de ACCESO.
+        en_subida = bool(contexto.get("vista_subida")) or (
+            contexto.get("es_origen") and ka == "HILO"
+            and contexto.get("senal") == "ACCESO"
+        )
+        if not en_subida:
+            raise _error("pon_solo_subida")
     if ka == "PON" and not contexto.get("es_origen", True):
         raise _error("pon_es_origen")
+
+    # `asOrigin` del HTML: el extremo de origen tiene que poder serlo (canBeOrigin).
+    # Va ANTES de los dominios, igual que en `validateStep`.
+    if contexto.get("es_origen"):
+        info_origen = info_puerto(a["tipo"], a.get("puerto"))
+        if not info_origen.get("es_origen"):
+            raise ErrorRegla(
+                "El origen debe ser una PON/SFP/RJ45 de OLT o switch, o un hilo de "
+                "cable. El ODF y el splitter solo transmiten la señal.",
+                codigo="origen_no_valido",
+            )
+        if info_origen.get("requiere_senal") and not contexto.get("senal"):
+            raise ErrorRegla(
+                "Indica qué tipo de señal entra por este hilo (ACCESO o ENLACE).",
+                codigo="senal_requerida",
+            )
 
     cadena = set(contexto.get("cadena") or [])
     if clave(b) in cadena and clave(a) in cadena:
         raise _error("sin_lazos")
 
     dominios = set(contexto.get("dominios") or [])
+    # El HTML hace `pi.domain || signal`: la señal solo aporta dominio cuando el
+    # puerto de origen no tiene uno propio (es el caso del hilo de cable).
+    if contexto.get("senal") and not dominio_de(a):
+        dominios.add(contexto["senal"])
     for extremo in (a, b):
         dominio = dominio_de(extremo)
         if dominio:

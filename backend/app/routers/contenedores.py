@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.config import VERSION_CONTRATO_DIAGRAMA
 from app.database import get_db
 from app.domain import servicios
+from app.domain.errores import ErrorConflicto
 from app.models import ftth_logica as logica
 from app.models import ftth_models as fisicos
 from app.routers.ftth_logica import _precargar_cables
@@ -111,7 +112,31 @@ def _ejecutar(db: Session, comando: _Comando, contenedor_id: int, tipo: str, acc
     if comando.base_revision is not None:
         servicios.exigir_revision(
             servicios.contenedor(db, contenedor_id), comando.base_revision)
+        # Reclamo ATÓMICO de la revisión: un UPDATE condicionado por el valor
+        # esperado. Si dos escrituras compiten, solo una lo consigue y la otra
+        # recibe 409 (no se pierde ninguna actualización).
+        reclamadas = (
+            db.query(fisicos.FtthElemento)
+            .filter(
+                fisicos.FtthElemento.id == contenedor_id,
+                fisicos.FtthElemento.revision == int(comando.base_revision),
+            )
+            .update({"revision": int(comando.base_revision) + 1},
+                    synchronize_session=False)
+        )
+        if not reclamadas:
+            raise ErrorConflicto(
+                "Otra escritura cambió el diagrama al mismo tiempo. Recarga y reintenta.",
+                {"revision_enviada": comando.base_revision},
+            )
     resultado = accion()
+    # Una SOLA subida de revisión por escritura, en la base (atómica).
+    if comando.base_revision is not None:
+        nueva_revision = int(comando.base_revision) + 1  # la reclamó el UPDATE
+    else:
+        nueva_revision = servicios.subir_revision(db, contenedor_id)
+    if isinstance(resultado, dict):
+        resultado["revision"] = nueva_revision
     if comando.operation_id:
         db.add(logica.FtthOperacion(
             operation_id=comando.operation_id, contenedor_id=contenedor_id,

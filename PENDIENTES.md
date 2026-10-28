@@ -107,9 +107,34 @@ antes de dar la fase por cerrada.
   en la Fase 5 (R8).
 
 
-## Fase 3 · Reglas de conexión
+## Fase 3 · Reglas de conexión — **3.1, 3.2 y 3.4 completas; 3.3 pendiente**
 
-_(pendiente de empezar)_
+| # | Estado | Evidencia |
+|---|---|---|
+| 3.1 Validador único | hecho | `app/domain/reglas.py`; lo usan `conectar` y `marcar_origen` |
+| 3.2 Vectores dorados | hecho | **540 vectores** desde el HTML con Playwright (Edge) → `tests/vectores_reglas.json`; **545 passed** |
+| 3.3 Energía | **pendiente** | ver P-008 |
+| 3.4 Integridad | hecho | idempotencia, 409 de revisión, no borrar con conexiones y **dos escrituras simultáneas** (una gana) |
+
+### P-008 · Fase 3.3: comparación de energía (dB) HTML ↔ Python
+
+- **Qué falta**: recorrer la cadena en Python (OLT PON → splitter IN → OUT → ODF
+  A/B → switch SFP) y comparar con `computeEnergy()` del HTML, tolerancia 0.01 dB.
+- **Dónde**: `app/domain/reglas.py` (nuevo `recorrer_energia`) +
+  `tests/herramientas/calcular_energia_html.py` + `tests/test_energia.py`.
+- **Constantes ya disponibles** en `reglas_conexion.json`: conector 0.3 dB,
+  empalme 0.1 dB, ODF 0.1 dB, splitter 3.7/7.3/10.7/14.0/17.5/21.0 dB y
+  0.35 dB/km de fibra.
+- **Por qué no se hizo**: se priorizó dejar en verde la validación de reglas
+  (3.1/3.2) y la integridad (3.4), que son la base de las fases 4-5.
+
+### P-009 · Reglas que dependen del grafo de la cadena
+
+- Los vectores describen **dos extremos**; las reglas que necesitan la cadena
+  completa (lazos y "ya existe un origen") no se pueden expresar así. La prueba las
+  marca `xfail` con motivo (hoy: **0 casos**), y la detección real de lazos
+  (`contexto["cadena"]`) sigue pendiente de implementar en `servicios.contexto()`.
+
 
 ## Fase 4 · Módulo nativo de frontend
 

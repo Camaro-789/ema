@@ -56,9 +56,21 @@ def exigir_revision(elemento, base_revision: Optional[int]) -> None:
         )
 
 
-def subir_revision(elemento) -> int:
-    elemento.revision = revision(elemento) + 1
-    return elemento.revision
+def subir_revision(db: Session, contenedor_id: int) -> int:
+    """Sube la revision EN LA BASE (atomico) y devuelve el valor nuevo.
+
+    Se hace con un UPDATE (`revision = revision + 1`) para que dos escrituras
+    simultaneas no puedan dejar el mismo numero.
+    """
+    db.query(fisicos.FtthElemento).filter(
+        fisicos.FtthElemento.id == contenedor_id
+    ).update({"revision": fisicos.FtthElemento.revision + 1},
+             synchronize_session=False)
+    return int(
+        db.query(fisicos.FtthElemento.revision)
+        .filter(fisicos.FtthElemento.id == contenedor_id)
+        .scalar() or 0
+    )
 
 
 def _division(valor) -> Optional[str]:
@@ -159,7 +171,7 @@ def crear_dispositivo(db: Session, contenedor_id: int, datos: Dict[str, Any]) ->
     db.flush()
     puertos = _generar_puertos(db, elemento, equipo, tipo, salidas)
     return {"dispositivo": _dto_equipo(equipo), "puertos": puertos,
-            "revision": subir_revision(elemento)}
+            "revision": revision(elemento)}
 
 
 CAMPOS_EDITABLES = ("nombre", "etiqueta", "estado", "perdida_db", "division", "bandeja_id")
@@ -208,7 +220,7 @@ def editar_dispositivo(db: Session, contenedor_id: int, dispositivo_id: int,
         equipo.serie = cambios["etiqueta"] or equipo.serie
     db.flush()
     return {"dispositivo": _dto_equipo(equipo), "cambios": aplicados,
-            "revision": subir_revision(elemento)}
+            "revision": revision(elemento)}
 
 
 def mover_dispositivo(db: Session, contenedor_id: int, dispositivo_id: int,
@@ -257,8 +269,7 @@ def mover_dispositivo(db: Session, contenedor_id: int, dispositivo_id: int,
         "origen_id": origen.id,
         "destino_id": destino.id,
         "excede": False,
-        "revision_origen": subir_revision(origen),
-        "revision_destino": subir_revision(destino),
+        "revision_destino": subir_revision(db, destino.id),
     }
 
 
@@ -302,7 +313,7 @@ def eliminar_dispositivo(db: Session, contenedor_id: int, dispositivo_id: int) -
     db.delete(equipo)
     db.flush()
     return {"dispositivo_id": dispositivo_id, "puertos_eliminados": int(borrados or 0),
-            "revision": subir_revision(elemento)}
+            "revision": revision(elemento)}
 
 
 def contexto(db: Session, contenedor_id: int) -> Dict[str, Any]:
@@ -428,7 +439,7 @@ def conectar(db: Session, contenedor_id: int, datos: Dict[str, Any]) -> Dict[str
             "fibra_b_id": empalme.fibra_b_id, "puerto_id": empalme.puerto_id,
             "dominio": resultado.get("dominio"), "extension": resultado.get("extension", False),
         },
-        "revision": subir_revision(elemento),
+        "revision": revision(elemento),
     }
 
 
@@ -450,7 +461,7 @@ def desconectar(db: Session, contenedor_id: int, conexion_id: int) -> Dict[str, 
         ).update({"estado": "libre"}, synchronize_session=False)
     db.delete(empalme)
     db.flush()
-    return {"conexion_id": conexion_id, "revision": subir_revision(elemento)}
+    return {"conexion_id": conexion_id, "revision": revision(elemento)}
 
 
 def marcar_origen(db: Session, contenedor_id: int, datos: Dict[str, Any]) -> Dict[str, Any]:
@@ -514,7 +525,7 @@ def marcar_origen(db: Session, contenedor_id: int, datos: Dict[str, Any]) -> Dic
             "estado_potencia": reglas.estado_potencia(meta.senal, tx,
                                                       meta.origen_tipo == "RJ45"),
         },
-        "revision": subir_revision(elemento),
+        "revision": revision(elemento),
     }
 
 

@@ -1,7 +1,7 @@
 # RESUMEN_FINAL — integración del módulo nativo POP (v25)
 
-**Rama:** `integracion-v25` · **Fecha:** 2026-10-27 · **Estado:** Fases 1 y 2 completas;
-Fases 3–6 pendientes (ver `PENDIENTES.md`).
+**Rama:** `integracion-v25` · **Fecha:** 2026-10-27 · **Estado:** Fases 1, 2 y 3 (3.1/3.2/3.4)
+completas; 3.3 y Fases 4–6 pendientes (ver `PENDIENTES.md`).
 
 ## Commits
 
