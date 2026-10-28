@@ -152,8 +152,8 @@ if (-not $node) {
 
 # ── 5. Resumen ───────────────────────────────────────────────────────────────
 Titulo 'RESUMEN'
-$ok = ($resultados | Where-Object { $_.OK }).Count
-$fallos = ($resultados | Where-Object { -not $_.OK }).Count
+$ok = @($resultados | Where-Object { $_.OK }).Count
+$fallos = @($resultados | Where-Object { -not $_.OK }).Count
 Write-Host ("  Correctas: $ok    Con fallos: $fallos") -ForegroundColor Cyan
 if ($fallos -eq 0) {
     Write-Host '  TODO EN VERDE: el sistema arranca y no hay pruebas rotas.' -ForegroundColor Green
