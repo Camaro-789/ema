@@ -9,7 +9,7 @@ Comandos de escritura (Fase 2.7): todos llevan `operation_id` (idempotencia) y
 Aquí solo se valida la entrada: la decisión está en `app.domain.servicios`.
 """
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
