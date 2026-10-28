@@ -1,11 +1,12 @@
-# TABLA DE PARIDAD — HTML v25 ↔ módulo nativo (Fase 4.4)
+# TABLA DE PARIDAD — HTML v25 ↔ módulo nativo (Fase 4.4 + pasos 4–6)
 
 **Fecha:** 2026-10-28 · **Módulo:** `frontend/js/pop/` · **Prueba de interfaz:**
-`backend/tests/herramientas/prueba_pop_playwright.py` → **11 comprobaciones en verde**,
-cable de 96 hilos abierto en **670 ms**.
+`backend/tests/herramientas/prueba_pop_playwright.py` → **42 comprobaciones en verde**,
+cable de 96 hilos abierto en **390 ms**.
 
-> **Capturas lado a lado:** pendiente. Playwright puede hacerlas
-> (`page.screenshot`), pero no se generaron en esta entrega; queda en P-010.
+> **Capturas lado a lado:** hechas por la propia suite en `docs/paridad/`
+> (`referencia-html.png` + `nativo-papel|rack|matriz.png`), con el README de P-010.
+> La suite **falla** si alguna queda por debajo de 10 KB.
 
 | Funcionalidad del HTML | Estado | Dónde / nota |
 |---|---|---|
@@ -22,17 +23,17 @@ cable de 96 hilos abierto en **670 ms**.
 | Papel: editar equipo (nombre, estado, pérdida) | **hecho** | lápiz ✎ → `PATCH` (diálogo con `prompt`) |
 | Papel: conectar puertos | **hecho** | clic en dos puertos/hilos → `POST /conexiones` |
 | Papel: hilos de 48/96 agrupados y expandibles | **hecho** | «ver N más» / «ver menos» |
-| Papel: virtualización (solo lo visible) | **parcial** | se omiten tarjetas fuera de la vista; no hay culling por fila de hilo |
-| Papel: mover equipo ENTRE gabinetes (⇄) | **API hecha, UI pendiente** | `POST …/mover` probado en pytest; falta el diálogo de destino |
+| Papel: virtualización (solo lo visible) | **parcial** | se omiten tarjetas **ya colocadas** fuera de la vista; las de posición automática siempre se dibujan (si no, un equipo nuevo podía desaparecer) |
+| Papel: mover equipo ENTRE gabinetes (⇄) | **hecho** | diálogo de destino con los gabinetes unidos por cable → `POST …/mover` (paso 4) |
 | Matriz: una tarjeta por gabinete | **adaptado** | una tarjeta por **contenedor** (el modelo real: los gabinetes se unen por cables) |
-| Matriz: tarjeta colapsable | **pendiente** | P-011 |
-| Matriz: iconos ✎ ⇄ ✕ en el banner azul | **parcial** | ✎ ⇄ ✕ están en cada fila; en el banner solo «+» |
-| Matriz: chip por hilo conectado | **hecho** | `cable:hilo ➔ equipo:puerto` (etiqueta simplificada) |
+| Matriz: tarjeta colapsable | **hecho** | `▾ ocultar / ▸ mostrar` por equipo, estado en `COLAPSADOS` (sobrevive al repintado) |
+| Matriz: iconos ✎ ⇄ ✕ en el banner azul | **hecho** | los tres van **en el banner** de cada equipo (`.pop-eq-banner`), no por fila |
+| Matriz: chip por hilo conectado | **hecho** | `GABINETE ➔ equipo:puerto` con el gabinete del otro extremo del cable (`relacionados` del DTO) |
 | VER COMUNICACIÓN: un pulso origen→final | **hecho** | `linterna.js`: 300 px/s, 26 px, cada 1.5 s, **un** `requestAnimationFrame` |
-| Linterna: botones L/R y ventana flotante | **pendiente** | P-011 |
-| Insignia de dirección («PON ▶ derecha») | **hecho** | texto en la cabecera |
-| Origen de señal / potencia TX en pantalla | **API hecha, UI pendiente** | `POST …/origen`; la vista aún no lo pinta |
-| Energía calculada (dBm) en la traza | **pendiente** | depende de 3.3 (P-008) |
+| Linterna: botones L/R y ventana flotante | **hecho** | `◀ L / ▶ R` en la ventana de luz; L invierte los puntos del pulso (paso 5) |
+| Insignia de dirección («SEÑAL ▶ ORIGEN → FINAL») | **hecho** | en la ventana de luz; cambia a `◀ FINAL → ORIGEN` con L |
+| Origen de señal / potencia TX en pantalla | **hecho** | bloque `ORIGEN · TX` del panel derecho: selector de puerto/hilo y TX editable (paso 5) |
+| Energía calculada (dBm) en la traza | **hecho** | `energia.js`: conector 0.3 · empalme/ODF 0.1 · splitter por división, constantes de `/api/config/reglas`; chip por ruta con los umbrales del dominio |
 | `?plantilla=1` abre el HTML aparte | **hecho** | botón PLANTILLA → `pop_gestor_v25.html?plantilla=1` |
 | Sin iframe / sin postMessage | **hecho** | módulos ES (`type="module"`) |
 | Todo detrás de un interruptor | **hecho** | el módulo se abre con `POPNativo.abrir(id)`; el armario sigue con el puente hasta la Fase 5 (R8) |
