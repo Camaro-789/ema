@@ -104,6 +104,7 @@ function pintar(diagrama) {
       alEditar: editar,
       alEliminar: eliminar,
       alNuevo: nuevoEquipo,
+      alMover: moverEquipo,
       alConectar: () => aviso('Selecciona dos puertos en el papel dinámico para conectar.', 'aviso'),
       alDesconectar: desconectar,
     });
@@ -237,6 +238,46 @@ async function anclarCable(cableId) {
     (revision) => api.anclarCable(contenedorId, cableId, revision),
     'Cable anclado al POP.',
   );
+}
+
+async function moverEquipo(dispositivoId) {
+  const diagrama = store.diagramaActual();
+  if (!diagrama) return;
+  const destinos = (diagrama.relacionados || [])
+    .filter((r) => Number(r.id) !== Number(diagrama.contenedor.id))
+    .map((r) => ({ id: r.id, nombre: `${r.nombre}${r.numero ? ` ${r.numero}` : ''}` }));
+  if (!destinos.length) {
+    aviso('No hay otro gabinete unido por cables para mover el equipo.', 'aviso');
+    return;
+  }
+  const host = modal.querySelector('.pop-cuerpo');
+  const capa = document.createElement('div');
+  capa.className = 'pop-dialogo';
+  capa.innerHTML = `
+    <div class="pop-dialogo-caja">
+      <header><b>MOVER EQUIPO</b><button type="button" data-cerrar>✕</button></header>
+      <div class="pop-dialogo-cuerpo">
+        <label>Gabinete destino</label>
+        <select data-destino>${destinos.map((d) => `<option value="${d.id}">${d.nombre}</option>`).join('')}</select>
+        <p class="pop-dialogo-nota">Se mueve con sus puertos y su posición en el lienzo.</p>
+      </div>
+      <footer>
+        <button type="button" class="pop-btn" data-cancelar>CANCELAR</button>
+        <button type="button" class="pop-btn pop-btn--oscuro" data-mover>MOVER</button>
+      </footer>
+    </div>`;
+  host.appendChild(capa);
+  const cerrar = () => capa.remove();
+  capa.querySelector('[data-cerrar]').addEventListener('click', cerrar);
+  capa.querySelector('[data-cancelar]').addEventListener('click', cerrar);
+  capa.querySelector('[data-mover]').addEventListener('click', async () => {
+    const destino = Number(capa.querySelector('[data-destino]').value);
+    cerrar();
+    await ejecutar(
+      (revision) => api.moverDispositivo(contenedorId, dispositivoId, destino, revision),
+      'Equipo movido de gabinete.',
+    );
+  });
 }
 
 async function nuevoEquipo() {

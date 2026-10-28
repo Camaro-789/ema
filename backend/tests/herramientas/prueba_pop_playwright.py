@@ -105,7 +105,7 @@ async def main() -> int:
             await pagina.click('[data-pestana="rack"]')
             check(await pagina.locator(".pop-rack-fila").count() >= 3, "el rack lista los equipos")
             await pagina.click('[data-pestana="matriz"]')
-            check(await pagina.locator(".pop-matriz-fila").count() >= 3,
+            check(await pagina.locator(".pop-eq-card").count() >= 3,
                   "la matriz lista los equipos")
             await pagina.click('[data-pestana="papel"]')
 
@@ -155,7 +155,30 @@ async def main() -> int:
                 await pagina.click('[data-pestana="matriz"]')
                 check("PYTEST-EQUIPO" in (await pagina.locator(".pop-matriz").inner_text()),
                       "y en la matriz")
-                await pagina.click('[data-pestana="papel"]')
+
+            # Paso 4: matriz con banner por equipo, chips con contenedor, colapsable y mover
+            await pagina.click('[data-pestana="matriz"]')
+            check(await pagina.locator(".pop-eq-card").count() >= 3,
+                  "matriz: una tarjeta por equipo")
+            for icono, nombre in (("data-editar", "✎"), ("data-mover", "⇄"),
+                                  ("data-eliminar", "✕")):
+                check(await pagina.locator(f".pop-eq-banner [{icono}]").count() >= 3,
+                      f"matriz: {nombre} en el banner del equipo")
+            chips = await pagina.locator(".pop-chip").count()
+            check(chips >= 1, f"matriz: chips de hilo conectado ({chips})")
+            if chips:
+                texto_chip = await pagina.locator(".pop-chip").first.inner_text()
+                check("➔" in texto_chip, "el chip usa «origen ➔ destino»", texto_chip)
+            await pagina.locator("[data-colapsar]").first.click()
+            check(await pagina.locator(".pop-eq-cuerpo[hidden]").count() >= 1,
+                  "matriz: la tarjeta se colapsa")
+            await pagina.locator("[data-mover]").first.click()
+            await pagina.wait_for_selector(".pop-dialogo [data-destino]", timeout=5000)
+            check(await pagina.locator(".pop-dialogo [data-destino] option").count() >= 1,
+                  "matriz: el diálogo de mover lista el gabinete destino")
+            await pagina.locator('.pop-dialogo [data-cancelar]').click()
+            await pagina.click('[data-pestana="papel"]')
+
 
             # Conexión inválida: el servidor la rechaza y la UI muestra SU mensaje.
             await pagina.evaluate("""() => {

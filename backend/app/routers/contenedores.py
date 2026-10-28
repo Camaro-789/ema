@@ -199,6 +199,31 @@ def diagrama(
     ).all()
 
     precarga = _precargar_cables(db, cables)
+    # Contenedores del OTRO extremo de cada cable: alimenta los chips «Gab2 ➔ …».
+    otros_ids = set()
+    for cable in cables:
+        otro = (cable.extremo_B_id if cable.extremo_A_id == elemento.id
+                else cable.extremo_A_id)
+        if otro:
+            otros_ids.add(otro)
+    relacionados = []
+    if otros_ids:
+        otros = db.query(fisicos.FtthElemento).filter(
+            fisicos.FtthElemento.id.in_(otros_ids)).all()
+        tipos_otros = {
+            tipo.id: tipo
+            for tipo in db.query(fisicos.FtthTipo).filter(
+                fisicos.FtthTipo.id.in_({o.tipo_id for o in otros if o.tipo_id})).all()
+        }
+        for otro in otros:
+            tipo_otro = tipos_otros.get(otro.tipo_id)
+            numero = (otro.propiedades_instancia or {}).get("numero")
+            relacionados.append({
+                "id": otro.id,
+                "categoria": otro.categoria,
+                "nombre": getattr(tipo_otro, "nombre_id", None) or f"{otro.categoria} #{otro.id}",
+                "numero": numero,
+            })
     cables_dto = []
     for cable in cables:
         fibras = precarga["fibras"].get(cable.id, [])
@@ -262,6 +287,7 @@ def diagrama(
              "senal": m.senal, "tx_dbm": m.tx_dbm, "nota": m.nota} for m in origenes
         ],
         "posiciones": posiciones,
+        "relacionados": relacionados,
         "hilos_por_cable": hilos_por_cable,
     }
 
