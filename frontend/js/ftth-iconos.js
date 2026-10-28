@@ -127,6 +127,56 @@ const FTTHIconos = (() => {
   }
 
   /**
+   * Genera el bitmap SDF REAL del cuadro del poste.
+   *
+   * Campo de distancia con signo: el alfa vale 0.5 justo en el borde, >0.5 dentro
+   * y <0.5 fuera. MapLibre evalua esa funcion en el fragment shader, de modo que
+   * el borde se dibuja analiticamente y queda recto y nitido en cualquier zoom,
+   * sin el desenfoque que produce un relleno normal al escalarlo. Con radio 0 las
+   * esquinas quedan a 90 grados exactos.
+   *
+   * Esta imagen la consume UNICAMENTE la capa 'ftth-postes-layer' (ver ftth-mapa.js).
+   * Los demas nodos (caja, manga, ODF, OLT...) siguen usando sus SVG oficiales a
+   * color, sin tocar: 'ftth-labels-layer' no usa esta imagen.
+   */
+  function _generarCuadradoSDF(size = 32, radio = 0) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(size, size);
+    const d = img.data;
+
+    const pad = 4;            // margen para que la rampa SDF no toque el borde del bitmap
+    const half = size / 2;
+    const halfBox = half - pad;
+    const spread = 4;          // ancho de la rampa: debe caber dentro de 'pad'
+    const r = Math.max(0, Math.min(radio, halfBox));
+
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const px = x + 0.5 - half;
+        const py = y + 0.5 - half;
+        // Distancia con signo a un rectangulo (redondeado solo si r > 0).
+        const qx = Math.abs(px) - (halfBox - r);
+        const qy = Math.abs(py) - (halfBox - r);
+        const ax = Math.max(qx, 0);
+        const ay = Math.max(qy, 0);
+        const dist = Math.sqrt(ax * ax + ay * ay) + Math.min(Math.max(qx, qy), 0) - r;
+        // 0 en el borde exacto, negativo hacia dentro.
+        let a = 0.5 - dist / spread;
+        if (a < 0) a = 0; else if (a > 1) a = 1;
+        const i = (y * size + x) * 4;
+        d[i] = 255; d[i + 1] = 255; d[i + 2] = 255;
+        d[i + 3] = Math.round(a * 255);
+      }
+    }
+
+    ctx.putImageData(img, 0, 0);
+    return ctx.getImageData(0, 0, size, size);
+  }
+
+  /**
    * Registra los íconos en un mapa MapLibre. Llama a onReady cuando termina.
    * Es idempotente: no vuelve a añadir íconos que ya existan.
    */
@@ -135,6 +185,16 @@ const FTTHIconos = (() => {
       if (onReady) onReady();
       return;
     }
+
+    // Registrar la forma cuadrada SDF para los postes
+    try {
+      if (!map.hasImage || !map.hasImage('ftth-shape-square')) {
+        map.addImage('ftth-shape-square', _generarCuadradoSDF(32), { sdf: true });
+      }
+    } catch (e) {
+      console.warn('FTTHIconos: no se pudo registrar ftth-shape-square:', e);
+    }
+
     cargarParaMapa().then(imagenes => {
       Object.keys(imagenes).forEach(cat => {
         const id = 'ftth-ico-' + cat;

@@ -173,6 +173,21 @@ const FTTHDiagrama = (() => {
       }
       _datos = await res.json();
       pintar();
+      if (window.FTTHFusiones && typeof window.FTTHFusiones.cargarFusiones === 'function') {
+        const fusionesDto = [];
+        (_datos.empalmes || []).forEach((e) => {
+          fusionesDto.push({
+            id: e.id,
+            strandId: e.fibra_a_id,
+            extremo: e.extremo_a || 'entrada',
+            portId: e.puerto_id || null,
+            strandBId: e.fibra_b_id || null,
+            extremoB: e.extremo_b || 'salida',
+            waypoints: e.waypoints || [],
+          });
+        });
+        window.FTTHFusiones.cargarFusiones(fusionesDto);
+      }
     } catch (e) {
       console.error('[diagrama] error de red:', e);
       mostrarError('No se pudo contactar al servidor.');
@@ -182,7 +197,13 @@ const FTTHDiagrama = (() => {
   }
 
   function mostrarError(texto) {
-    if (cuerpo()) cuerpo().innerHTML = `<div class="diag-error">${escapeHtml(texto)}</div>`;
+    let msg = texto;
+    if (Array.isArray(texto)) {
+      msg = texto.map(item => (typeof item === 'object' && item && item.msg) ? item.msg : JSON.stringify(item)).join(' | ');
+    } else if (typeof texto === 'object' && texto !== null) {
+      msg = texto.msg || texto.detail || texto.message || JSON.stringify(texto);
+    }
+    if (cuerpo()) cuerpo().innerHTML = `<div class="diag-error">${escapeHtml(String(msg || 'Error al cargar el diagrama'))}</div>`;
     if (badge()) badge().textContent = 'Error';
   }
 
@@ -212,14 +233,19 @@ const FTTHDiagrama = (() => {
     // sitio (el guardado o la rejilla de dos columnas, nunca apiladas).
     const sitios = calcularSitios(d.dispositivos || []);
 
+    // Columnas: ENTRADA (izquierda) · SALIDA (derecha) · Dispositivos (centro/libre).
+    // Las bandejas de empalme físicas ya no se muestran como columnas en el diagrama visual.
     cuerpo().innerHTML =
-      `<div class="diag-col">${colHilos(d)}</div>` +
-      `<div class="diag-col">${colBandejas(d)}</div>` +
+      `<div class="diag-col">${colHilos(d, 'entrada')}</div>` +
+      `<div class="diag-col">${colHilos(d, 'salida')}</div>` +
       colDispositivos(d, sitios);
 
     pintarPie();
     bindClicks();
     acomodar();   // mide las tarjetas y dimensiona el área de aparatos
+    if (window.FTTHFusiones && typeof window.FTTHFusiones.attachDiagramElements === 'function') {
+      window.FTTHFusiones.attachDiagramElements();
+    }
 
     // Si el usuario no ha navegado a mano, se enfoca solo: al abrir el nodo se
     // centra en los SPLITTERS con zoom normal, y si cambia el contenido (por
@@ -230,10 +256,47 @@ const FTTHDiagrama = (() => {
     }
   }
 
-  function colHilos(d) {
-    const hilos = d.hilos_que_terminan || d.hilos || [];
+  /**
+   * Lado del diagrama al que pertenece un HILO ya anclado: ENTRADA es la columna
+   * izquierda (el cable llega por su extremo B) y SALIDA la derecha (sale por su
+   * extremo A). El backend manda `lado` en el DTO; el extremo es el respaldo para
+   * DTO viejos.
+   */
+  function ladoDeHilo(x) {
+    if (x && x.lado) return String(x.lado).toLowerCase();
+    return String((x && x.extremo) || '').toUpperCase() === 'B' ? 'entrada' : 'salida';
+  }
+
+  /**
+   * Botón para INVERTIR el lado (entrada↔salida) de la punta que este cable tiene
+   * en la caja. El lado es una decisión del usuario y se guarda en el propio cable
+   * (`propiedades_instancia.lado_A` / `lado_B`): NO cambia la nomenclatura A/B.
+   */
+  function _botonLado(g, lado) {
+    const tipo = g.tipo || {};
+    const extremoAqui = Number(tipo.extremo_A_id) === Number(_boxId) ? 'A' : 'B';
+    const nuevo = lado === 'entrada' ? 'salida' : 'entrada';
+    const etiqueta = nuevo === 'entrada' ? 'Entrada' : 'Salida';
+    return `<button type="button" class="btn-lado" data-cable-id="${g.cable_id}" `
+      + `data-extremo="${extremoAqui}" data-lado="${nuevo}" title="Marcar la punta ${extremoAqui} como ${etiqueta}" `
+      + `style="margin-top:6px;width:100%;padding:5px 10px;background:#f0fdf4;color:#15803d;`
+      + `border:1px solid #bbf7d0;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;">`
+      + `⇄ Marcar como ${etiqueta}</button>`;
+  }
+
+  /**
+   * Columna de hilos de UN lado del nodo (entrada = izquierda, salida = derecha).
+   *
+   * El diagrama nace VACÍO: los cables que todavía NO están dentro no se listan
+   * aquí, se ofrecen en los botones «Agregar cable de entrada / salida» de la
+   * barra inferior (lo decide `cables_divisibles` del backend). Así el cable no
+   * «se mete solo» ni al trazar ni al colocar la caja: lo agrega el usuario.
+   */
+  function colHilos(d, lado) {
+    const esEntrada = lado === 'entrada';
+    const hilos = (d.hilos_que_terminan || d.hilos || []).filter((x) => ladoDeHilo(x) === lado);
     if (!hilos.length) return '';
-    let h = `<div class="diag-col-title">Hilos <span>(${hilos.length})</span></div>`;
+    let h = `<div class="diag-col-title">${esEntrada ? 'Entrada' : 'Salida'} <span>(${hilos.length})</span></div>`;
     const porCable = new Map();
     hilos.forEach((x) => {
       if (!porCable.has(x.cable_id)) {
@@ -250,7 +313,13 @@ const FTTHDiagrama = (() => {
     porCable.forEach((g) => {
       const propsTipo = g.tipo || {};
       const clave = window.FTTHPlantillas.resolverTipo({ categoria: 'cables', propiedades: propsTipo });
-      const hayDePaso = g.items.some(x => x.de_paso);
+
+      // Cable OZmap: extremos lógicos y reservas
+      const extremoA = propsTipo.extremo_A_id ? `A→Nodo #${propsTipo.extremo_A_id}` : 'A→—';
+      const extremoB = propsTipo.extremo_B_id ? `B→Nodo #${propsTipo.extremo_B_id}` : 'B→—';
+      const reservaA = propsTipo.reserva_A_m ? ` ${propsTipo.reserva_A_m}m` : '';
+      const reservaB = propsTipo.reserva_B_m ? ` ${propsTipo.reserva_B_m}m` : '';
+      const extremosInfo = `<span style="font-size:10px;color:#64748b;margin-left:8px;font-family:monospace;">${extremoA}${reservaA} · ${extremoB}${reservaB}</span>`;
 
       if (window.FTTHPlantillas && typeof window.FTTHPlantillas.render === 'function' && clave) {
         const datosVisuales = window.FTTHPlantillas.datosFibra(
@@ -259,59 +328,24 @@ const FTTHDiagrama = (() => {
           g.nombre
         );
         datosVisuales.hilosReales = g.items;
+        // Dirección: la columna de SALIDA se dibuja con los hilos hacia la izquierda
+        datosVisuales.orientacion = esEntrada ? 'in' : 'out';
         const cardHtml = window.FTTHPlantillas.render(clave, datosVisuales);
         if (cardHtml) {
-          h += '<div class="diag-grupo" style="margin-bottom:12px;">';
+          h += '<div class="diag-grupo diag-grupo--fibra-pura" style="margin-bottom:12px; background:transparent; border:none; box-shadow:none;">';
           h += cardHtml;
-          h += `<button type="button" onclick="if(window.showPropertiesModalById) window.showPropertiesModalById(${g.cable_id})" style="margin-top:6px;width:100%;padding:6px 12px;background:#f5f5f7;color:#1d1d1f;border:1px solid #d1d1d6;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">🔍 Propiedades de ${escapeHtml(g.nombre)}</button>`;
-          if (hayDePaso) {
-            h += `<button type="button" class="btn-sangrar-cable" data-cable-id="${g.cable_id}" data-cable-nombre="${escapeHtml(g.nombre)}" style="margin-top:6px;width:100%;padding:6px 12px;background:#e0f2fe;color:#0284c7;border:1px solid #bae6fd;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fa-solid fa-scissors"></i> Sangrar hilos de este cable aquí</button>`;
-          }
-
-          h += '<div class="diag-items" style="margin-top:8px;">';
-          g.items.forEach((x) => {
-            const sel = (_sel && _sel.tipo === 'hilo' && _sel.id === x.fibra_id) ? ' sel' : '';
-            const dePasoBadge = x.de_paso ? ' <span style="font-size:9px;background:#f1f5f9;color:#64748b;padding:1px 5px;border-radius:4px;border:1px solid #cbd5e1;font-weight:600;margin-left:4px;">De paso</span>' : '';
-            const estadoTexto = x.de_paso ? 'De paso' : (ETIQUETA_ESTADO[x.estado] || x.estado);
-            const titulo = `${x.nombre} · ${x.de_paso ? 'De paso (no sangrado)' : 'Sangrado aquí'} · ${x.estado}`;
-
-            h += `<button type="button" class="diag-hilo${sel}" data-hilo="${x.fibra_id}" data-de-paso="${x.de_paso ? '1' : '0'}" title="${escapeHtml(titulo)}" style="${x.de_paso ? 'opacity:0.85;' : ''}">`
-              + `<span class="diag-hilo-franja" style="background:${escapeHtml(x.color_hex || '#888')}"></span>`
-              + `<span class="diag-hilo-nombre">${escapeHtml(x.nombre)}${dePasoBadge}</span>`
-              + `<span class="diag-hilo-ext">${escapeHtml(x.extremo)}</span>`
-              + `<span class="diag-estado diag-estado--${escapeHtml(x.estado)}">`
-              + `${escapeHtml(estadoTexto)}</span>`
-              + '</button>';
-          });
-          h += '</div></div>';
+          h += '</div>';
           return;
         }
       }
 
-      // Fallback
-      h += '<div class="diag-grupo">';
-      h += `<div class="diag-grupo-cab">🔌 <strong onclick="if(window.showPropertiesModalById) window.showPropertiesModalById(${g.cable_id})" style="cursor:pointer;text-decoration:underline;">${escapeHtml(g.nombre)}</strong>`
+      // Fallback mínimo si no hay plantilla visual
+      h += '<div class="diag-grupo diag-grupo--fibra-pura" style="margin-bottom:12px; background:transparent; border:none; box-shadow:none;">';
+      h += `<div class="diag-grupo-cab" style="background:transparent;border:none;">🔌 <strong onclick="if(window.showPropertiesModalById) window.showPropertiesModalById(${g.cable_id})" style="cursor:pointer;text-decoration:underline;">${escapeHtml(g.nombre)}</strong>`
         + `<span class="diag-grupo-info">${g.items.length} hilo(s)</span></div>`;
-      if (hayDePaso) {
-        h += `<button type="button" class="btn-sangrar-cable" data-cable-id="${g.cable_id}" data-cable-nombre="${escapeHtml(g.nombre)}" style="margin-top:6px;margin-bottom:6px;width:100%;padding:6px 12px;background:#e0f2fe;color:#0284c7;border:1px solid #bae6fd;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fa-solid fa-scissors"></i> Sangrar hilos de este cable aquí</button>`;
-      }
-      h += '<div class="diag-items">';
-      g.items.forEach((x) => {
-        const sel = (_sel && _sel.tipo === 'hilo' && _sel.id === x.fibra_id) ? ' sel' : '';
-        const dePasoBadge = x.de_paso ? ' <span style="font-size:9px;background:#f1f5f9;color:#64748b;padding:1px 5px;border-radius:4px;border:1px solid #cbd5e1;font-weight:600;margin-left:4px;">De paso</span>' : '';
-        const estadoTexto = x.de_paso ? 'De paso' : (ETIQUETA_ESTADO[x.estado] || x.estado);
-        const titulo = `${x.nombre} · ${x.de_paso ? 'De paso (no sangrado)' : 'Sangrado aquí'} · ${x.estado}`;
-
-        h += `<button type="button" class="diag-hilo${sel}" data-hilo="${x.fibra_id}" data-de-paso="${x.de_paso ? '1' : '0'}" title="${escapeHtml(titulo)}" style="${x.de_paso ? 'opacity:0.85;' : ''}">`
-          + `<span class="diag-hilo-franja" style="background:${escapeHtml(x.color_hex || '#888')}"></span>`
-          + `<span class="diag-hilo-nombre">${escapeHtml(x.nombre)}${dePasoBadge}</span>`
-          + `<span class="diag-hilo-ext">${escapeHtml(x.extremo)}</span>`
-          + `<span class="diag-estado diag-estado--${escapeHtml(x.estado)}">`
-          + `${escapeHtml(estadoTexto)}</span>`
-          + '</button>';
-      });
-      h += '</div></div>';
+      h += '</div>';
     });
+
     return h;
   }
 
@@ -331,8 +365,11 @@ const FTTHDiagrama = (() => {
         for (let i = 1; i <= slots; i++) {
           const emp = (b.empalmes || []).find((e) => e.slot === i);
           if (emp) {
-            const desc = `${emp.hilo_a ? emp.hilo_a.nombre : '?'} ↔ ${emp.hilo_b ? emp.hilo_b.nombre : '?'}`;
-            h += `<div class="diag-slot diag-slot--ocupado" title="${escapeHtml('Posición ' + i + ': ' + desc)}">${i}</div>`;
+            const esPicado = !emp.hilo_b || emp.tipo === 'sangrado';
+            const desc = `${emp.hilo_a ? emp.hilo_a.nombre : '?'} `
+              + (emp.hilo_b ? `↔ ${emp.hilo_b.nombre}` : '· PICADO (libre, para derivar)');
+            const clase = 'diag-slot diag-slot--ocupado' + (esPicado ? ' diag-slot--sangrado' : '');
+            h += `<div class="${clase}" title="${escapeHtml('Posición ' + i + ': ' + desc)}">${i}</div>`;
           } else {
             h += `<div class="diag-slot" title="${escapeHtml('Posición ' + i + ' libre')}">${i}</div>`;
           }
@@ -482,99 +519,295 @@ const FTTHDiagrama = (() => {
         pintar();
       });
     });
-    c.querySelectorAll('.btn-sangrar-cable').forEach((b) => {
+    c.querySelectorAll('.btn-lado').forEach((b) => {
       b.addEventListener('click', (e) => {
         e.stopPropagation();
-        const cableId = Number(b.dataset.cableId);
-        const cableNombre = b.dataset.cableNombre;
-        abrirModalSangrarCable(cableId, cableNombre);
+        cambiarLadoCable(Number(b.dataset.cableId), b.dataset.extremo, b.dataset.lado);
       });
     });
   }
 
-  async function abrirModalSangrarCable(cableId, cableNombre) {
-    if (!cableId || !_boxId || !_datos) return;
-    const hilosCable = (_datos.hilos || _datos.hilos_que_terminan || []).filter(h => h.cable_id === Number(cableId) && h.de_paso);
-    if (!hilosCable.length) {
-      aviso('Todos los hilos disponibles de este cable ya están sangrados en este u otro nodo.', 'info');
-      return;
-    }
-
-    let modal = document.getElementById('diag-modal-sangrar');
-    if (modal) modal.remove();
-
-    modal = document.createElement('div');
-    modal.id = 'diag-modal-sangrar';
-    modal.style.cssText = [
-      'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:130000;',
-      'background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.35);',
-      'padding:20px 24px;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;',
-      'display:flex;flex-direction:column;gap:14px;width:380px;max-width:92vw;max-height:85vh;overflow:hidden;',
-    ].join('');
-
-    const itemsHtml = hilosCable.map(h => `
-      <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #f0f0f2;cursor:pointer;">
-        <input type="checkbox" class="chk-sangrar-hilo" value="${h.fibra_id}" checked style="width:16px;height:16px;">
-        <span style="width:14px;height:14px;border-radius:3px;background:${escapeHtml(h.color_hex || '#888')};display:inline-block;"></span>
-        <span style="font-size:13px;font-weight:600;color:#1d1d1f;flex:1;">${escapeHtml(h.nombre)}</span>
-        <span style="font-size:11px;color:#86868b;">Pos. ${h.hilo_global_no}</span>
-      </label>
-    `).join('');
-
-    modal.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f0f0f2;padding-bottom:10px;">
-        <div>
-          <div style="font-size:15px;font-weight:700;color:#1d1d1f;">✂️ Sangrar hilos de fibra</div>
-          <div style="font-size:11px;color:#86868b;margin-top:2px;">Cable: ${escapeHtml(cableNombre)}</div>
-        </div>
-        <button id="modal-sangrar-close" style="border:none;background:#f5f5f7;border-radius:6px;width:26px;height:26px;cursor:pointer;">✕</button>
-      </div>
-      <div style="font-size:12px;color:#86868b;">
-        Selecciona los hilos que deseas acceder/empalmar en este nodo:
-      </div>
-      <div style="overflow-y:auto;max-height:40vh;border:1px solid #e5e5ea;border-radius:8px;">
-        ${itemsHtml}
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;">
-        <button id="modal-sangrar-cancel" style="padding:8px 14px;background:#f5f5f7;color:#1d1d1f;border:1px solid #d1d1d6;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">Cancelar</button>
-        <button id="modal-sangrar-save" style="padding:8px 14px;background:#0071e3;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">Confirmar Sangrado</button>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    const close = () => { if (modal.parentNode) modal.remove(); };
-    modal.querySelector('#modal-sangrar-close').addEventListener('click', close);
-    modal.querySelector('#modal-sangrar-cancel').addEventListener('click', close);
-
-    modal.querySelector('#modal-sangrar-save').addEventListener('click', async () => {
-      const selected = Array.from(modal.querySelectorAll('.chk-sangrar-hilo:checked')).map(c => Number(c.value));
-      if (!selected.length) {
-        aviso('Selecciona al menos un hilo para sangrar', 'warning');
+  /**
+   * CORTE / SANGRADO del cable en esta caja. `opts` = { modo, fibras, lado }:
+   *   · modo='corte'    → el cable sigue: TODAS las fibras se empalman de paso.
+   *   · modo='sangrado' → las fibras de `fibras` se pican y las demás siguen.
+   *   · lado            → qué mitad es la de ENTRADA en la fusión.
+   */
+  async function dividirCableAqui(cableId, opts) {
+    if (!cableId || !_boxId) return;
+    const o = opts || {};
+    const modo = String(o.modo || 'corte').toLowerCase() === 'sangrado' ? 'sangrado' : 'corte';
+    const lado = String(o.lado || 'entrada').toLowerCase() === 'salida' ? 'salida' : 'entrada';
+    const fibras = Array.isArray(o.fibras) ? o.fibras : [];
+    const que = modo === 'sangrado'
+      ? 'Se SANGRA el cable: las fibras elegidas se pican (quedan abiertas) y las demás siguen de paso.'
+      : 'Se CORTA el cable: se parte en DOS y se empalman de paso TODAS las fibras.';
+    if (!window.confirm(`${que}\n\nEl cable original desaparecerá y cada cable nuevo conservará sus hilos.\n¿Continuar?`)) return;
+    aviso(modo === 'sangrado' ? 'Sangrando el cable...' : 'Cortando el cable...', 'info');
+    try {
+      const res = await fetch(apiUrl(`/api/elementos/${_boxId}/cables/${cableId}/dividir`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modo, fibras, lado }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        aviso(data.detail || 'No se pudo aplicar el corte/sangrado', 'error');
         return;
       }
-      close();
-      aviso('Sangrando hilos en este nodo...', 'info');
-      try {
-        const res = await fetch(apiUrl(`/api/elementos/${_boxId}/cables/${cableId}/sangrar`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hilos: selected })
+      const n = (data.cables || []).length;
+      const k = (data.empalmes || []).length;
+      aviso(`✓ ${modo === 'sangrado' ? 'Sangrado' : 'Corte'}: ${n} cable(s) · ${k} empalme(s)`, 'success');
+      _sel = null;
+      await cargar();
+      encuadrar();
+      marcarCambio();
+    } catch (e) {
+      console.error('Error en el corte/sangrado del cable:', e);
+      aviso('Error de red al aplicar el corte/sangrado', 'error');
+    }
+  }
+
+  /**
+   * Sangra un cable pasante en esta caja (acceso en mitad de tramo, sin dividirlo).
+   * Crea automáticamente empalmes de paso entrada↔salida para cada hilo.
+   */
+  async function sangrarCableAqui(cableId) {
+    if (!cableId || !_boxId) return;
+    if (!window.confirm('Se sangrará este cable en la caja (conservando el cable continuo y creando empalmes de paso por defecto).\n¿Continuar?')) return;
+    aviso('Sangrando el cable...', 'info');
+    try {
+      const res = await fetch(apiUrl(`/api/elementos/${_boxId}/cables/${cableId}/sangrar`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        aviso(data.detail || 'No se pudo sangrar el cable', 'error');
+        return;
+      }
+      aviso('✓ Cable sangrado con éxito: empalmes de paso creados', 'success');
+      _sel = null;
+      await cargar();
+      encuadrar();
+      marcarCambio();
+    } catch (e) {
+      console.error('Error sangrando el cable:', e);
+      aviso('Error de red al sangrar el cable', 'error');
+    }
+  }
+
+  /**
+   * Ancla el extremo del cable a esta caja y le fija el LADO (entrada/salida)
+   * elegido por el usuario. A/B es solo la nomenclatura de la punta; la dirección
+   * es una decisión del usuario (`propiedades_instancia.lado_A` / `lado_B`).
+   */
+  async function anclarExtremoAqui(cableId, extremo, lado) {
+    if (!cableId || !_boxId || !extremo) return;
+    const et = String(extremo).toUpperCase();
+    const ladoTxt = String(lado).toLowerCase() === 'salida' ? 'salida' : 'entrada';
+    if (!window.confirm(`Se anclará el extremo ${et} de este cable a esta caja como ${ladoTxt.toUpperCase()}.\n¿Continuar?`)) return;
+    const props = {};
+    props['lado_' + et] = ladoTxt;
+    const cuerpo = et === 'A'
+      ? { extremo_A_id: _boxId, propiedades_instancia: props }
+      : { extremo_B_id: _boxId, propiedades_instancia: props };
+    try {
+      const res = await fetch(apiUrl(`/api/elementos/${cableId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cuerpo)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        aviso(data.detail || 'No se pudo anclar el extremo', 'error');
+        return;
+      }
+      aviso(`✓ Extremo ${et} anclado a esta caja`, 'success');
+      await cargar();
+      encuadrar();
+      marcarCambio();
+    } catch (e) {
+      console.error('Error anclando el extremo:', e);
+      aviso('Error de red al anclar el extremo', 'error');
+    }
+  }
+
+  /**
+   * Cambia el LADO (entrada↔salida) de la punta que este cable tiene en la caja.
+   * Es una decisión del usuario: se guarda en el cable (`lado_A` / `lado_B`) y NO
+   * toca la nomenclatura A/B ni los hilos.
+   */
+  async function cambiarLadoCable(cableId, extremo, lado) {
+    if (!cableId || !extremo) return;
+    const et = String(extremo).toUpperCase();
+    const ladoTxt = String(lado).toLowerCase() === 'salida' ? 'salida' : 'entrada';
+    const props = {};
+    props['lado_' + et] = ladoTxt;
+    try {
+      const res = await fetch(apiUrl(`/api/elementos/${cableId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propiedades_instancia: props }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        aviso(err.detail || 'No se pudo cambiar el lado del cable', 'error');
+        return;
+      }
+      aviso(`✓ Punta ${et} marcada como ${ladoTxt.toUpperCase()}`, 'success');
+      await cargar();
+      marcarCambio();
+    } catch (e) {
+      console.error('Error cambiando el lado del cable:', e);
+      aviso('Error de red al cambiar el lado del cable', 'error');
+    }
+  }
+
+  // ── Cables detectados en el poste de esta caja (los ofrece la barra inferior) ─
+  /**
+   * Cables que el backend detecta en el poste de esta caja (`cables_divisibles`):
+   * los que TERMINAN aquí (accion `asignar_extremo`) y los que PASAN
+   * (accion `dividir`). El LADO (entrada/salida) lo elige el usuario al pulsar el
+   * botón, así que los DOS botones ofrecen la misma lista; el backend solo decide
+   * QUÉ se puede hacer con cada cable.
+   */
+  function candidatosDeLado() {
+    const divs = (_datos && _datos.cables_divisibles) || [];
+    return divs.filter((x) => x && x.accion);
+  }
+
+  const ESTILO_CAND = 'width:100%;display:flex;flex-direction:column;gap:2px;margin-bottom:8px;'
+    + 'padding:9px 12px;background:#f5f5f7;border:1px solid #d1d1d6;border-radius:8px;'
+    + 'text-align:left;font:inherit;';
+
+  /**
+   * Selector de cables para meter en el diagrama: lo abren los botones «Agregar
+   * cable de ENTRADA / SALIDA» de la barra inferior. El lado pulsado se aplica al
+   * confirmar. Por cable:
+   *   · asignar_extremo → se ancla ese extremo con el lado elegido.
+   *   · dividir        → CORTE (todas las fibras siguen empalmadas) o SANGRADO
+   *                      (se eligen las fibras que se pican y las demás siguen).
+   */
+  function mostrarModalAgregarCable(lado) {
+    const esEntrada = String(lado).toLowerCase() !== 'salida';
+    const ladoTxt = esEntrada ? 'ENTRADA' : 'SALIDA';
+    const cand = candidatosDeLado();
+
+    let picker = document.getElementById('diag-cable-picker');
+    if (!picker) {
+      picker = document.createElement('div');
+      picker.id = 'diag-cable-picker';
+      picker.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);'
+        + ' background:white; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:120000;'
+        + ' border-radius:10px; width:340px; max-height:70vh; overflow:auto;'
+        + ' font-family: Inter, -apple-system, sans-serif;';
+      picker.addEventListener('click', (e) => e.stopPropagation());
+      picker.addEventListener('mousedown', (e) => e.stopPropagation());
+      document.body.appendChild(picker);
+    }
+
+    const tarjeta = (x) => {
+      const et = x.extremo ? String(x.extremo).toUpperCase() : '';
+      const id = `diag-cable-cand-${x.cable_id}`;
+      const cab = `<span style="font-size:12.5px;font-weight:600;color:#1d1d1f;">🔌 `
+        + `${escapeHtml(x.nombre || ('Cable #' + x.cable_id))}</span>`;
+      if (x.accion !== 'dividir') {
+        return `<button type="button" class="btn-cable-cand" id="${id}" data-cable-id="${x.cable_id}"`
+          + ` data-accion="asignar" data-extremo="${et}" style="${ESTILO_CAND}cursor:pointer;">`
+          + cab
+          + `<span style="font-size:11px;color:#86868b;">termina aquí${et ? ' · extremo ' + et : ''}`
+          + ` · entra como ${ladoTxt.toLowerCase()}</span></button>`;
+      }
+      // Cable que PASA: CORTE (todas siguen) o SANGRADO (elegir las fibras picadas)
+      const fibras = (x.fibras || []).map((f) => `<label style="display:flex;align-items:center;`
+        + `gap:6px;font-size:11px;color:#1d1d1f;margin-bottom:3px;">`
+        + `<input type="checkbox" id="chk-${f.id}" data-cable-id="${x.cable_id}" `
+        + `data-fibra-id="${f.id}" value="${f.id}">`
+        + `<span style="width:10px;height:10px;border-radius:2px;background:${escapeHtml(f.color_hex || '#888')};`
+        + `border:1px solid #d1d1d6;"></span>${escapeHtml(f.nombre)}</label>`).join('');
+      return `<div class="diag-cable-corte" id="${id}" data-cable-id="${x.cable_id}" `
+        + `data-accion="dividir" style="${ESTILO_CAND}cursor:default;">`
+        + cab
+        + `<span style="font-size:11px;color:#86868b;">pasa por aquí · corte o sangrado</span>`
+        + `<div style="display:flex;gap:12px;margin-top:6px;font-size:12px;color:#1d1d1f;">`
+        + `<label><input type="radio" name="modo-${x.cable_id}" value="corte" checked> Corte</label>`
+        + `<label><input type="radio" name="modo-${x.cable_id}" value="sangrado"> Sangrado</label>`
+        + `</div>`
+        + `<div id="fibras-${x.cable_id}" style="display:none;margin-top:6px;max-height:130px;`
+        + `overflow:auto;border-top:1px dashed #d1d1d6;padding-top:6px;">`
+        + `<div style="font-size:10.5px;color:#86868b;margin-bottom:4px;">`
+        + `Fibras que se PICAN (las demás siguen de paso)</div>`
+        + (fibras || '<div style="font-size:11px;color:#86868b;">(el cable no declara hilos)</div>')
+        + `</div>`
+        + `<div style="display:flex;gap:6px;margin-top:8px;">`
+        + `<button type="button" class="btn-cable-sangrar-continuo" id="sangrar-${x.cable_id}" `
+        + `data-cable-id="${x.cable_id}" style="padding:6px 10px;background:#10b981;`
+        + `color:white;border:none;border-radius:6px;cursor:pointer;font-size:11.5px;flex:1;">`
+        + `Sangrar cable</button>`
+        + `<button type="button" class="btn-cable-aplicar" id="aplicar-${x.cable_id}" `
+        + `data-cable-id="${x.cable_id}" style="padding:6px 10px;background:#1d68bd;`
+        + `color:white;border:none;border-radius:6px;cursor:pointer;font-size:11.5px;flex:1;">`
+        + `Dividir cable</button>`
+        + `</div></div>`;
+    };
+
+    const lista = cand.length
+      ? cand.map(tarjeta).join('')
+      : '<div style="font-size:12.5px;color:#86868b;">No hay cables detectados en el poste de esta caja. '
+        + 'Colócala sobre un poste por el que pase o termine un cable.</div>';
+
+    picker.innerHTML = `<h4 style="margin:0 0 12px;color:#1e293b;font-size:14px;">`
+      + `Agregar cable de ${ladoTxt}</h4>${lista}`
+      + '<div style="display:flex;justify-content:flex-end;margin-top:6px;">'
+      + '<button type="button" id="diag-cable-cancel" style="padding:6px 12px;border:1px solid #ccc;'
+      + 'background:white;border-radius:6px;cursor:pointer;">Cerrar</button></div>';
+    picker.style.display = 'block';
+
+    cand.forEach((x) => {
+      const nodo = document.getElementById('diag-cable-cand-' + x.cable_id);
+      if (!nodo) return;
+      if (x.accion !== 'dividir') {
+        nodo.onclick = async () => {
+          picker.style.display = 'none';
+          await anclarExtremoAqui(Number(x.cable_id), x.extremo, lado);
+        };
+        return;
+      }
+      const btnSangrar = document.getElementById('sangrar-' + x.cable_id);
+      if (btnSangrar) btnSangrar.onclick = async () => {
+        picker.style.display = 'none';
+        await sangrarCableAqui(Number(x.cable_id));
+      };
+      const btn = document.getElementById('aplicar-' + x.cable_id);
+      if (btn) btn.onclick = async () => {
+        const modo = String(leerModo(x.cable_id)).toLowerCase() === 'sangrado' ? 'sangrado' : 'corte';
+        const ids = [];
+        (x.fibras || []).forEach((f) => {
+          const cb = document.getElementById('chk-' + f.id);
+          if (cb && cb.checked) ids.push(f.id);
         });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          aviso(err.detail || 'Error al sangrar hilos', 'error');
+        if (modo === 'sangrado' && !ids.length) {
+          aviso('Marca al menos una fibra para sangrar (o elige CORTE)', 'error');
           return;
         }
-        aviso(`✓ ${selected.length} hilo(s) sangrado(s) exitosamente en este nodo`, 'success');
-        await cargar();
-        encuadrar();
-        marcarCambio();
-      } catch (e) {
-        console.error('Error sangrando hilos:', e);
-        aviso('Error de red al sangrar hilos', 'error');
-      }
+        picker.style.display = 'none';
+        await dividirCableAqui(Number(x.cable_id), { modo, fibras: ids, lado });
+      };
     });
+    const cancel = document.getElementById('diag-cable-cancel');
+    if (cancel) cancel.onclick = () => { picker.style.display = 'none'; };
+  }
+
+  /** Modo (corte/sangrado) elegido en el selector para un cable que pasa. */
+  function leerModo(cableId) {
+    const marcado = (typeof document.querySelector === 'function')
+      ? document.querySelector(`input[name="modo-${cableId}"]:checked`)
+      : null;
+    if (marcado && marcado.value) return marcado.value;
+    const sel = document.getElementById('modo-' + cableId);
+    return sel && sel.value ? sel.value : 'corte';
   }
 
   // ── Lienzo navegable (zoom + arrastre, sin barras de desplazamiento) ──────
@@ -954,6 +1187,9 @@ const FTTHDiagrama = (() => {
       area.style.width = `${Math.round(maxX + AREA_MARGEN)}px`;
       area.style.height = `${Math.round(maxY + AREA_MARGEN)}px`;
     }
+    if (window.FTTHFusiones && typeof window.FTTHFusiones.renderFusions === 'function') {
+      window.FTTHFusiones.renderFusions();
+    }
   }
 
   /** Marca el disquete mientras haya aparatos movidos sin guardar. */
@@ -1082,6 +1318,14 @@ const FTTHDiagrama = (() => {
         const err = await res.json().catch(() => ({}));
         aviso(err.detail || 'No se pudo guardar el diagrama', 'error');
         return false;
+      }
+      if (window.FTTHFusiones && typeof window.FTTHFusiones.obtenerFusiones === 'function') {
+        const fus = window.FTTHFusiones.obtenerFusiones();
+        await fetch(apiUrl(`/api/elementos/${_boxId}/empalmes/fusiones`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fusiones: fus }),
+        }).catch((e) => console.warn('[diagrama] no se pudieron guardar las fusiones:', e));
       }
       _posSucias = false;
       marcarPendiente(false);
@@ -1417,7 +1661,7 @@ const FTTHDiagrama = (() => {
     const btnAddFusion = document.querySelector('.bottom-toolbar button[data-tooltip="Agregar fusión"]');
     if (btnAddFusion) {
       btnAddFusion.addEventListener('click', () => {
-        mostrarModalAgregarSplitter('fusion');
+        aviso('Modo Fusión: Arrastra desde el círculo terminal de cualquier hilo hacia otro hilo o puerto de splitter para crear una fusión', 'info');
       });
     }
 
@@ -1428,18 +1672,15 @@ const FTTHDiagrama = (() => {
       });
     }
 
-    const btnAddCableIn = document.querySelector('.bottom-toolbar button[data-tooltip="Agregar cable de entrada"]');
-    if (btnAddCableIn) {
-      btnAddCableIn.addEventListener('click', () => {
-        mostrarModalEntradaFibra('A');
-      });
+    // Los dos botones de cable de la barra inferior: abren el selector de los
+    // cables que el backend detecta en el poste de esta caja, por lado.
+    const btnCableIn = document.querySelector('.bottom-toolbar button[data-tooltip="Agregar cable de entrada"]');
+    if (btnCableIn) {
+      btnCableIn.addEventListener('click', () => mostrarModalAgregarCable('entrada'));
     }
-
-    const btnAddCableOut = document.querySelector('.bottom-toolbar button[data-tooltip="Agregar cable de salida"]');
-    if (btnAddCableOut) {
-      btnAddCableOut.addEventListener('click', () => {
-        mostrarModalEntradaFibra('B');
-      });
+    const btnCableOut = document.querySelector('.bottom-toolbar button[data-tooltip="Agregar cable de salida"]');
+    if (btnCableOut) {
+      btnCableOut.addEventListener('click', () => mostrarModalAgregarCable('salida'));
     }
 
     const btnDelete = document.querySelector('.bottom-toolbar button[data-tooltip="Eliminar elemento"]');
@@ -1452,9 +1693,23 @@ const FTTHDiagrama = (() => {
       });
     }
     
-    // Wire up Select / Cut etc. to show a message for now
+    // Botón Cortar conexión / fusión de la barra inferior
     const btnCut = document.querySelector('.bottom-toolbar button[data-tooltip="Cortar elemento/spliter/fusion"]');
-    if (btnCut) btnCut.addEventListener('click', () => aviso('Selecciona una conexión para cortar', 'info'));
+    if (btnCut) {
+      btnCut.addEventListener('click', () => {
+        if (window.FTTHFusiones && typeof window.FTTHFusiones.toggleModoCortar === 'function') {
+          const activo = window.FTTHFusiones.toggleModoCortar();
+          btnCut.classList.toggle('active', activo);
+          if (activo) {
+            aviso('Modo cortar activo: haz clic sobre cualquier línea de fusión para cortarla', 'warning');
+          } else {
+            aviso('Modo cortar desactivado', 'info');
+          }
+        } else {
+          aviso('Haz clic derecho sobre cualquier línea de fusión para cortarla', 'info');
+        }
+      });
+    }
 
     // ── Close sidebar when clicking on the empty workspace canvas ──
     const ws = document.getElementById('diagramWorkspace');
@@ -1622,256 +1877,9 @@ const FTTHDiagrama = (() => {
     }
   }
 
-  async function mostrarModalEntradaFibra(extremo) {
-    if (!window.currentProjectId) {
-      aviso('Selecciona un proyecto primero', 'error');
-      return;
-    }
-    if (!_boxId) {
-      aviso('No hay un nodo abierto', 'error');
-      return;
-    }
-
-    // Cargar cables del proyecto
-    let cables = [];
-    try {
-      const res = await fetch(apiUrl(
-        `/api/elementos/todos?proyecto_id=${window.currentProjectId}&categoria=cables`
-      ), { cache: 'no-store' });
-      if (res.ok) {
-        const gj = await res.json();
-        cables = ((gj && gj.features) || [])
-          .filter(f => f.properties && f.properties.categoria === 'cables')
-          .sort((a, b) => {
-            // Los más recientes (mayor ID) van primero
-            const ia = Number(a.properties.id) || 0;
-            const ib = Number(b.properties.id) || 0;
-            return ib - ia;
-          });
-      }
-    } catch (e) {
-      aviso('Error al cargar cables del proyecto', 'error');
-      return;
-    }
-
-    if (!cables.length) {
-      aviso('No hay cables de fibra trazados en este proyecto. Traza una fibra en el mapa primero.', 'error');
-      return;
-    }
-
-    // Helper para parsear objetos o strings
-    const _parse = (raw) => {
-      if (typeof raw === 'object' && raw !== null) return raw;
-      if (typeof raw === 'string') {
-        try { return JSON.parse(raw); } catch { return {}; }
-      }
-      return {};
-    };
-
-    // Identificar cables ya anclados a este nodo (una sola vez por nodo)
-    const cablesAnclados = new Set(
-      ((_datos && _datos.hilos) || [])
-        .map(h => Number(h.cable_id))
-        .filter(id => id > 0)
-    );
-
-    // Identificar punto objetivo (coordenadas del poste o del nodo)
-    let targetPt = null;
-    const mapFeatures = (window.FTTHMapa && window.FTTHMapa._currentFeatures) || [];
-    const poleId = _datos && _datos.nodo && _datos.nodo.poste_ref_id ? Number(_datos.nodo.poste_ref_id) : null;
-    if (poleId) {
-      const poleFeat = mapFeatures.find(f => f.properties && Number(f.properties.id) === poleId);
-      if (poleFeat && poleFeat.geometry && poleFeat.geometry.coordinates) {
-        targetPt = poleFeat.geometry.coordinates;
-      }
-    }
-    if (!targetPt && _datos && _datos.nodo && _datos.nodo.lon && _datos.nodo.lat) {
-      targetPt = [Number(_datos.nodo.lon), Number(_datos.nodo.lat)];
-    }
-
-    const distMeters = (p1, p2) => {
-      if (!p1 || !p2 || p1.length < 2 || p2.length < 2) return 999999;
-      const R = 6371000;
-      const rad = Math.PI / 180;
-      const dLat = (p2[1] - p1[1]) * rad;
-      const dLon = (p2[0] - p1[0]) * rad;
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(p1[1] * rad) * Math.cos(p2[1] * rad) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    };
-
-    const cablePasaPorPunto = (f, pt) => {
-      if (!pt || !f || !f.geometry) return false;
-      let coords = [];
-      if (f.geometry.type === 'LineString') coords = f.geometry.coordinates || [];
-      else if (f.geometry.type === 'MultiLineString') coords = (f.geometry.coordinates || []).flat();
-
-      return coords.some(c => distMeters(c, pt) <= 30.0);
-    };
-
-    // Asignar propiedades de filtrado/ordenamiento a los cables
-    cables.forEach(f => {
-      const cId = Number(f.properties.id);
-      f._yaAnclado = cablesAnclados.has(cId);
-      f._esDelPoste = cablePasaPorPunto(f, targetPt);
-    });
-
-    // Ordenar: 1º Pasa por este poste y NO anclado, 2º Otros NO anclados, 3º Ya anclados
-    cables.sort((a, b) => {
-      if (a._yaAnclado !== b._yaAnclado) return a._yaAnclado ? 1 : -1;
-      if (a._esDelPoste !== b._esDelPoste) return a._esDelPoste ? -1 : 1;
-      const ia = Number(a.properties.id) || 0;
-      const ib = Number(b.properties.id) || 0;
-      return ib - ia;
-    });
-
-    // Construir selector de cables
-    const etiquetaExtremo = extremo === 'B' ? 'salida (extremo B)' : 'entrada (extremo A)';
-    let itemsHtml = cables.map((f, idx) => {
-      const p = f.properties || {};
-      const instP = _parse(p.propiedades_instancia);
-      const tipoP = _parse(p.propiedades_tipo);
-      const nombre = instP.nombre || instP.name || p.tipo_nombre || `Cable #${p.id}`;
-      const fibras = tipoP.fibras || instP.fibras || 12;
-      const looses = tipoP.looses || instP.looses || (fibras > 4 ? Math.ceil(fibras / 12) : 0);
-      const reserva = instP.reserva_m ? ` · ${instP.reserva_m}m reserva` : '';
-      const esReciente = idx === 0 && !f._yaAnclado && !f._esDelPoste ? ' <span style="background:#0071e3;color:#fff;font-size:9px;padding:1px 6px;border-radius:4px;margin-left:6px;">Último lanzado</span>' : '';
-      const badgePoste = f._esDelPoste ? ' <span style="background:#e0f2fe;color:#0284c7;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;margin-left:6px;"><i class="fa-solid fa-bolt"></i> Pasa por este poste</span>' : '';
-
-      let btnHtml = `<span style="font-size:11px;background:#1d1d1f;color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;flex-shrink:0;">Seleccionar</span>`;
-      let styleOpacity = '1';
-      if (f._yaAnclado) {
-        btnHtml = `<span style="font-size:11px;background:#e5e5ea;color:#86868b;padding:4px 10px;border-radius:6px;font-weight:600;flex-shrink:0;">✓ Ya anclado</span>`;
-        styleOpacity = '0.65';
-      }
-
-      return `<div class="diag-fibra-picker-item" data-cable-id="${p.id}" data-ya-anclado="${f._yaAnclado ? '1' : '0'}" style="padding:10px 14px;border-bottom:1px solid #f0f0f2;cursor:${f._yaAnclado ? 'default' : 'pointer'};display:flex;align-items:center;gap:10px;transition:background 0.15s;opacity:${styleOpacity};">
-        <div style="width:34px;height:34px;border-radius:8px;background:${f._esDelPoste ? '#0284c7' : '#64748b'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <i class="fa-solid fa-ethernet" style="color:#fff;font-size:14px;"></i>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:600;color:#1d1d1f;">${escapeHtml(nombre)}${badgePoste}${esReciente}</div>
-          <div style="font-size:11px;color:#86868b;margin-top:2px;">${escapeHtml(String(fibras))} hilos · ${escapeHtml(String(looses))} buffer(s)${escapeHtml(reserva)}</div>
-        </div>
-        ${btnHtml}
-      </div>`;
-    }).join('');
-
-    let picker = document.getElementById('diag-fibra-picker');
-    if (!picker) {
-      picker = document.createElement('div');
-      picker.id = 'diag-fibra-picker';
-      picker.style.cssText = [
-        'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);',
-        'background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.35);',
-        'z-index:120000;width:420px;max-width:96vw;max-height:80vh;',
-        'display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;',
-        'overflow:hidden;',
-      ].join('');
-      picker.addEventListener('click', e => e.stopPropagation());
-      picker.addEventListener('mousedown', e => e.stopPropagation());
-      document.body.appendChild(picker);
-    }
-
-    picker.innerHTML = `
-      <div style="padding:16px 18px;border-bottom:1px solid #f0f0f2;display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:#1d1d1f;">Conectar fibra — ${escapeHtml(etiquetaExtremo)}</div>
-          <div style="font-size:11px;color:#86868b;margin-top:2px;">Selecciona el cable a anclar en este nodo</div>
-        </div>
-        <button id="diag-fibra-picker-close" style="width:28px;height:28px;border:none;background:#f5f5f7;border-radius:8px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;">✕</button>
-      </div>
-      <div style="overflow-y:auto;flex:1;">
-        ${itemsHtml}
-      </div>
-    `;
-    picker.style.display = 'flex';
-
-    // Cerrar
-    picker.querySelector('#diag-fibra-picker-close').addEventListener('click', () => {
-      picker.style.display = 'none';
-    });
-
-    // Hover visual en items
-    picker.querySelectorAll('.diag-fibra-picker-item').forEach(item => {
-      if (item.dataset.yaAnclado !== '1') {
-        item.addEventListener('mouseenter', () => { item.style.background = '#f5f5f7'; });
-        item.addEventListener('mouseleave', () => { item.style.background = ''; });
-      }
-
-      item.addEventListener('click', async () => {
-        if (item.dataset.yaAnclado === '1') {
-          aviso('Este cable ya se encuentra anclado a este nodo.', 'warning');
-          return;
-        }
-        picker.style.display = 'none';
-        const cableId = item.dataset.cableId;
-        await anclarFibraAlNodo(cableId, extremo);
-      });
-    });
-  }
-
-  /**
-   * Ancla todos los hilos de un cable al nodo actual en el extremo indicado (A o B).
-   * Llama a GET /api/cables/{id}/hilos → luego PUT /api/fibras/{id}/extremos/{extremo}
-   * por cada hilo.
-   */
-  async function anclarFibraAlNodo(cableId, extremo) {
-    if (!cableId || !_boxId) return;
-    aviso(`Anclando fibra #${cableId} al nodo #${_boxId}…`, 'info');
-    try {
-      // Materializar hilos de forma idempotente para garantizar que existan en BD
-      await fetch(apiUrl(`/api/cables/${cableId}/materializar-hilos`), { method: 'POST' }).catch(() => {});
-
-      const hRes = await fetch(apiUrl(`/api/cables/${cableId}/hilos`), { cache: 'no-store' });
-      if (!hRes.ok) {
-        const err = await hRes.json().catch(() => ({}));
-        aviso(err.detail || 'No se pudieron leer los hilos del cable', 'error');
-        return;
-      }
-      const hData = await hRes.json();
-      const tubos = hData.tubos || [];
-      if (!tubos.length) {
-        aviso('No se pudieron obtener los hilos del cable', 'error');
-        return;
-      }
-
-      const promises = [];
-      for (const t of tubos) {
-        for (const h of (t.hilos || [])) {
-          promises.push(
-            fetch(apiUrl(`/api/fibras/${h.id}/extremos/${extremo}`), {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nodo_id: Number(_boxId) }),
-            })
-          );
-        }
-      }
-
-      const resultados = await Promise.allSettled(promises);
-      const errores = resultados.filter(r => r.status === 'rejected' || (r.value && !r.value.ok)).length;
-
-      if (errores) {
-        aviso(`Fibra anclada con ${errores} advertencia(s). Verifica los hilos.`, 'warning');
-      } else {
-        aviso(`✓ Cable #${cableId} anclado en extremo ${extremo} al nodo #${_boxId}`, 'success');
-      }
-
-      // Refrescar diagrama
-      await cargar();
-      encuadrar();
-      marcarCambio();
-
-    } catch (e) {
-      console.error('[diagrama] error anclando fibra:', e);
-      aviso('Error de red al anclar la fibra', 'error');
-    }
-  }
-
   return {
-    abrir, cerrar, esNodo, mostrarModalAgregarSplitter, mostrarModalEntradaFibra,
+    abrir, cerrar, esNodo, mostrarModalAgregarSplitter,
+    mostrarModalAgregarCable, candidatosDeLado,
     CATEGORIAS_APARATO, etiquetaAparato,
     zoom, encuadrar, vista, mover,
     modoEliminar, enModoEliminar, borrarObjeto,
@@ -1881,6 +1889,8 @@ const FTTHDiagrama = (() => {
     centrarAparatos: centrarEnAparatos,
     // Ventana del diagrama: maximizar y tamaño a mano
     pantallaCompleta, tamanoPanel,
+    boxId: () => _boxId,
+    sangrarCableAqui,
   };
 })();
 

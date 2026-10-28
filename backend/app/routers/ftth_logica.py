@@ -14,11 +14,11 @@ Materialización de un cable (Anexo B del diseño):
     plantilla.propiedades.fibras      -> total declarado (se valida, no se impone)
 """
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import app.models.ftth_models as fisicos
@@ -184,6 +184,11 @@ def materializar_hilos(cable_id: int, forzar: bool = False, db: Session = Depend
         "parametros": params,
         "resultado": resumen,
         "advertencias": advertencias,
+        # Cable OZmap: extremos lógicos y reservas
+        "extremo_A_id": elemento.extremo_A_id,
+        "extremo_B_id": elemento.extremo_B_id,
+        "reserva_A_m": elemento.reserva_A_m or 0,
+        "reserva_B_m": elemento.reserva_B_m or 0,
     }
 
 
@@ -296,7 +301,7 @@ def _materializar(elemento, tubos: int, por_tubo: int, perfil, db: Session,
                         )
                     )
                     extremos_creados += 1
-    db.flush()
+        db.flush()
 
     return {
         "tubos_creados": tubos_creados,
@@ -416,6 +421,11 @@ def obtener_hilos(
             "por_estado": conteo,
             "sin_extremo_anclado": sin_anclar,
         },
+        # Cable OZmap: extremos lógicos y reservas
+        "extremo_A_id": elemento.extremo_A_id,
+        "extremo_B_id": elemento.extremo_B_id,
+        "reserva_A_m": elemento.reserva_A_m or 0,
+        "reserva_B_m": elemento.reserva_B_m or 0,
         "tubos": [
             {
                 "id": t.id,
@@ -497,12 +507,23 @@ def actualizar_extremo(
         if not nodo:
             raise HTTPException(404, f"El nodo #{payload.nodo_id} no existe.")
 
-        # Regla Global de Validación: Si el extremo B ya está asignado a otro nodo, rechazar con HTTP 400
+        # Regla de Validación: Si el extremo B ya está asignado a otro nodo, permitir reasignación si
+        # el nodo anterior es infraestructura (poste, ducto) o comparte el mismo poste de anclaje.
         if letra == "B" and fila.nodo_id is not None and fila.nodo_id != payload.nodo_id:
-            raise HTTPException(
-                400,
-                f"El hilo #{fibra_id} ya se encuentra sangrado/terminado en el nodo #{fila.nodo_id}."
+            nodo_anterior = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == fila.nodo_id).first()
+            es_infra = nodo_anterior is None or (nodo_anterior.categoria or "").lower() in CATEGORIAS_SIN_CONMUTAR
+            mismo_poste = (
+                nodo_anterior is not None and (
+                    nodo.poste_ref_id == nodo_anterior.id or
+                    nodo_anterior.poste_ref_id == nodo.id or
+                    (nodo.poste_ref_id is not None and nodo.poste_ref_id == nodo_anterior.poste_ref_id)
+                )
             )
+            if not (es_infra or mismo_poste):
+                raise HTTPException(
+                    400,
+                    f"El hilo #{fibra_id} ya se encuentra sangrado/terminado en el nodo #{fila.nodo_id}."
+                )
         fila.nodo_id = payload.nodo_id
     # Desanclar explícitamente: si el cliente envía "nodo_id": null, se limpia el anclaje.
     enviados = getattr(payload, "model_fields_set", None)
@@ -515,6 +536,11 @@ def actualizar_extremo(
 
     db.commit()
     db.refresh(fila)
+
+    # Sincronizar el extremo a nivel de elemento cable a partir de la verdad de los hilos
+    fibra = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == fibra_id).first()
+    if fibra and fibra.elemento_id:
+        sincronizar_extremos_cable(db, fibra.elemento_id)
 
     advertencias: List[str] = []
     if fila.nodo_id is not None:
@@ -532,6 +558,57 @@ def actualizar_extremo(
         "holgura_m": fila.holgura_m,
         "advertencias": advertencias,
     }
+
+
+def sincronizar_extremos_cable(db: Session, cable_id: int) -> Dict[str, Optional[int]]:
+    """
+    Sincroniza los campos de extremo lógico (extremo_A_id y extremo_B_id) del elemento cable
+    en FtthElemento a partir de las filas reales en ftth_fibra_extremos.
+    Garantiza que la información a nivel de cable siempre derive de la verdad de los hilos.
+    """
+    from collections import Counter
+    cable = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == cable_id).first()
+    if not cable:
+        return {"extremo_A_id": None, "extremo_B_id": None}
+
+    fibras = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.elemento_id == cable_id).all()
+    if not fibras:
+        return {
+            "extremo_A_id": cable.extremo_A_id,
+            "extremo_B_id": cable.extremo_B_id,
+        }
+
+    fibra_ids = [f.id for f in fibras]
+    extremos = (
+        db.query(logica.FtthFibraExtremo)
+        .filter(logica.FtthFibraExtremo.fibra_id.in_(fibra_ids))
+        .all()
+    )
+
+    exts_A = [e.nodo_id for e in extremos if e.extremo == "A" and e.nodo_id is not None]
+    exts_B = [e.nodo_id for e in extremos if e.extremo == "B" and e.nodo_id is not None]
+
+    nuevo_A = Counter(exts_A).most_common(1)[0][0] if exts_A else None
+    nuevo_B = Counter(exts_B).most_common(1)[0][0] if exts_B else None
+
+    cable.extremo_A_id = nuevo_A
+    cable.extremo_B_id = nuevo_B
+
+    props = dict(cable.propiedades_instancia or {})
+    if nuevo_A is not None:
+        props["extremo_A_id"] = nuevo_A
+    elif "extremo_A_id" in props and len(exts_A) == 0:
+        props.pop("extremo_A_id", None)
+
+    if nuevo_B is not None:
+        props["extremo_B_id"] = nuevo_B
+    elif "extremo_B_id" in props and len(exts_B) == 0:
+        props.pop("extremo_B_id", None)
+
+    cable.propiedades_instancia = props
+    db.commit()
+    db.refresh(cable)
+    return {"extremo_A_id": nuevo_A, "extremo_B_id": nuevo_B}
 
 
 # ── Cables de un proyecto (vista para la interfaz) ────────────────────────────
@@ -624,6 +701,11 @@ def listar_cables(proyecto_id: int, db: Session = Depends(get_db)) -> Dict[str, 
             "hilos_esperados": params["hilos_totales"],
             "puede_materializar": motivo is None,
             "advertencias": avisos,
+            # Cable OZmap: extremos lógicos y reservas
+            "extremo_A_id": cable.extremo_A_id,
+            "extremo_B_id": cable.extremo_B_id,
+            "reserva_A_m": cable.reserva_A_m or 0,
+            "reserva_B_m": cable.reserva_B_m or 0,
         })
         advertencias.extend(f"Cable #{cable.id}: {a}" for a in avisos)
 
@@ -746,7 +828,7 @@ CATEGORIAS_NODO = ("cajanap", "manga", "odf", "armario", "olt", "splitter", "fus
 TIPOS_BANDEJA = ("empalme", "paso", "splitter", "mixta")
 # Aparatos que se pueden instalar dentro de un nodo. Todo lo que se cree en
 # "Tipos de objetos" con estas categorías se puede añadir al diagrama.
-TIPOS_DISPOSITIVO = ("splitter", "adaptador", "wdm", "pigtail", "switch", "fusion", "odf")
+TIPOS_DISPOSITIVO = ("splitter", "adaptador", "wdm", "pigtail", "switch", "olt", "fusion", "odf")
 
 # Categorías de aparato que NO necesitan puertos (no se dividen ni conectan por puerto)
 TIPOS_SIN_PUERTOS = ("fusion",)
@@ -781,6 +863,10 @@ class DispositivoCreate(BaseModel):
     serie: Optional[str] = None
     atenuacion_db: Optional[float] = None
     estado: Optional[str] = None
+
+
+class DispositivoNota(BaseModel):
+    serie: Optional[str] = None
 
 
 def _parsear_division(division) -> Optional[tuple]:
@@ -944,7 +1030,10 @@ def crear_dispositivo(elem_id: int, payload: DispositivoCreate, db: Session = De
         if tipo in TIPOS_SIN_PUERTOS:
             salidas = salidas or 0
         elif not salidas:
-            raise HTTPException(400, f"Indica cuántos puertos tiene el {tipo} (por ejemplo 12).")
+            if tipo == "olt":
+                salidas = 8
+            else:
+                raise HTTPException(400, f"Indica cuántos puertos tiene el {tipo} (por ejemplo 12).")
 
     total = (entradas or 0) + (salidas or 0)
     if salidas > 256 or total > 256:
@@ -960,7 +1049,7 @@ def crear_dispositivo(elem_id: int, payload: DispositivoCreate, db: Session = De
             advertencias.append(
                 f"No hay atenuación nominal conocida para «{division}»: se registrará sin pérdida y podrás ajustarla."
             )
-    if atenuacion is None and tipo in ("adaptador", "wdm", "odf"):
+    if atenuacion is None and tipo in ("adaptador", "wdm", "odf", "olt"):
         atenuacion = ATENUACION_ADAPTADOR_DB
     if atenuacion is None and tipo in TIPOS_SIN_PUERTOS:
         atenuacion = ATENUACION_FUSION_DB
@@ -1110,6 +1199,151 @@ def _nombre_cable(cable, tipo_cable) -> str:
     return _nombre_elemento(cable, tipo_cable) if cable else "cable desconocido"
 
 
+# ── División de un cable en el poste donde está una caja ─────────────────────
+# Regla única, sin estados intermedios:
+#   · El poste es INTERIOR a la ruta del cable          -> el cable se DIVIDE en dos.
+#   · El poste es el EXTREMO del cable (el extremo A/B está sin nodo o apunta a
+#     ESE mismo poste)                                   -> no hay nada que partir:
+#     solo se le ASIGNA ese extremo a la caja.
+# El índice del poste en `postes_intermedios` (que va EN ORDEN de recorrido) se
+# usa para saber DÓNDE cortar, no para decidir: un cable trazado desde una caja
+# puede tener su primer poste en la posición 0 y aun así ser interior.
+ACCION_DIVIDIR = "dividir"
+ACCION_ASIGNAR = "asignar_extremo"
+
+# Lado del diagrama al que va un cable al agregarlo (lo decide el backend; el
+# frontend solo pinta cada lado en su columna):
+#   · ENTRADA (columna IZQUIERDA) = el tramo que LLEGA a la caja (su extremo B).
+#   · SALIDA  (columna DERECHA)   = el tramo que SALE de la caja (su extremo A).
+#   · Un cable que PASA (se divide) entra por los DOS lados: el trozo que llega
+#     va a ENTRADA y el que sigue a SALIDA; por eso se ofrece en ambos botones.
+LADO_ENTRADA = "entrada"
+LADO_SALIDA = "salida"
+LADO_AMBOS = "ambos"
+
+
+def _lado_de_cable(accion, extremo) -> str:
+    """Lado del diagrama para un cable pendiente de meter (entrada/salida/ambos)."""
+    if accion == ACCION_DIVIDIR:
+        return LADO_AMBOS
+    return LADO_ENTRADA if str(extremo or "").upper() == "B" else LADO_SALIDA
+
+
+def _lado_guardado(props_inst, extremo) -> str:
+    """
+    Lado (entrada/salida) ELEGIDO por el usuario para ese extremo del cable.
+
+    A/B es solo la nomenclatura física de la punta; la DIRECCIÓN (entrada o
+    salida) la decide el usuario y se guarda en `propiedades_instancia.lado_A` /
+    `lado_B`. Si aún no la ha elegido, se mantiene el comportamiento de siempre
+    (B→entrada, A→salida) para no cambiar los cables ya guardados.
+    """
+    v = str((props_inst or {}).get("lado_" + str(extremo).upper()) or "").strip().lower()
+    if v in (LADO_ENTRADA, LADO_SALIDA):
+        return v
+    return LADO_ENTRADA if str(extremo).upper() == "B" else LADO_SALIDA
+
+
+def _ids_postes_de_cable(db: Session, cable) -> List[int]:
+    """Ids de los postes de la ruta del cable, EN ORDEN de recorrido (o [])."""
+    props = dict(cable.propiedades_instancia or {})
+    ids = props.get("postes_intermedios")
+    if isinstance(ids, list) and ids:
+        limpios = [logica._to_int(i) for i in ids]
+        return [i for i in limpios if i]
+    # Cable viejo (trazado antes de que existiera la lista): se deduce de su
+    # geometría, igual que ya hace el resto del sistema. Así «Dividir» también
+    # funciona con cables antiguos.
+    return logica.postes_de_la_geometria(db, cable.proyecto_id, cable.coords_json)
+
+
+def _decision_division(cable, elem_id, poste_id, ids) -> tuple:
+    """
+    (accion, extremo) para el poste de esta caja, o (None, None) si ese poste no
+    es parte de la ruta del cable o si la caja YA es uno de sus extremos.
+    """
+    ext_a = logica._to_int(cable.extremo_A_id)
+    ext_b = logica._to_int(cable.extremo_B_id)
+    if ext_a == elem_id or ext_b == elem_id:
+        return None, None
+    if not ids or poste_id not in ids:
+        return None, None
+    pos = ids.index(poste_id)
+    es_primero, es_ultimo = pos == 0, pos == len(ids) - 1
+    if es_primero and (ext_a is None or ext_a == poste_id):
+        return ACCION_ASIGNAR, "A"
+    if es_ultimo and (ext_b is None or ext_b == poste_id):
+        return ACCION_ASIGNAR, "B"
+    return ACCION_DIVIDIR, None
+
+
+def _cables_divisibles(db: Session, elemento) -> List[Dict[str, Any]]:
+    """
+    Cables que pasan por el poste de esta caja y qué se puede hacer con ellos:
+    lo pinta el diagrama (botón «Dividir cable aquí» / «Anclar extremo a esta
+    caja»). El frontend NO decide nada: solo muestra lo que diga el backend.
+    """
+    poste_id = logica._to_int(elemento.poste_ref_id)
+    if not poste_id:
+        return []
+    tipos = {
+        t.id: t for t in db.query(fisicos.FtthTipo)
+        .filter(fisicos.FtthTipo.proyecto_id == elemento.proyecto_id).all()
+    }
+    cables = (
+        db.query(fisicos.FtthElemento)
+        .filter(
+            fisicos.FtthElemento.proyecto_id == elemento.proyecto_id,
+            fisicos.FtthElemento.categoria == "cables",
+        )
+        .order_by(fisicos.FtthElemento.id)
+        .all()
+    )
+    salida: List[Dict[str, Any]] = []
+    for cable in cables:
+        ids = _ids_postes_de_cable(db, cable)
+        accion, extremo = _decision_division(cable, elemento.id, poste_id, ids)
+        if not accion:
+            continue
+        # Los hilos del cable: los necesita el selector de "SANGRADO" del diagrama
+        # (elegir qué fibras se pican y cuáles siguen).
+        tubos = {
+            t.id: t.tubo_no
+            for t in db.query(logica.FtthCableTubo)
+            .filter(logica.FtthCableTubo.elemento_id == cable.id).all()
+        }
+        fibras = (
+            db.query(logica.FtthCableFibra)
+            .filter(logica.FtthCableFibra.elemento_id == cable.id)
+            .order_by(logica.FtthCableFibra.hilo_global_no)
+            .all()
+        )
+        salida.append({
+            "cable_id": cable.id,
+            "nombre": _nombre_cable(cable, tipos.get(cable.tipo_id)),
+            "poste_id": poste_id,
+            "posicion": ids.index(poste_id),     # 0-based, en orden de recorrido
+            "total_postes": len(ids),
+            "accion": accion,
+            "acciones": [ACCION_DIVIDIR, "sangrar"] if accion == ACCION_DIVIDIR else [accion],
+            "extremo": extremo,
+            "lado": _lado_de_cable(accion, extremo),
+            "fibras": [
+                {
+                    "id": f.id,
+                    "global": f.hilo_global_no,
+                    "nombre": f"T{tubos.get(f.tubo_id, 0):02d}-H{f.hilo_no_en_tubo:02d}",
+                    "color": f.color,
+                    "color_hex": f.color_hex,
+                    "estado": f.estado,
+                }
+                for f in fibras
+            ],
+        })
+    salida.sort(key=lambda x: (x["posicion"], x["cable_id"]))
+    return salida
+
+
 @router.get("/elementos/{elem_id}/nodo", summary="DTO del diagrama de un nodo (bandejas, dispositivos, puertos, hilos)")
 def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
     elemento = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == elem_id).first()
@@ -1153,57 +1387,28 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
         .all()
     }
 
-    # ── Hilos que terminan o pasan por este nodo (Sangrado vs De Paso) ───────────
-    pole_id = elemento.poste_ref_id or elem_id
-
-    # 1. Hilos directamente anclados a este nodo (extremo A o B en elem_id)
-    extremos_directos = (
-        db.query(logica.FtthFibraExtremo)
-        .filter(logica.FtthFibraExtremo.nodo_id == elem_id)
-        .all()
-    )
-    cable_ids_anclados = set()
-    for ext in extremos_directos:
-        fib = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == ext.fibra_id).first()
-        if fib:
-            cable_ids_anclados.add(fib.elemento_id)
-
-    # 2. Buscar cables del proyecto que pasen por este poste/nodo o tengan hilos anclados aquí
-    cables_proyecto = (
+    # ── Hilos de cables conectados a este nodo (extremo A o B) ───────────
+    cables_relacionados = (
         db.query(fisicos.FtthElemento)
         .filter(
             fisicos.FtthElemento.proyecto_id == elemento.proyecto_id,
-            fisicos.FtthElemento.categoria.in_(["cables", "ductos", "ducto"])
+            fisicos.FtthElemento.categoria == "cables",
+            or_(
+                fisicos.FtthElemento.extremo_A_id == elem_id,
+                fisicos.FtthElemento.extremo_B_id == elem_id,
+            )
         )
+        .order_by(fisicos.FtthElemento.id)
         .all()
     )
 
-    cables_relacionados = []
-    for c in cables_proyecto:
-        if c.id in cable_ids_anclados:
-            cables_relacionados.append(c)
-            continue
-
-        props_c = dict(c.propiedades_instancia or {})
-        postes_c = props_c.get("postes_intermedios") or []
-        ruta_c = props_c.get("trazado_ruta") or []
-        p_set = set()
-        if isinstance(postes_c, list):
-            p_set.update([_to_int(x) for x in postes_c if _to_int(x)])
-        if isinstance(ruta_c, list):
-            for paso in ruta_c:
-                if isinstance(paso, dict) and paso.get("poste") is not None:
-                    p_set.add(_to_int(paso.get("poste")))
-
-        if pole_id in p_set or elem_id in p_set:
-            cables_relacionados.append(c)
-
     hilos: List[Dict[str, Any]] = []
-    hilos_ids_vistos = set()
 
     for cable in cables_relacionados:
         tipo_cable = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == cable.tipo_id).first()
         props_cable = dict(getattr(tipo_cable, "propiedades", None) or {})
+        props_inst = dict(cable.propiedades_instancia or {})
+        letra_extremo = "A" if cable.extremo_A_id == elem_id else "B"
 
         fibras_cable = (
             db.query(logica.FtthCableFibra)
@@ -1213,51 +1418,37 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
         )
 
         for fibra in fibras_cable:
-            if fibra.id in hilos_ids_vistos:
-                continue
-
             tubo = db.query(logica.FtthCableTubo).filter(logica.FtthCableTubo.id == fibra.tubo_id).first()
             numero_tubo = tubo.tubo_no if tubo else 0
 
-            extA = db.query(logica.FtthFibraExtremo).filter(
+            ext_fila = db.query(logica.FtthFibraExtremo).filter(
                 logica.FtthFibraExtremo.fibra_id == fibra.id,
-                logica.FtthFibraExtremo.extremo == 'A'
+                logica.FtthFibraExtremo.extremo == letra_extremo
             ).first()
 
-            extB = db.query(logica.FtthFibraExtremo).filter(
-                logica.FtthFibraExtremo.fibra_id == fibra.id,
-                logica.FtthFibraExtremo.extremo == 'B'
-            ).first()
-
-            nodoB_id = extB.nodo_id if extB else None
-
-            # Reglas de Visibilidad:
-            # 1. extB.nodo_id == elem_id -> Sangrado aquí (editable, de_paso: False)
-            # 2. extB.nodo_id != None y != elem_id -> OMITIR completamente (ya terminó en otro nodo)
-            # 3. extB.nodo_id == None -> De paso (de_paso: True, editable: False)
-            if nodoB_id is not None and nodoB_id != elem_id:
-                continue
-
-            es_sangrado_aqui = (nodoB_id == elem_id)
-            es_de_paso = not es_sangrado_aqui
-            ext_ref = extB if extB else extA
-
-            hilos_ids_vistos.add(fibra.id)
             hilos.append({
                 "fibra_id": fibra.id,
-                "extremo": ext_ref.extremo if ext_ref else 'B',
-                "extremo_id": ext_ref.id if ext_ref else None,
-                "holgura_m": ext_ref.holgura_m if ext_ref else None,
+                "extremo": letra_extremo,
+                # Lado del diagrama: el ELEGIDO por el usuario para ese extremo y, si
+                # no lo ha elegido, el de siempre (B→entrada, A→salida). El lienzo
+                # solo pinta cada lado en su columna.
+                "lado": _lado_guardado(props_inst, letra_extremo),
+                "extremo_id": ext_fila.id if ext_fila else None,
+                "holgura_m": ext_fila.holgura_m if ext_fila else None,
                 "cable_id": fibra.elemento_id,
                 "cable": _nombre_cable(cable, tipo_cable),
                 "cable_tipo": {
                     "id": getattr(tipo_cable, "id", None),
                     "nombre": getattr(tipo_cable, "nombre_id", None),
                     "plantilla_visual": props_cable.get("plantilla_visual"),
-                    "estructura": props_cable.get("estructura"),
-                    "fibras": props_cable.get("fibras"),
-                    "looses": props_cable.get("looses"),
-                    "fibrasLoose": props_cable.get("fibrasLoose"),
+                    "estructura": props_cable.get("estructura") or props_inst.get("estructura"),
+                    "fibras": props_cable.get("fibras") or props_inst.get("fibras"),
+                    "looses": props_cable.get("looses") or props_inst.get("looses"),
+                    "fibrasLoose": props_cable.get("fibrasLoose") or props_inst.get("fibrasLoose"),
+                    "extremo_A_id": cable.extremo_A_id,
+                    "extremo_B_id": cable.extremo_B_id,
+                    "reserva_A_m": cable.reserva_A_m or 0,
+                    "reserva_B_m": cable.reserva_B_m or 0,
                 },
                 "tubo_no": tubo.tubo_no if tubo else None,
                 "hilo_no_en_tubo": fibra.hilo_no_en_tubo,
@@ -1267,22 +1458,150 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
                 "color_hex": fibra.color_hex,
                 "estado": fibra.estado,
                 "perfil": fibra.perfil,
-                "de_paso": es_de_paso,
-                "sangrado_aqui": es_sangrado_aqui,
-                "editable": es_sangrado_aqui,
                 "empalme": None,
             })
+
+    # ── Cables sangrados en este nodo (pasan continuamente sin anclar A/B) ──
+    props_nodo = dict(elemento.propiedades_instancia or {})
+    cables_sangrados_ids = set(props_nodo.get("cables_sangrados") or [])
+    empalmes_este_nodo = (
+        db.query(logica.FtthEmpalme)
+        .filter(logica.FtthEmpalme.nodo_id == elem_id)
+        .all()
+    )
+    for emp in empalmes_este_nodo:
+        for fid in (emp.fibra_a_id, emp.fibra_b_id):
+            if fid:
+                f_obj = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == fid).first()
+                if f_obj and f_obj.elemento_id:
+                    c_obj = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == f_obj.elemento_id).first()
+                    if c_obj and c_obj.extremo_A_id != elem_id and c_obj.extremo_B_id != elem_id:
+                        cables_sangrados_ids.add(c_obj.id)
+
+    for c_id in sorted(cables_sangrados_ids):
+        cable = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == c_id).first()
+        if not cable:
+            continue
+        tipo_cable = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == cable.tipo_id).first()
+        props_cable = dict(getattr(tipo_cable, "propiedades", None) or {})
+        props_inst = dict(cable.propiedades_instancia or {})
+
+        fibras_cable = (
+            db.query(logica.FtthCableFibra)
+            .filter(logica.FtthCableFibra.elemento_id == cable.id)
+            .order_by(logica.FtthCableFibra.hilo_global_no)
+            .all()
+        )
+
+        for fibra in fibras_cable:
+            tubo = db.query(logica.FtthCableTubo).filter(logica.FtthCableTubo.id == fibra.tubo_id).first()
+            numero_tubo = tubo.tubo_no if tubo else 0
+
+            dto_comun = {
+                "fibra_id": fibra.id,
+                "cable_id": fibra.elemento_id,
+                "cable": _nombre_cable(cable, tipo_cable),
+                "cable_tipo": {
+                    "id": getattr(tipo_cable, "id", None),
+                    "nombre": getattr(tipo_cable, "nombre_id", None),
+                    "plantilla_visual": props_cable.get("plantilla_visual"),
+                    "estructura": props_cable.get("estructura") or props_inst.get("estructura"),
+                    "fibras": props_cable.get("fibras") or props_inst.get("fibras"),
+                    "looses": props_cable.get("looses") or props_inst.get("looses"),
+                    "fibrasLoose": props_cable.get("fibrasLoose") or props_inst.get("fibrasLoose"),
+                    "extremo_A_id": cable.extremo_A_id,
+                    "extremo_B_id": cable.extremo_B_id,
+                    "reserva_A_m": cable.reserva_A_m or 0,
+                    "reserva_B_m": cable.reserva_B_m or 0,
+                },
+                "tubo_no": tubo.tubo_no if tubo else None,
+                "hilo_no_en_tubo": fibra.hilo_no_en_tubo,
+                "hilo_global_no": fibra.hilo_global_no,
+                "nombre": f"T{numero_tubo:02d}-H{fibra.hilo_no_en_tubo:02d}",
+                "color": fibra.color,
+                "color_hex": fibra.color_hex,
+                "estado": fibra.estado,
+                "perfil": fibra.perfil,
+                "empalme": None,
+            }
+
+            hilos.append({
+                **dto_comun,
+                "extremo": "entrada",
+                "lado": "entrada",
+                "extremo_id": None,
+                "holgura_m": None,
+            })
+            hilos.append({
+                **dto_comun,
+                "extremo": "salida",
+                "lado": "salida",
+                "extremo_id": None,
+                "holgura_m": None,
+            })
+
+    # ── Empalmes (F4): las fusiones registradas DENTRO de este nodo ───────────
+    # El diagrama las pinta en el slot de su bandeja y marca cada hilo con la suya.
+    nombre_por_fibra = {h["fibra_id"]: h["nombre"] for h in hilos}
+    empalmes_db = (
+        db.query(logica.FtthEmpalme)
+        .filter(logica.FtthEmpalme.nodo_id == elem_id)
+        .order_by(logica.FtthEmpalme.slot, logica.FtthEmpalme.id)
+        .all()
+    )
+    empalmes_dto: List[Dict[str, Any]] = []
+    empalme_por_extremo: Dict[tuple, Dict[str, Any]] = {}
+    empalme_por_fibra: Dict[int, Dict[str, Any]] = {}
+    for emp in empalmes_db:
+        props_emp = dict(getattr(emp, "propiedades", None) or {})
+        ext_a = getattr(emp, "extremo_a", None) or "entrada"
+        ext_b = getattr(emp, "extremo_b", None) or "salida"
+        info_emp = {
+            "empalme_id": emp.id,
+            "slot": emp.slot,
+            "tipo": emp.tipo,
+        }
+        empalmes_dto.append({
+            "id": emp.id,
+            "bandeja_id": emp.bandeja_id,
+            "slot": emp.slot,
+            "tipo": emp.tipo,
+            "fibra_a_id": emp.fibra_a_id,
+            "fibra_b_id": emp.fibra_b_id,
+            "extremo_a": ext_a,
+            "extremo_b": ext_b,
+            "puerto_id": getattr(emp, "puerto_id", None),
+            "hilo_a": {"fibra_id": emp.fibra_a_id, "nombre": nombre_por_fibra.get(emp.fibra_a_id)},
+            "hilo_b": ({"fibra_id": emp.fibra_b_id, "nombre": nombre_por_fibra.get(emp.fibra_b_id)}
+                       if emp.fibra_b_id else None),
+            "waypoints": props_emp.get("waypoints") or [],
+            "etiqueta": emp.etiqueta,
+        })
+        if emp.fibra_a_id:
+            empalme_por_extremo[(emp.fibra_a_id, ext_a)] = info_emp
+            empalme_por_fibra[emp.fibra_a_id] = info_emp
+        if emp.fibra_b_id:
+            empalme_por_extremo[(emp.fibra_b_id, ext_b)] = info_emp
+            empalme_por_fibra[emp.fibra_b_id] = info_emp
+
+    for h in hilos:
+        h["empalme"] = (
+            empalme_por_extremo.get((h["fibra_id"], h["extremo"]))
+            or empalme_por_extremo.get((h["fibra_id"], h["lado"]))
+            or empalme_por_fibra.get(h["fibra_id"])
+        )
 
     # ── Advertencias útiles (la UI no calcula reglas de negocio) ───────────
     puertos_libres = sum(1 for p in puertos_db if p.estado == "libre")
     out_libres = sum(1 for p in puertos_db if p.estado == "libre" and p.direccion == "OUT")
+    sin_empalme = sum(1 for h in hilos if not h.get("empalme"))
     if hilos and not bandejas_db:
         advertencias.append(
             f"{len(hilos)} hilo(s) terminan en este nodo pero no hay bandejas creadas para poder empalmarlos."
         )
-    if hilos:
+    if sin_empalme:
         advertencias.append(
-            f"{len(hilos)} hilo(s) anclados aquí aún sin empalme registrado (la fusión se declara en la fase de empalmes)."
+            f"{sin_empalme} hilo(s) anclados aquí aún sin empalme registrado (la fusión se declara en la fase de empalmes)."
         )
     if out_libres:
         advertencias.append(f"{out_libres} puerto(s) OUT libres disponibles para clientes.")
@@ -1294,7 +1613,9 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
         )
 
     return _dto_nodo(elemento, tipo, props, categoria, capacidad, bandejas_db, dispositivos_db,
-                     puertos_db, hilos, puertos_libres, advertencias, posiciones=posiciones)
+                     puertos_db, hilos, puertos_libres, advertencias, posiciones=posiciones,
+                     cables_divisibles=_cables_divisibles(db, elemento),
+                     empalmes=empalmes_dto)
 
 
 def _posicion_diagrama(
@@ -1307,8 +1628,14 @@ def _posicion_diagrama(
 
 def _dto_nodo(elemento, tipo, props, categoria, capacidad, bandejas_db, dispositivos_db,
               puertos_db, hilos, puertos_libres, advertencias,
-              posiciones: Optional[Dict[int, Dict[str, Any]]] = None) -> Dict[str, Any]:
+              posiciones: Optional[Dict[int, Dict[str, Any]]] = None,
+              cables_divisibles: Optional[List[Dict[str, Any]]] = None,
+              empalmes: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Construye el DTO auto-contenido que pinta el diagrama del nodo."""
+    empalmes = empalmes or []
+    por_bandeja: Dict[Any, List[Dict[str, Any]]] = {}
+    for e in empalmes:
+        por_bandeja.setdefault(e.get("bandeja_id"), []).append(e)
     return {
         "nodo": {
             "box_id": elemento.id,
@@ -1332,8 +1659,8 @@ def _dto_nodo(elemento, tipo, props, categoria, capacidad, bandejas_db, disposit
                 "tipo": b.tipo,
                 "slots": b.slots,
                 "etiqueta": b.etiqueta,
-                "ocupados": 0,
-                "empalmes": [],
+                "ocupados": len(por_bandeja.get(b.id, [])),
+                "empalmes": por_bandeja.get(b.id, []),
             }
             for b in bandejas_db
         ],
@@ -1367,18 +1694,22 @@ def _dto_nodo(elemento, tipo, props, categoria, capacidad, bandejas_db, disposit
             }
             for p in puertos_db
         ],
-        "empalmes": [],   # se completan en F4
+        "empalmes": empalmes,
+        "hilos": hilos,
         "hilos_que_terminan": hilos,
+        # Qué cables PASAN por el poste de esta caja y qué se puede hacer con ellos
+        # (dividir en este punto, o asignarle el extremo que le falta). El diagrama
+        # solo pinta botones a partir de esto.
+        "cables_divisibles": cables_divisibles or [],
         "resumen": {
             "bandejas": len(bandejas_db),
             "slots_totales": sum((b.slots or 0) for b in bandejas_db),
-            "slots_ocupados": 0,
+            "slots_ocupados": len(empalmes),
             "dispositivos": len(dispositivos_db),
             "puertos": len(puertos_db),
             "puertos_libres": puertos_libres,
-            "hilos_anclados": sum(1 for h in hilos if h.get("sangrado_aqui") or not h.get("de_paso")),
-            "hilos_de_paso": sum(1 for h in hilos if h.get("de_paso")),
-            "empalmes": 0,
+            "hilos_anclados": len(hilos),
+            "empalmes": len(empalmes),
         },
         "advertencias": advertencias,
     }
@@ -1499,6 +1830,35 @@ def restablecer_posiciones_diagrama(elem_id: int, db: Session = Depends(get_db))
         "elemento_id": elemento.id,
         "posiciones_borradas": int(borradas or 0),
     }
+
+
+# ── Edición de etiqueta/anotación del dispositivo ────────────────────────────
+
+
+@router.patch(
+    "/elementos/{elem_id}/dispositivos/{dispositivo_id}",
+    summary="Actualizar etiqueta o anotación de un dispositivo",
+)
+def actualizar_dispositivo(
+    elem_id: int,
+    dispositivo_id: int,
+    payload: DispositivoNota,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    elemento = _nodo_para_conmutar(elem_id, db)
+    dispositivo = (
+        db.query(logica.FtthDispositivo)
+        .filter(
+            logica.FtthDispositivo.id == dispositivo_id,
+            logica.FtthDispositivo.elemento_id == elemento.id,
+        )
+        .first()
+    )
+    if not dispositivo:
+        raise HTTPException(404, f"El dispositivo #{dispositivo_id} no esta en el elemento #{elem_id}.")
+    dispositivo.serie = (payload.serie or "").strip() or None
+    db.commit()
+    return {"id": dispositivo.id, "serie": dispositivo.serie}
 
 
 # ── Bajas del diagrama (F3) ─────────────────────────────────────────────────
@@ -1659,68 +2019,947 @@ def eliminar_bandeja(
     return resumen
 
 
-class SangrarPayload(BaseModel):
-    hilos: List[int]
+def auto_materializar_cable(elemento: fisicos.FtthElemento, db: Session,
+                            commit: bool = True) -> Dict[str, Any]:
+    """
+    Genera automáticamente los tubos e hilos de un cable y asigna sus extremos A y B.
+
+    Con `commit=False` NO confirma la transacción: lo usa la DIVISIÓN de un cable,
+    que crea dos cables seguidos y confirma UNA sola vez al final (así un fallo a
+    mitad no deja el cable partido por la mitad).
+    """
+    if (elemento.categoria or "").lower() not in CATEGORIAS_CON_HILOS:
+        return {}
+    tipo = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == elemento.tipo_id).first()
+    params = _parametros_materializacion(tipo)
+    resumen = _materializar(
+        elemento,
+        params["tubos"] or 0,
+        params["fibras_por_loose"] or 0,
+        params["perfil"],
+        db,
+        etiqueta_tubo=params.get("etiqueta_tubo"),
+    )
+    sincronizar_extremos_cable_a_hilos(db, elemento)
+    if commit:
+        db.commit()
+    return resumen
+
+
+def sincronizar_extremos_cable_a_hilos(db: Session, elemento: fisicos.FtthElemento):
+    """Propaga los extremos A y B del cable a todas sus fibras hijas."""
+    fibras = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.elemento_id == elemento.id).all()
+    if not fibras:
+        return
+    fibra_ids = [f.id for f in fibras]
+    extremos = db.query(logica.FtthFibraExtremo).filter(logica.FtthFibraExtremo.fibra_id.in_(fibra_ids)).all()
+    for ext in extremos:
+        if ext.extremo == "A":
+            ext.nodo_id = elemento.extremo_A_id
+        elif ext.extremo == "B":
+            ext.nodo_id = elemento.extremo_B_id
+    db.flush()
+
+
+# ── División de un cable en el poste de una caja ─────────────────────────────
+class DivisionCreate(BaseModel):
+    """
+    Cuerpo OPCIONAL de la división (corte/sangrado) del cable en el poste de esta caja.
+
+    · modo='corte' (por defecto) → el cable SIGUE: se empalman de paso TODAS las
+      fibras (la mitad que llega se fusiona con la que continúa).
+    · modo='sangrado'            → las fibras de `fibras` se PICAN (quedan abiertas
+      para derivar) y las demás siguen de paso. `fibras` = [fibra_id, ...] del
+      cable ORIGINAL, o None/'todas' para picarlas todas.
+    · lado='entrada'|'salida'    → cuál de las dos mitades es la de ENTRADA en la
+      fusión (`fibra_a`). Por defecto 'entrada'.
+    """
+    poste_id: Optional[int] = None
+    modo: str = "corte"
+    fibras: Any = None
+    lado: Optional[str] = None
+
+
+def _bandeja_para_empalmes(db: Session, caja, n_slots: int):
+    """
+    (bandeja, slot_inicial) con sitio REAL libre para `n_slots` empalmes nuevos.
+
+    Reutiliza la primera bandeja cuya capacidad libre alcance; si ninguna cabe,
+    crea una nueva (tipo 'empalme'). Así dos operaciones en la misma caja no
+    pisan las mismas posiciones.
+    """
+    bandejas = (
+        db.query(logica.FtthBandeja)
+        .filter(logica.FtthBandeja.elemento_id == caja.id)
+        .order_by(logica.FtthBandeja.bandeja_no)
+        .all()
+    )
+    for b in bandejas:
+        ocupados = (
+            db.query(func.count(logica.FtthEmpalme.id))
+            .filter(logica.FtthEmpalme.bandeja_id == b.id).scalar() or 0
+        )
+        if (b.slots or 0) - ocupados >= n_slots:
+            return b, ocupados + 1
+    ultimo = max([b.bandeja_no or 0 for b in bandejas], default=0)
+    nueva = logica.FtthBandeja(
+        proyecto_id=caja.proyecto_id, elemento_id=caja.id,
+        bandeja_no=ultimo + 1, tipo="empalme",
+        slots=max(int(n_slots), 12), etiqueta="Empalmes automáticos",
+    )
+    db.add(nueva)
+    db.flush()
+    return nueva, 1
+
+
+def _ruta_del_cable(cable) -> List[Dict[str, Any]]:
+    """Copia de `trazado_ruta` (pasos poste/punto) o [] si el cable no la tiene."""
+    props = dict(cable.propiedades_instancia or {})
+    ruta = props.get("trazado_ruta")
+    if isinstance(ruta, list):
+        return [dict(p) for p in ruta if isinstance(p, dict)]
+    return []
+
+
+def _con_extremo(ruta, nodo_id, coord_libre, al_inicio):
+    """
+    Garantiza que la ruta EMPIEZA (o TERMINA) en la punta lógica del cable: el nodo
+    de su extremo si lo tiene, o su coordenada libre si la punta está sin nodo.
+    Solo añade el paso que falte: nunca pisa una punta que ya esté puesta.
+    """
+    if not ruta:
+        return ruta
+    punta = ruta[0] if al_inicio else ruta[-1]
+    nodo = logica._to_int(nodo_id)
+    ya_puesta = bool(punta.get("punto")) or (nodo and logica._to_int(punta.get("poste")) == nodo)
+    if ya_puesta:
+        return ruta
+    if nodo:
+        paso = {"poste": nodo}
+    elif coord_libre:
+        paso = {"punto": list(coord_libre)}
+    else:
+        return ruta
+    return [paso] + ruta if al_inicio else ruta + [paso]
 
 
 @router.post(
-    "/elementos/{nodo_id}/cables/{cable_id}/sangrar",
-    summary="Sangrar hilos específicos de un cable en un nodo",
+    "/elementos/{elem_id}/cables/{cable_id}/dividir",
+    summary="Dividir un cable en el poste de esta caja (dos cables A→B)",
 )
-def sangrar_hilos_cable(
-    nodo_id: int,
+def dividir_cable(
+    elem_id: int,
     cable_id: int,
-    payload: SangrarPayload,
+    payload: Optional[DivisionCreate] = None,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    nodo = _nodo_para_conmutar(nodo_id, db)
+    """
+    Parte el cable en DOS cables independientes, con el MISMO modelo de siempre
+    (un extremo A y un extremo B, ambos nodos reales):
+
+        · Cable 1: del extremo A original -> ESTA caja   (postes hasta el corte)
+        · Cable 2: de ESTA caja           -> extremo B original (postes desde el corte)
+
+    El cable original se borra. NO queda ningún estado «de paso»: la continuidad,
+    si el usuario la necesita, se declara con una FUSIÓN normal en el diagrama.
+
+    Los dos cables se crean por el MISMO camino que cualquier cable nuevo
+    (`logica.crear_elemento_en_db` -> `auto_materializar_cable`) y en UNA sola
+    transacción: si algo falla, no queda el cable partido por la mitad.
+    """
+    from app.routers.ftth_elementos import feature_from_elemento
+
+    caja = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == elem_id).first()
+    if not caja:
+        raise HTTPException(404, f"El nodo #{elem_id} no existe.")
     cable = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == cable_id).first()
-    if not cable:
-        raise HTTPException(404, f"El cable #{cable_id} no existe.")
+    if not cable or (cable.categoria or "").lower() != "cables":
+        raise HTTPException(404, f"El cable #{cable_id} no existe (o no es un cable).")
 
-    hilos_solicitados = payload.hilos or []
-    if not hilos_solicitados:
-        raise HTTPException(400, "Debe enviar al menos un id de hilo para sangrar.")
+    poste_id = logica._to_int((payload.poste_id if payload else None) or caja.poste_ref_id)
+    if not poste_id:
+        raise HTTPException(
+            400, "Esta caja no está sobre un poste: no hay dónde dividir el cable."
+        )
 
-    sangrados = []
-    for fid in hilos_solicitados:
-        fibra = db.query(logica.FtthCableFibra).filter(
-            logica.FtthCableFibra.id == fid,
-            logica.FtthCableFibra.elemento_id == cable.id
-        ).first()
-        if not fibra:
-            raise HTTPException(400, f"El hilo #{fid} no pertenece al cable #{cable_id}.")
+    ids = _ids_postes_de_cable(db, cable)
+    accion, extremo = _decision_division(cable, elem_id, poste_id, ids)
+    if accion == ACCION_ASIGNAR:
+        raise HTTPException(
+            400,
+            f"El poste #{poste_id} es el extremo {extremo} del cable #{cable_id}: ese "
+            f"extremo se ASIGNA a la caja, no se divide. Ancla el extremo {extremo}.",
+        )
+    if accion != ACCION_DIVIDIR:
+        raise HTTPException(
+            400,
+            f"No se puede dividir aquí: el poste #{poste_id} no forma parte de la ruta "
+            f"del cable #{cable_id}, o esta caja ya es uno de sus extremos.",
+        )
 
-        extB = db.query(logica.FtthFibraExtremo).filter(
-            logica.FtthFibraExtremo.fibra_id == fid,
-            logica.FtthFibraExtremo.extremo == 'B'
-        ).first()
+    pos = ids.index(poste_id)
+    props = dict(cable.propiedades_instancia or {})
+    coords = logica._coords_normalizadas(cable.coords_json)
 
-        if not extB:
-            extB = logica.FtthFibraExtremo(
-                proyecto_id=cable.proyecto_id,
-                fibra_id=fid,
-                extremo='B',
-                nodo_id=nodo.id
-            )
-            db.add(extB)
+    # ── Corte / sangrado (F4): qué fibras se pican y qué mitad es la de ENTRADA ──
+    modo = str((payload.modo if payload else None) or "corte").strip().lower()
+    if modo not in ("corte", "sangrado"):
+        modo = "corte"
+    lado = str((payload.lado if payload else None) or "").strip().lower()
+    if lado not in (LADO_ENTRADA, LADO_SALIDA):
+        lado = LADO_ENTRADA
+
+    # Hilos del cable ORIGINAL -> su nº global: el pareo de la fusión va por número
+    # (el hilo i de un tramo con el hilo i del otro).
+    global_por_fibra = {
+        f.id: f.hilo_global_no
+        for f in db.query(logica.FtthCableFibra)
+        .filter(logica.FtthCableFibra.elemento_id == cable.id).all()
+    }
+    crudo = payload.fibras if payload else None
+    picar_global: set = set()
+    if modo == "sangrado":
+        if crudo is None or (isinstance(crudo, str) and crudo.strip().lower() in ("todas", "all")):
+            picar_global = {g for g in global_por_fibra.values() if g}     # sangrado total
         else:
-            if extB.nodo_id is not None and extB.nodo_id != nodo.id:
-                raise HTTPException(
-                    400,
-                    f"El hilo #{fid} ya se encuentra sangrado/terminado en el nodo #{extB.nodo_id}."
-                )
-            extB.nodo_id = nodo.id
+            lista = crudo if isinstance(crudo, list) \
+                else str(crudo).replace(";", ",").split(",")
+            picar_global = {
+                global_por_fibra.get(logica._to_int(x))
+                for x in lista if logica._to_int(x) in global_por_fibra
+            }
+            picar_global.discard(None)
 
-        fibra.estado = "empalmado"
-        sangrados.append(fid)
+    # ── Ruta paso a paso, cortada en el poste (el poste queda en LOS DOS cables) ──
+    ruta = _ruta_del_cable(cable)
+    ruta1: List[Dict[str, Any]] = []
+    ruta2: List[Dict[str, Any]] = []
+    if ruta:
+        pasos_poste = [i for i, p in enumerate(ruta)
+                       if logica._to_int(p.get("poste")) == poste_id]
+        k = pasos_poste[pos] if pos < len(pasos_poste) else (pasos_poste[0] if pasos_poste else -1)
+        if k >= 0:
+            ruta1 = ruta[:k + 1]
+            ruta2 = ruta[k:]
+    if not ruta1:
+        # Cable viejo, sin ruta paso a paso: se arma desde los postes (en orden)
+        ruta1 = [{"poste": p} for p in ids[:pos + 1]]
+        ruta2 = [{"poste": p} for p in ids[pos:]]
+    ruta1 = _con_extremo(ruta1, cable.extremo_A_id, coords[0] if coords else None, al_inicio=True)
+    ruta2 = _con_extremo(ruta2, cable.extremo_B_id, coords[-1] if coords else None, al_inicio=False)
+
+    # ── Los dos cables nuevos ────────────────────────────────────────────────
+    # Se copian los datos de instancia que no son de ruta ni de extremo (nombre,
+    # reserva suelta, estructura...); cada cable 1 y 2 recibe los suyos.
+    CLAVES_PROPIAS = {
+        "trazado_ruta", "postes_intermedios", "extremo_A_id", "extremo_B_id",
+        "reserva_A_m", "reserva_B_m", "numero",
+        # El LADO (entrada/salida) es por PUNTA: cada cable nuevo recibe el suyo.
+        "lado_A", "lado_B",
+    }
+    comunes = {k: v for k, v in props.items() if k not in CLAVES_PROPIAS}
+
+    inst1 = dict(comunes)
+    inst1.update({
+        "extremo_A_id": cable.extremo_A_id,          # conserva la punta A original
+        "extremo_B_id": elem_id,                     # termina en ESTA caja
+        "reserva_A_m": cable.reserva_A_m or 0,
+        "reserva_B_m": 0,
+        "postes_intermedios": ids[:pos + 1],         # ... y el poste del corte
+        "trazado_ruta": ruta1,
+    })
+    if logica._to_int(props.get("numero")):
+        inst1["numero"] = props["numero"]             # conserva el número visible
+
+    inst2 = dict(comunes)
+    inst2.update({
+        "extremo_A_id": elem_id,                      # sale de ESTA caja
+        "extremo_B_id": cable.extremo_B_id,           # conserva la punta B original
+        "reserva_A_m": 0,
+        "reserva_B_m": cable.reserva_B_m or 0,
+        "postes_intermedios": ids[pos:],              # el poste del corte ...
+        "trazado_ruta": ruta2,
+    })
+
+    # ── Lado (entrada/salida) de la punta que queda en la caja ────────────────
+    # El tramo 1 LLEGA por su punta B; el tramo 2 SALE por su punta A. El lado
+    # elegido decide cuál es ENTRADA y el otro tramo recibe el contrario. Las
+    # puntas que NO están en la caja conservan el lado que ya tenían.
+    lado_opuesto = LADO_SALIDA if lado == LADO_ENTRADA else LADO_ENTRADA
+    if str(props.get("lado_A") or "").lower() in (LADO_ENTRADA, LADO_SALIDA):
+        inst1["lado_A"] = str(props["lado_A"]).lower()
+    inst1["lado_B"] = lado
+    if str(props.get("lado_B") or "").lower() in (LADO_ENTRADA, LADO_SALIDA):
+        inst2["lado_B"] = str(props["lado_B"]).lower()
+    inst2["lado_A"] = lado_opuesto
+
+    empalmes_ids: List[int] = []
+    try:
+        cable1 = logica.crear_elemento_en_db(
+            db, proyecto_id=cable.proyecto_id, tipo_id=cable.tipo_id, categoria="cables",
+            coords_json=cable.coords_json, propiedades_instancia=inst1, commit=False,
+        )
+        id1 = cable1.id
+        cable2 = logica.crear_elemento_en_db(
+            db, proyecto_id=cable.proyecto_id, tipo_id=cable.tipo_id, categoria="cables",
+            coords_json=cable.coords_json, propiedades_instancia=inst2, commit=False,
+        )
+        id2 = cable2.id
+
+        # ── FUSIONES (F4): el corte/sangrado deja los EMPALMES en la caja ──────
+        # El pareo va por número de hilo global: el hilo i del tramo 1 con el hilo
+        # i del tramo 2. Corte → todos de paso; sangrado → los elegidos se PICAN
+        # (quedan abiertos, sin hilo B) y el resto sigue de paso.
+        db.flush()
+        fils1 = {
+            f.hilo_global_no: f
+            for f in db.query(logica.FtthCableFibra)
+            .filter(logica.FtthCableFibra.elemento_id == id1).all()
+        }
+        fils2 = {
+            f.hilo_global_no: f
+            for f in db.query(logica.FtthCableFibra)
+            .filter(logica.FtthCableFibra.elemento_id == id2).all()
+        }
+        empalmes_creados = 0
+        if fils1 and fils2:
+            bandeja, slot = _bandeja_para_empalmes(db, caja, len(fils1))
+            for g in sorted(fils1.keys()):
+                f1, f2 = fils1.get(g), fils2.get(g)
+                if not f1 or not f2:
+                    continue
+                if g in picar_global:
+                    # SANGRADO: la fibra se PICÓ. Queda ABIERTA para derivar.
+                    entra, otra = (f1, f2) if lado == LADO_ENTRADA else (f2, f1)
+                    fila = logica.FtthEmpalme(
+                        proyecto_id=caja.proyecto_id, nodo_id=elem_id,
+                        bandeja_id=bandeja.id, slot=slot,
+                        fibra_a_id=entra.id, fibra_b_id=None,
+                        tipo="sangrado", etiqueta=f"picado {g}",
+                    )
+                    entra.estado = "reservado"
+                    otra.estado = "libre"
+                else:
+                    # CORTE / PASO: la mitad que llega se FUSIONA con la que sigue.
+                    entra, sale = (f1, f2) if lado == LADO_ENTRADA else (f2, f1)
+                    fila = logica.FtthEmpalme(
+                        proyecto_id=caja.proyecto_id, nodo_id=elem_id,
+                        bandeja_id=bandeja.id, slot=slot,
+                        fibra_a_id=entra.id, fibra_b_id=sale.id,
+                        tipo="paso", etiqueta=f"paso {g}",
+                    )
+                    entra.estado = "empalmado"
+                    sale.estado = "empalmado"
+                db.add(fila)
+                db.flush()
+                empalmes_ids.append(fila.id)
+                slot += 1
+                empalmes_creados += 1
+
+        # El original desaparece (con sus hijos: tubos, hilos y extremos)
+        logica.borrar_hijos_del_elemento(db, cable.id)
+        db.delete(cable)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:  # pragma: no cover - defensivo
+        db.rollback()
+        raise HTTPException(500, f"No se pudo dividir el cable #{cable_id}: {e}")
+
+    def _resumen_de(cable_id_nuevo: int) -> Dict[str, Any]:
+        c = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == cable_id_nuevo).first()
+        tipo_c = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == c.tipo_id).first()
+        hilos_n = (
+            db.query(func.count(logica.FtthCableFibra.id))
+            .filter(logica.FtthCableFibra.elemento_id == c.id)
+            .scalar() or 0
+        )
+        return {
+            "id": c.id,
+            "numero": (c.propiedades_instancia or {}).get("numero"),
+            "nombre": _nombre_cable(c, tipo_c),
+            "extremo_A_id": c.extremo_A_id,
+            "extremo_B_id": c.extremo_B_id,
+            "postes_intermedios": (c.propiedades_instancia or {}).get("postes_intermedios"),
+            "hilos": int(hilos_n),
+            "feature": feature_from_elemento(c, tipo_c),
+        }
+
+    resumen1 = _resumen_de(id1)
+    resumen2 = _resumen_de(id2)
+    # Los empalmes QUE HA CREADO esta operación (no los que ya hubiera en la caja)
+    empalmes_dto = [
+        {
+            "id": e.id, "slot": e.slot, "tipo": e.tipo,
+            "fibra_a_id": e.fibra_a_id, "fibra_b_id": e.fibra_b_id,
+        }
+        for e in db.query(logica.FtthEmpalme)
+        .filter(logica.FtthEmpalme.id.in_(empalmes_ids))
+        .order_by(logica.FtthEmpalme.slot).all()
+    ] if empalmes_ids else []
+    print(f"[division] cable #{cable_id} partido en el poste #{poste_id} (caja #{elem_id}): "
+          f"cable1=#{id1} ({resumen1['hilos']} hilos) · cable2=#{id2} ({resumen2['hilos']} hilos) "
+          f"· modo={modo} lado={lado} picadas={sorted(picar_global)} empalmes={len(empalmes_dto)}",
+          flush=True)
+    return {
+        "status": "ok",
+        "cable_original_id": cable_id,
+        "caja_id": elem_id,
+        "poste_id": poste_id,
+        "modo": modo,
+        "lado": lado,
+        "fibras_picadas": sorted(picar_global),
+        "empalmes": empalmes_dto,
+        "cables": [resumen1, resumen2],
+    }
+
+
+class SangradoCreate(BaseModel):
+    poste_id: Optional[int] = None
+
+
+@router.post(
+    "/elementos/{elem_id}/cables/{cable_id}/sangrar",
+    summary="Sangrado de un cable pasante (acceso en mitad de tramo)",
+)
+def sangrar_cable(
+    elem_id: int,
+    cable_id: int,
+    payload: Optional[SangradoCreate] = None,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    caja = _nodo_para_conmutar(elem_id, db)
+    cable = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == cable_id).first()
+    if not cable or (cable.categoria or "").lower() != "cables":
+        raise HTTPException(404, f"El cable #{cable_id} no existe (o no es de categoría cables).")
+
+    poste_id = logica._to_int((payload.poste_id if payload else None) or caja.poste_ref_id)
+    if not poste_id:
+        raise HTTPException(400, "Esta caja no está sobre un poste: no se puede sangrar el cable.")
+
+    ids = _ids_postes_de_cable(db, cable)
+    accion, extremo = _decision_division(cable, elem_id, poste_id, ids)
+    if accion != ACCION_DIVIDIR:
+        raise HTTPException(
+            400,
+            f"No se puede sangrar aquí: el poste #{poste_id} no es un punto intermedio del cable #{cable_id} (o la caja ya es uno de sus extremos).",
+        )
+
+    # Validar si ya está sangrado en esta caja
+    props_caja = dict(caja.propiedades_instancia or {})
+    cables_sangrados = list(props_caja.get("cables_sangrados") or [])
+    if cable.id in cables_sangrados:
+        raise HTTPException(400, f"El cable #{cable_id} ya fue sangrado en este nodo #{elem_id}.")
+
+    # Validar si ya existen empalmes en este nodo para hilos de este cable
+    hilos_cable_ids = [
+        f.id for f in db.query(logica.FtthCableFibra.id)
+        .filter(logica.FtthCableFibra.elemento_id == cable.id).all()
+    ]
+    if hilos_cable_ids:
+        emp_existente = db.query(logica.FtthEmpalme).filter(
+            logica.FtthEmpalme.nodo_id == elem_id,
+            or_(
+                logica.FtthEmpalme.fibra_a_id.in_(hilos_cable_ids),
+                logica.FtthEmpalme.fibra_b_id.in_(hilos_cable_ids)
+            )
+        ).first()
+        if emp_existente:
+            raise HTTPException(400, f"El cable #{cable_id} ya tiene empalmes registrados en este nodo (id #{emp_existente.id}).")
+
+    # Registrar sangrado en propiedades de caja y cable
+    if cable.id not in cables_sangrados:
+        cables_sangrados.append(cable.id)
+    props_caja["cables_sangrados"] = cables_sangrados
+    caja.propiedades_instancia = props_caja
+
+    props_cable = dict(cable.propiedades_instancia or {})
+    cajas_sangrado = list(props_cable.get("cajas_sangrado") or [])
+    if elem_id not in cajas_sangrado:
+        cajas_sangrado.append(elem_id)
+    props_cable["cajas_sangrado"] = cajas_sangrado
+    cable.propiedades_instancia = props_cable
+
+    # Obtener todas las fibras del cable
+    fibras = (
+        db.query(logica.FtthCableFibra)
+        .filter(logica.FtthCableFibra.elemento_id == cable.id)
+        .order_by(logica.FtthCableFibra.hilo_global_no)
+        .all()
+    )
+    if not fibras:
+        raise HTTPException(400, f"El cable #{cable_id} no tiene fibras materializadas.")
+
+    bandeja, slot_inicio = _bandeja_para_empalmes(db, caja, len(fibras))
+
+    hilos_entrada = []
+    hilos_salida = []
+
+    for idx, f in enumerate(fibras):
+        emp_paso = logica.FtthEmpalme(
+            proyecto_id=caja.proyecto_id,
+            nodo_id=elem_id,
+            bandeja_id=bandeja.id,
+            slot=slot_inicio + idx,
+            fibra_a_id=f.id,
+            extremo_a="entrada",
+            fibra_b_id=f.id,
+            extremo_b="salida",
+            puerto_id=None,
+            tipo="paso",
+            etiqueta=f"Paso H{f.hilo_global_no}",
+            propiedades={}
+        )
+        db.add(emp_paso)
+        f.estado = "empalmado"
+
+        dto_base = {
+            "fibra_id": f.id,
+            "cable_id": cable.id,
+            "hilo_global_no": f.hilo_global_no,
+            "hilo_no_en_tubo": f.hilo_no_en_tubo,
+            "nombre": f"H{f.hilo_global_no}",
+            "color": f.color,
+            "color_hex": f.color_hex,
+        }
+        hilos_entrada.append({**dto_base, "extremo": "entrada", "lado": "entrada"})
+        hilos_salida.append({**dto_base, "extremo": "salida", "lado": "salida"})
+
+    db.commit()
+
+    return {
+        "status": "ok",
+        "mensaje": f"Cable #{cable_id} sangrado en nodo #{elem_id}: {len(fibras)} empalmes de paso creados.",
+        "cable_id": cable.id,
+        "nodo_id": elem_id,
+        "hilos_entrada": hilos_entrada,
+        "hilos_salida": hilos_salida,
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# F4 — Endpoints CRUD de Empalmes y Fusiones Manuales (Hilos ↔ Hilos / Puertos)
+# ═════════════════════════════════════════════════════════════════════════════
+
+class EmpalmeCreate(BaseModel):
+    fibra_a_id: int
+    extremo_a: Optional[str] = "entrada"
+    fibra_b_id: Optional[int] = None
+    extremo_b: Optional[str] = "salida"
+    puerto_id: Optional[int] = None
+    bandeja_id: Optional[int] = None
+    slot: Optional[int] = None
+    tipo: Optional[str] = "paso"
+    etiqueta: Optional[str] = None
+    propiedades: Optional[Dict[str, Any]] = None
+
+
+class EmpalmeUpdate(BaseModel):
+    bandeja_id: Optional[int] = None
+    slot: Optional[int] = None
+    extremo_a: Optional[str] = None
+    fibra_b_id: Optional[int] = None
+    extremo_b: Optional[str] = None
+    puerto_id: Optional[int] = None
+    tipo: Optional[str] = None
+    etiqueta: Optional[str] = None
+    propiedades: Optional[Dict[str, Any]] = None
+
+
+class FusionItem(BaseModel):
+    strandId: int
+    portId: Union[int, str]
+    waypoints: Optional[List[Dict[str, float]]] = None
+
+
+class FusionesSync(BaseModel):
+    fusiones: List[FusionItem] = []
+
+
+@router.post("/elementos/{elem_id}/empalmes", summary="Crear un empalme manual (hilo↔hilo o hilo↔puerto)")
+def crear_empalme_manual(
+    elem_id: int, payload: EmpalmeCreate, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    caja = _nodo_para_conmutar(elem_id, db)
+
+    fibra_a = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == payload.fibra_a_id).first()
+    if not fibra_a:
+        raise HTTPException(404, f"La fibra #{payload.fibra_a_id} no existe.")
+
+    extremo_a = (payload.extremo_a or "entrada").strip().lower()
+    extremo_b = (payload.extremo_b or "salida").strip().lower() if payload.fibra_b_id else None
+
+    # Validar anti-autoconexión en el mismo extremo
+    if payload.fibra_b_id and payload.fibra_b_id == payload.fibra_a_id:
+        if extremo_a == extremo_b:
+            raise HTTPException(400, "Un hilo no puede empalmarse consigo mismo en el mismo extremo.")
+
+    fibra_b = None
+    if payload.fibra_b_id:
+        fibra_b = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == payload.fibra_b_id).first()
+        if not fibra_b:
+            raise HTTPException(404, f"La fibra B #{payload.fibra_b_id} no existe.")
+
+    puerto = None
+    if payload.puerto_id:
+        puerto = db.query(logica.FtthPuerto).filter(
+            logica.FtthPuerto.id == payload.puerto_id,
+            logica.FtthPuerto.elemento_id == elem_id
+        ).first()
+        if not puerto:
+            raise HTTPException(404, f"El puerto #{payload.puerto_id} no pertenece al nodo #{elem_id}.")
+
+    # Unicidad estricta 1 a 1 por extremo en este nodo
+    existente_a = db.query(logica.FtthEmpalme).filter(
+        logica.FtthEmpalme.nodo_id == elem_id,
+        or_(
+            and_(logica.FtthEmpalme.fibra_a_id == payload.fibra_a_id, logica.FtthEmpalme.extremo_a == extremo_a),
+            and_(logica.FtthEmpalme.fibra_b_id == payload.fibra_a_id, logica.FtthEmpalme.extremo_b == extremo_a),
+        )
+    ).first()
+    if existente_a:
+        raise HTTPException(400, f"El hilo #{payload.fibra_a_id} ({extremo_a}) ya tiene un empalme activo en este nodo (id #{existente_a.id}).")
+
+    if payload.fibra_b_id:
+        existente_b = db.query(logica.FtthEmpalme).filter(
+            logica.FtthEmpalme.nodo_id == elem_id,
+            or_(
+                and_(logica.FtthEmpalme.fibra_a_id == payload.fibra_b_id, logica.FtthEmpalme.extremo_a == extremo_b),
+                and_(logica.FtthEmpalme.fibra_b_id == payload.fibra_b_id, logica.FtthEmpalme.extremo_b == extremo_b),
+            )
+        ).first()
+        if existente_b:
+            raise HTTPException(400, f"El hilo B #{payload.fibra_b_id} ({extremo_b}) ya está ocupado en otro empalme (id #{existente_b.id}).")
+
+    if payload.puerto_id:
+        existente_p = db.query(logica.FtthEmpalme).filter(
+            logica.FtthEmpalme.nodo_id == elem_id,
+            logica.FtthEmpalme.puerto_id == payload.puerto_id
+        ).first()
+        if existente_p:
+            raise HTTPException(400, f"El puerto #{payload.puerto_id} ya está conectado al empalme #{existente_p.id}.")
+
+    # Bandeja y slot
+    bandeja_id = payload.bandeja_id
+    slot = payload.slot
+    if bandeja_id:
+        bandeja = db.query(logica.FtthBandeja).filter(
+            logica.FtthBandeja.id == bandeja_id,
+            logica.FtthBandeja.elemento_id == elem_id
+        ).first()
+        if not bandeja:
+            raise HTTPException(404, f"La bandeja #{bandeja_id} no pertenece al nodo #{elem_id}.")
+        if slot is not None:
+            if slot < 1 or slot > (bandeja.slots or 12):
+                raise HTTPException(400, f"El slot {slot} está fuera del rango de la bandeja (1..{bandeja.slots}).")
+            ocupado_slot = db.query(logica.FtthEmpalme).filter(
+                logica.FtthEmpalme.bandeja_id == bandeja_id,
+                logica.FtthEmpalme.slot == slot
+            ).first()
+            if ocupado_slot:
+                raise HTTPException(400, f"El slot {slot} de la bandeja #{bandeja_id} ya está ocupado.")
+    else:
+        bandeja, slot = _bandeja_para_empalmes(db, caja, 1)
+        bandeja_id = bandeja.id
+
+    tipo = payload.tipo or ("paso" if payload.fibra_b_id else ("conector" if payload.puerto_id else "sangrado"))
+
+    nuevo = logica.FtthEmpalme(
+        proyecto_id=caja.proyecto_id,
+        nodo_id=elem_id,
+        bandeja_id=bandeja_id,
+        slot=slot,
+        fibra_a_id=payload.fibra_a_id,
+        extremo_a=extremo_a,
+        fibra_b_id=payload.fibra_b_id,
+        extremo_b=extremo_b,
+        puerto_id=payload.puerto_id,
+        tipo=tipo,
+        etiqueta=payload.etiqueta,
+        propiedades=payload.propiedades or {},
+    )
+    db.add(nuevo)
+
+    fibra_a.estado = "empalmado" if payload.fibra_b_id else ("conectado" if payload.puerto_id else "reservado")
+    if fibra_b:
+        fibra_b.estado = "empalmado"
+    if puerto:
+        puerto.estado = "ocupado"
+
+    db.commit()
+    db.refresh(nuevo)
+
+    return {
+        "id": nuevo.id,
+        "nodo_id": nuevo.nodo_id,
+        "bandeja_id": nuevo.bandeja_id,
+        "slot": nuevo.slot,
+        "fibra_a_id": nuevo.fibra_a_id,
+        "extremo_a": nuevo.extremo_a,
+        "fibra_b_id": nuevo.fibra_b_id,
+        "extremo_b": nuevo.extremo_b,
+        "puerto_id": nuevo.puerto_id,
+        "tipo": nuevo.tipo,
+        "etiqueta": nuevo.etiqueta,
+        "propiedades": nuevo.propiedades or {},
+    }
+
+
+@router.put("/elementos/{elem_id}/empalmes/{empalme_id}", summary="Modificar o reubicar slot de un empalme")
+def actualizar_empalme(
+    elem_id: int, empalme_id: int, payload: EmpalmeUpdate, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    caja = _nodo_para_conmutar(elem_id, db)
+
+    empalme = db.query(logica.FtthEmpalme).filter(
+        logica.FtthEmpalme.id == empalme_id,
+        logica.FtthEmpalme.nodo_id == elem_id
+    ).first()
+    if not empalme:
+        raise HTTPException(404, f"El empalme #{empalme_id} no existe en el nodo #{elem_id}.")
+
+    # Validación de reubicación de slot con la misma rigurosidad
+    bandeja_id = payload.bandeja_id if payload.bandeja_id is not None else empalme.bandeja_id
+    slot = payload.slot if payload.slot is not None else empalme.slot
+
+    if payload.bandeja_id is not None or payload.slot is not None:
+        if bandeja_id:
+            bandeja = db.query(logica.FtthBandeja).filter(
+                logica.FtthBandeja.id == bandeja_id,
+                logica.FtthBandeja.elemento_id == elem_id
+            ).first()
+            if not bandeja:
+                raise HTTPException(404, f"La bandeja #{bandeja_id} no pertenece al nodo #{elem_id}.")
+            if slot is not None:
+                if slot < 1 or slot > (bandeja.slots or 12):
+                    raise HTTPException(400, f"El slot {slot} está fuera del rango de la bandeja (1..{bandeja.slots}).")
+                # Verificar ocupación por OTRO empalme
+                ocupado = db.query(logica.FtthEmpalme).filter(
+                    logica.FtthEmpalme.bandeja_id == bandeja_id,
+                    logica.FtthEmpalme.slot == slot,
+                    logica.FtthEmpalme.id != empalme_id
+                ).first()
+                if ocupado:
+                    raise HTTPException(400, f"El slot {slot} de la bandeja #{bandeja_id} ya está ocupado por el empalme #{ocupado.id}.")
+
+        empalme.bandeja_id = bandeja_id
+        empalme.slot = slot
+
+    if payload.tipo:
+        empalme.tipo = payload.tipo
+    if payload.extremo_a is not None:
+        empalme.extremo_a = payload.extremo_a
+    if payload.extremo_b is not None:
+        empalme.extremo_b = payload.extremo_b
+    if payload.etiqueta is not None:
+        empalme.etiqueta = payload.etiqueta
+    if payload.propiedades is not None:
+        props = dict(empalme.propiedades or {})
+        props.update(payload.propiedades)
+        empalme.propiedades = props
+
+    db.commit()
+    db.refresh(empalme)
+
+    return {
+        "id": empalme.id,
+        "bandeja_id": empalme.bandeja_id,
+        "slot": empalme.slot,
+        "fibra_a_id": empalme.fibra_a_id,
+        "extremo_a": empalme.extremo_a,
+        "fibra_b_id": empalme.fibra_b_id,
+        "extremo_b": empalme.extremo_b,
+        "puerto_id": empalme.puerto_id,
+        "tipo": empalme.tipo,
+        "propiedades": empalme.propiedades or {},
+    }
+
+
+@router.delete("/elementos/{elem_id}/empalmes/{empalme_id}", summary="Eliminar un empalme y liberar sus hilos/puerto")
+def eliminar_empalme(
+    elem_id: int, empalme_id: int, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    caja = _nodo_para_conmutar(elem_id, db)
+
+    empalme = db.query(logica.FtthEmpalme).filter(
+        logica.FtthEmpalme.id == empalme_id,
+        logica.FtthEmpalme.nodo_id == elem_id
+    ).first()
+    if not empalme:
+        raise HTTPException(404, f"El empalme #{empalme_id} no existe en el nodo #{elem_id}.")
+
+    # Liberar fibra A
+    fibra_a = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == empalme.fibra_a_id).first()
+    if fibra_a:
+        fibra_a.estado = "libre"
+
+    # Liberar fibra B si existía
+    if empalme.fibra_b_id:
+        fibra_b = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == empalme.fibra_b_id).first()
+        if fibra_b:
+            fibra_b.estado = "libre"
+
+    # Liberar puerto si existía
+    if empalme.puerto_id:
+        puerto = db.query(logica.FtthPuerto).filter(logica.FtthPuerto.id == empalme.puerto_id).first()
+        if puerto:
+            puerto.estado = "libre"
+
+    db.delete(empalme)
+    db.commit()
+
+    return {
+        "status": "ok",
+        "empalme_id": empalme_id,
+        "nodo_id": elem_id,
+        "mensaje": "Empalme eliminado y extremos liberados."
+    }
+
+
+@router.put("/elementos/{elem_id}/empalmes/fusiones", summary="Sincronizar masivamente las fusiones del diagrama (con waypoints)")
+def sincronizar_fusiones_diagrama(
+    elem_id: int, payload: FusionesSync, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    caja = _nodo_para_conmutar(elem_id, db)
+
+    # Actualizar o insertar las fusiones recibidas
+    procesadas = 0
+    for item in payload.fusiones:
+        strand_id = item.strandId
+        port_val = str(item.portId).strip()
+        port_num = int(port_val) if port_val.isdigit() else None
+
+        # Si el puerto viene como 'IN-1' o id
+        puerto_id = port_num
+        if puerto_id is None and port_val.upper() in ("IN", "IN-1"):
+            p_in = db.query(logica.FtthPuerto).filter(
+                logica.FtthPuerto.elemento_id == elem_id,
+                logica.FtthPuerto.direccion == "IN"
+            ).first()
+            if p_in:
+                puerto_id = p_in.id
+
+        emp = db.query(logica.FtthEmpalme).filter(
+            logica.FtthEmpalme.nodo_id == elem_id,
+            logica.FtthEmpalme.fibra_a_id == strand_id
+        ).first()
+
+        props = {"waypoints": item.waypoints or []}
+
+        if emp:
+            emp.puerto_id = puerto_id
+            emp.propiedades = props
+            emp.tipo = "conector" if puerto_id else emp.tipo
+        else:
+            bandeja, slot = _bandeja_para_empalmes(db, caja, 1)
+            emp = logica.FtthEmpalme(
+                proyecto_id=caja.proyecto_id,
+                nodo_id=elem_id,
+                bandeja_id=bandeja.id,
+                slot=slot,
+                fibra_a_id=strand_id,
+                extremo_a="entrada",
+                puerto_id=puerto_id,
+                tipo="conector" if puerto_id else "sangrado",
+                propiedades=props,
+            )
+            db.add(emp)
+
+        fibra = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == strand_id).first()
+        if fibra:
+            fibra.estado = "conectado" if puerto_id else "reservado"
+
+        if puerto_id:
+            puerto = db.query(logica.FtthPuerto).filter(logica.FtthPuerto.id == puerto_id).first()
+            if puerto:
+                puerto.estado = "ocupado"
+
+        procesadas += 1
 
     db.commit()
     return {
         "status": "ok",
-        "nodo_id": nodo.id,
-        "cable_id": cable.id,
-        "hilos_sangrados": len(sangrados),
-        "ids": sangrados,
+        "nodo_id": elem_id,
+        "fusiones_sincronizadas": procesadas
     }
 
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Trazabilidad Óptica (Iluminar)
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get("/fibras/{fibra_id}/traza", summary="Obtener la traza óptica de una fibra y ramificaciones")
+def traza_fibra(fibra_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    fibra = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == fibra_id).first()
+    if not fibra:
+        raise HTTPException(404, f"La fibra #{fibra_id} no existe.")
+
+    cable = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == fibra.elemento_id).first()
+
+    empalmes = db.query(logica.FtthEmpalme).filter(
+        or_(
+            logica.FtthEmpalme.fibra_a_id == fibra_id,
+            logica.FtthEmpalme.fibra_b_id == fibra_id,
+        )
+    ).all()
+
+    ramifica_a = []
+    pasos = []
+
+    for emp in empalmes:
+        paso_info = {
+            "empalme_id": emp.id,
+            "nodo_id": emp.nodo_id,
+            "tipo": emp.tipo,
+            "slot": emp.slot,
+            "extremo_a": getattr(emp, "extremo_a", None),
+            "extremo_b": getattr(emp, "extremo_b", None),
+        }
+
+        if emp.puerto_id:
+            puerto = db.query(logica.FtthPuerto).filter(logica.FtthPuerto.id == emp.puerto_id).first()
+            if puerto:
+                paso_info["puerto"] = {
+                    "id": puerto.id,
+                    "etiqueta": puerto.etiqueta,
+                    "direccion": puerto.direccion,
+                    "dispositivo_id": puerto.dispositivo_id,
+                }
+                if (puerto.direccion or "").upper() == "IN":
+                    puertos_out = db.query(logica.FtthPuerto).filter(
+                        logica.FtthPuerto.dispositivo_id == puerto.dispositivo_id,
+                        logica.FtthPuerto.direccion == "OUT"
+                    ).order_by(logica.FtthPuerto.puerto_no).all()
+
+                    for p_out in puertos_out:
+                        emp_out = db.query(logica.FtthEmpalme).filter(
+                            logica.FtthEmpalme.puerto_id == p_out.id
+                        ).first()
+                        target_fid = None
+                        if emp_out:
+                            target_fid = emp_out.fibra_a_id if emp_out.fibra_a_id != fibra_id else emp_out.fibra_b_id
+                        ramifica_a.append({
+                            "puerto_id": p_out.id,
+                            "puerto_no": p_out.puerto_no,
+                            "etiqueta": p_out.etiqueta,
+                            "fibra_id": target_fid
+                        })
+        else:
+            otro_hilo_id = emp.fibra_b_id if emp.fibra_a_id == fibra_id else emp.fibra_a_id
+            paso_info["conectado_a_fibra_id"] = otro_hilo_id
+
+        pasos.append(paso_info)
+
+    return {
+        "fibra_id": fibra.id,
+        "cable_id": cable.id if cable else None,
+        "cable_nombre": cable.nombre if cable else None,
+        "hilo_global_no": fibra.hilo_global_no,
+        "hilo_no_en_tubo": fibra.hilo_no_en_tubo,
+        "color": fibra.color,
+        "color_hex": fibra.color_hex,
+        "estado": fibra.estado,
+        "pasos": pasos,
+        "ramifica_a": ramifica_a if ramifica_a else None,
+    }

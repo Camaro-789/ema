@@ -1,0 +1,1936 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POP CO_1 — Capa física</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+html,body{height:100%}
+body{display:flex;flex-direction:column;background:#eef1f5;color:#000;font-size:11px;overflow:hidden}
+.hidden{display:none!important}
+button,select,input{font-size:11px}
+
+/* ===== barra superior ===== */
+.top{height:46px;flex-shrink:0;display:flex;align-items:stretch;background:#fff;border-bottom:1px solid #000;position:relative;z-index:70}
+.brand{padding:0 16px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid #E5E5EA}
+.brand b{font-size:13px}.brand small{font-size:9.5px;color:#666;margin-top:1px}
+.tab{padding:0 18px;display:flex;align-items:center;font-weight:700;font-size:10.5px;letter-spacing:.03em;cursor:pointer;border-right:1px solid #E5E5EA;background:#fff;user-select:none}
+.tab:hover{background:#F5F5F5}.tab.on{background:#000;color:#fff}
+.spacer{flex:1}
+.btn{border:1px solid #000;background:#fff;padding:6px 12px;font-weight:700;cursor:pointer;letter-spacing:.02em}
+.btn:hover{background:#f0f0f0}.btn.dark{background:#000;color:#fff}.btn.dark:hover{background:#222}
+.btn.sm{padding:3px 8px;font-size:10px}
+.top .btn{margin:7px 10px;align-self:center}
+
+/* ===== cuerpo ===== */
+.body{flex:1;display:flex;min-height:0}
+.side{width:270px;flex-shrink:0;background:#fff;border-right:1px solid #000;display:flex;flex-direction:column;position:relative;z-index:5}
+.sh{padding:9px 12px;font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:#FAFAFA;border-bottom:1px solid #E5E5EA}
+.side .list{flex:1;overflow:auto}
+.cable{padding:12px;border-bottom:1px solid #E5E5EA}
+.cable b{display:block;font-size:11.5px}.cable small{color:#666;font-size:10px}
+.hilos{margin-top:10px;border:1px solid #000}
+.hl{display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;border-bottom:1px solid #E5E5EA;font-size:10px;font-weight:600;cursor:pointer;background:#fff}
+.hl:last-child{border-bottom:none}.hl:hover{background:#F5F5F5}
+.hl .sw{width:11px;height:11px;border:1px solid #000;flex-shrink:0}
+.hl .pp{margin-left:auto;width:12px;height:12px;border:1px solid #000;background:var(--lc,#fff)}
+.help{padding:10px 12px;border-top:1px solid #E5E5EA;font-size:10px;color:#444;line-height:1.7;background:#FAFAFA}
+.help b{color:#000}
+#stage{flex:1;position:relative;overflow:auto;min-width:0}
+
+/* selección */
+.sel{outline:2px solid #000!important;outline-offset:2px;position:relative;z-index:30}
+.org{outline:2px solid #d00!important;outline-offset:2px;position:relative;z-index:30}
+
+/* ===== RACK (3D minimalista) ===== */
+.rackwrap{max-width:900px;margin:0 auto;padding:22px 90px 40px 24px}
+.rack{background:linear-gradient(180deg,#e4e7ec,#d3d8df);border:1px solid #000;box-shadow:5px 5px 0 #000;padding-bottom:10px}
+.rack-h{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #000;background:#fff;font-weight:700;font-size:10.5px;letter-spacing:.05em}
+.rack-h b{display:flex;align-items:center;gap:8px}
+.led{width:9px;height:9px;background:#1fa84f;border:1px solid #000}
+@keyframes blink{50%{opacity:.3}}
+.rack-h small{font-weight:600;color:#666;letter-spacing:0}
+#rackUnitsList{margin:10px 8px 0;border:1px solid #000;background:#16181c;box-shadow:inset 0 3px 8px rgba(0,0,0,.8)}
+.eqp{display:flex;align-items:stretch}
+.rail{width:42px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:6px 0;background:linear-gradient(90deg,#c9ced6,#f3f5f8 55%,#c9ced6);box-shadow:inset 1px 0 0 #fff,inset -1px 0 0 rgba(0,0,0,.35);border-bottom:1px solid #9aa1ad}
+.rail .u{font-size:8.5px;font-weight:800;color:#222;text-align:center;line-height:1.2}
+.rail .hs{display:flex;flex-direction:column;align-items:center;justify-content:space-around;flex:1;margin-top:4px;gap:6px}
+.rail i{display:block;width:8px;height:8px;background:#16181c;border:1px solid #6b7280;box-shadow:inset 0 1px 2px #000}
+.fp{flex:1;min-width:0;position:relative;margin:2px 3px;border:1px solid #000;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(180deg,#fff 0%,#eceef2 100%);box-shadow:inset 0 1px 0 #fff,inset 0 -3px 0 rgba(0,0,0,.08),0 2px 0 rgba(0,0,0,.5)}
+.scr{position:absolute;width:10px;height:10px;border-radius:50%!important;background:radial-gradient(circle at 30% 30%,#fff,#9aa1ad 65%,#4b5160);border:1px solid #333}
+.scr::after{content:'';position:absolute;left:1px;right:1px;top:3.5px;height:2px;background:#222;transform:rotate(40deg)}
+.scr.tl{left:6px;top:6px}.scr.bl{left:6px;bottom:6px}.scr.tr{right:6px;top:6px}.scr.br{right:6px;bottom:6px}
+.eb{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:8px 30px}
+.handle{width:7px;height:30px;flex-shrink:0;margin-right:12px;background:linear-gradient(180deg,#a8afbb,#4b5160 50%,#a8afbb);border:1px solid #000}
+.tag{display:inline-block;color:#fff;font-size:8.5px;font-weight:700;padding:2px 6px;letter-spacing:.05em;margin-right:8px}
+.ename{font-weight:700;font-size:11.5px}
+.well{display:flex;gap:10px;align-items:center;background:#23262c;border:1px solid #000;padding:6px 10px;box-shadow:inset 0 2px 5px rgba(0,0,0,.7)}
+.pgrp{display:flex;gap:5px;align-items:center}
+.pgrp+.pgrp{padding-left:10px;border-left:1px solid #4a4f58}
+.pgrp>span{font-size:8.5px;font-weight:700;color:#aab2c0;margin-right:3px}
+.pt{width:14px;height:14px;border:1px solid #000;background:var(--pb,#fff);cursor:pointer;display:inline-block;flex-shrink:0}
+.pt.linked{background:var(--lc)}
+.pt:hover{outline:1px solid #fff;outline-offset:1px}
+.free{margin:2px 3px;padding:9px 14px;font-size:10px;font-weight:700;color:#aab2c0;border:1px dashed #666}
+/* ODF */
+.odf-h{display:flex;align-items:center;gap:8px;padding:9px 30px}
+.odf-h .sp{flex:1}
+.odf-h .cnt{font-size:9px;font-weight:700;color:#666}
+.odf-strip{display:flex;align-items:center;gap:6px;margin:0 30px 10px;padding:8px 10px;background:#23262c;border:1px solid #000;box-shadow:inset 0 2px 5px rgba(0,0,0,.7)}
+.odf-strip .lb{font-size:8.5px;font-weight:700;color:#aab2c0;margin-right:6px}
+.odf-strip .pn{display:flex;flex-direction:column;align-items:center;gap:2px}
+.odf-strip .pn span.n{font-size:7.5px;color:#aab2c0;font-weight:600}
+.odfx{margin:0 26px 14px;padding:32px 10px;background:#23262c;border:1px solid #000;box-shadow:inset 0 2px 5px rgba(0,0,0,.7)}
+.grid16{display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:3px}
+.col{display:flex;flex-direction:column;align-items:stretch;min-width:0}
+.cell{border:1px solid #000;background:#fff;height:38px;padding:3px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:7.5px;font-weight:700;text-align:center;min-width:0;overflow:hidden}
+.cell:hover{background:#F5F5F5}
+.cell .dot{width:8px;height:8px;border:1px solid #000;margin-bottom:2px;flex-shrink:0}
+.cell span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.15}
+.cell .m{color:#666;font-weight:500;font-size:7px}
+.cell.free2{color:#8a8f99;border-color:#555;background:#2d3037}
+.splice{height:30px;display:flex;justify-content:center;align-items:center}
+.splice i{display:block;width:2px;height:100%;background:repeating-linear-gradient(to bottom,#6b7280 0 4px,transparent 4px 8px)}
+.splice i.on{background:var(--lc);box-shadow:0 0 0 1px rgba(255,255,255,.55),0 0 8px var(--lc)}
+
+.portnum{display:inline-flex;flex-direction:column;align-items:center;gap:3px;color:#aab2c0;font-size:8px;font-weight:700}.portnum .pt{width:14px;height:14px}
+.numtag{display:inline-block;background:#111;color:#fff;padding:1px 4px;margin-right:3px;font-size:9px}
+.matrix-tools{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f7f8fa;border-bottom:1px solid #ddd;font-weight:700}
+.route-card{margin:12px;border:1px solid #c7cbd1;background:#fff;box-shadow:3px 3px 0 #d5d9df}
+.route-card>header{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:#e9eef5;border-bottom:1px solid #c7cbd1}
+.route-card>header span{color:#555;font-weight:500}
+.route-flow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;padding:14px}
+.route-node{display:flex;align-items:center;gap:7px;border:1px solid #9ca3af;padding:7px 9px;background:#f9fafb;max-width:260px;overflow-wrap:anywhere;font-weight:600}
+.route-node small{display:inline-flex;align-items:center;justify-content:center;background:#2563eb;color:#fff;width:18px;height:18px;flex-shrink:0}
+.route-arrow{align-self:center;font-weight:800;color:#64748b}
+.route-summary{padding:10px 14px;background:#f8fafc;border-top:1px solid #e5e7eb;line-height:1.6;overflow-wrap:anywhere}
+body.no-animations .pk,body.no-animations .is-origin{animation:none!important}
+body.no-animations .conn path[filter]{filter:none!important}
+body.no-animations .led{animation:none!important;opacity:1}
+body.no-animations .splice i.on{box-shadow:none!important}
+/* overlay del rack */
+.cables-svg{position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:60;overflow:visible;clip-path:inset(46px 0 0 0)}
+.conn .hit{pointer-events:stroke;cursor:pointer}
+.conn:hover .under{stroke:#d00}
+@keyframes flow{to{stroke-dashoffset:-20}}
+/* paquetes de datos: tres capas a distinta cadencia = flujo denso, milisegundos */
+/* el movimiento de los paquetes lo hace JS (requestAnimationFrame): no depende de ajustes del sistema ni se reinicia al redibujar */
+.pk1{stroke-dasharray:4 28;stroke-linecap:round}
+.pk2{stroke-dasharray:2 16.5;stroke-linecap:round}
+.pk3{stroke-dasharray:26 142;stroke-linecap:round}
+.conn:hover .core{stroke-width:3.8}
+.chip rect{fill:#000;stroke:#fff;stroke-width:1}
+.chip.bad rect{fill:#d00}
+.chip text{fill:#fff;font:700 9px -apple-system,Segoe UI,Arial,sans-serif;pointer-events:none}
+.is-origin{box-shadow:0 0 0 2px var(--eq,#00bfa5),0 0 10px 2px var(--eq,#00bfa5)!important;position:relative;z-index:20}
+@keyframes op{50%{box-shadow:0 0 0 2px var(--eq,#00bfa5),0 0 2px 0 var(--eq,#00bfa5)}}
+#lineMenuExtra{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+#lineMenuExtra label{font-size:9px;font-weight:700;color:#666;letter-spacing:.05em}
+#lineMenuExtra input{border:1px solid #000;padding:5px 7px;width:100%}
+.eqc{display:flex;align-items:center;gap:6px;padding:0 12px;font-size:9.5px;font-weight:700;letter-spacing:.04em;border-left:1px solid #E5E5EA}
+.eqc input{width:30px;height:22px;border:1px solid #000;padding:0;background:#fff;cursor:pointer}
+.tg{display:inline-block;font-size:8.5px;font-weight:700;padding:2px 6px;background:var(--eq,#00bfa5);color:#000;border:1px solid #000;letter-spacing:.05em;margin-left:6px}
+
+/* ===== PANEL DINÁMICO ===== */
+#dynWrap{position:absolute;inset:0;display:flex;flex-direction:column}
+.dbar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 12px;background:#fff;border-bottom:1px solid #000;font-size:10.5px}
+.dbar .r{display:flex;align-items:center;gap:0}
+.dbar .r .btn{border-right:none}.dbar .r .btn:last-child{border-right:1px solid #000}
+.dbar .zl{border:1px solid #000;border-right:none;padding:6px 10px;font-weight:700;min-width:48px;text-align:center;background:#fff}
+#dynScroll{flex:1;overflow:auto;background-color:#eef1f5;background-image:linear-gradient(rgba(0,0,0,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.05) 1px,transparent 1px);background-size:26px 26px}
+#dynSizer{position:relative}
+#dynWorld{position:absolute;left:0;top:0;transform-origin:0 0;user-select:none}
+.dnode{position:absolute;background:#fff;border:1px solid #000;box-shadow:5px 5px 0 #000}
+.dhead{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#000;color:#fff;cursor:grab;border-bottom:1px solid #000}
+.dhead:active{cursor:grabbing}
+.dhead .dt{width:8px;align-self:stretch;background:var(--nc);flex-shrink:0;margin:-7px 0 -7px -10px;width:6px}
+.dhead b{font-size:11px;display:block}.dhead small{font-size:9px;color:#bbb}
+.dcols{display:flex;justify-content:space-between;padding:4px 14px;font-size:8px;font-weight:700;letter-spacing:.06em;color:#555;background:#FAFAFA;border-bottom:1px solid #E5E5EA}
+.drow{position:relative;height:22px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 16px;font-size:10px;font-weight:600;border-bottom:1px solid #E5E5EA}
+.drow:last-child{border-bottom:none}
+.drow .sw{width:10px;height:10px;border:1px solid #000;flex-shrink:0}
+.drow .lbl{flex:1}.drow .lbl.r{text-align:right}.drow .lbl.c{text-align:center}
+.dport{position:absolute;top:50%;width:12px;height:12px;margin-top:-6px;border:1px solid #000;background:#fff;cursor:crosshair;z-index:3}
+.dport.left{left:-7px}.dport.right{right:-7px}
+.dport.linked{background:var(--pc);cursor:pointer}
+.dport:hover{outline:2px solid #000;outline-offset:1px}
+.dport.ok{background:#1fa84f;outline:2px solid #1fa84f;outline-offset:2px}
+.dport.dim{opacity:.25}
+body.linking,body.linking *{cursor:crosshair!important}
+
+/* ===== MATRIZ ===== */
+.mx{max-width:980px;margin:0 auto;padding:22px 24px}
+.mx .card{background:#fff;border:1px solid #000;box-shadow:5px 5px 0 #000}
+.mrow{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #E5E5EA;position:relative;padding-left:18px}
+.mrow:last-child{border-bottom:none}
+.mrow .bar{position:absolute;left:0;top:0;bottom:0;width:6px;border-right:1px solid #000}
+.mrow .e{flex:1;font-weight:600}.mrow .e.r{text-align:right}
+.mrow .ar{font-weight:700;color:#666}
+.empty{padding:40px;text-align:center;color:#777;font-weight:600}
+
+/* ===== menú / toast / modal ===== */
+#lineMenu{position:fixed;z-index:90;background:#fff;border:1px solid #000;box-shadow:5px 5px 0 #000;padding:12px;max-width:300px;line-height:1.6}
+#lineMenu .k{font-size:9px;font-weight:700;color:#666;letter-spacing:.06em;margin-bottom:4px}
+#lineMenu .bts{display:flex;gap:6px;margin-top:10px}
+#lineMenu .btn.red:hover{background:#d00;color:#fff;border-color:#d00}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:120;background:#000;color:#fff;padding:9px 14px;font-weight:600;border:1px solid #000;box-shadow:4px 4px 0 #1fa84f;max-width:560px}
+#toast.err{box-shadow:4px 4px 0 #d00}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal{background:#fff;border:1px solid #000;box-shadow:5px 5px 0 #000;width:380px;max-width:94vw}
+.modal h2{font-size:12px;padding:11px 14px;border-bottom:1px solid #000;display:flex;justify-content:space-between}
+.modal .bd{padding:14px;display:flex;flex-direction:column;gap:10px}
+.modal label{display:block;font-size:9.5px;font-weight:700;text-transform:uppercase;color:#444;margin-bottom:3px;letter-spacing:.04em}
+.modal input,.modal select{width:100%;border:1px solid #000;padding:7px 8px;background:#fff}
+.modal .ft{padding:11px 14px;border-top:1px solid #E5E5EA;display:flex;gap:8px;justify-content:flex-end}
+
+/* Matriz completa del gabinete */
+.matrix-tools{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px;background:#f7f8fa;border-bottom:1px solid #ddd}
+.matrix-tools>div:first-child,.mx-section-title>div{display:flex;flex-direction:column;gap:3px}
+.matrix-tools small,.mx-section-title small{font-size:11px;font-weight:400;color:#64748b}
+.mx-actions{display:flex;gap:6px;flex-wrap:wrap}
+.mx-help{padding:10px 12px;background:#fffbe8;border-bottom:1px solid #eadfba;color:#64551c;font-size:12px}
+.mx-section-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:16px 12px 8px;font-size:14px}
+.mx-device-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,390px),1fr));gap:12px;padding:0 12px 14px}
+.mx-device{min-width:0;border:1px solid #cbd5e1;border-radius:7px;background:#fff;overflow:hidden;box-shadow:0 2px 5px #0f172a0b}
+.mx-device-head{display:flex;align-items:center;gap:9px;padding:11px;background:#eef3f9;border-bottom:1px solid #d5dde8}
+.mx-type{color:white;font-size:10px;font-weight:800;padding:5px 7px;border-radius:3px;flex-shrink:0}
+.mx-device-name{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.mx-device-name b{font-size:13px;overflow-wrap:anywhere}
+.mx-device-name small{font-size:10px;color:#64748b}
+.mx-count{font-size:10px;white-space:nowrap;color:#334155;background:#fff;border:1px solid #cbd5e1;padding:4px 6px;border-radius:4px}
+.mx-device-ports{display:grid;grid-template-columns:1fr}
+.mx-device-ports.two-faces{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mx-face{min-width:0}
+.mx-face+h4,.mx-face h4{font-size:10px;letter-spacing:.04em;padding:8px;margin:0;background:#f8fafc;border-bottom:1px solid #e2e8f0;color:#475569}
+.mx-face+.mx-face{border-left:1px solid #e2e8f0}
+.mx-port{display:flex;align-items:center;gap:8px;min-width:0;padding:7px 8px;border-bottom:1px solid #edf0f4;min-height:37px}
+.mx-port:last-child{border-bottom:0}
+.mx-port .pt{flex-shrink:0;width:15px;height:15px;cursor:pointer;border-radius:3px}
+.mx-port .pt:hover{outline:2px solid #2563eb;outline-offset:2px}
+.mx-port-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.mx-port-text b{font-size:11px;font-weight:700;overflow-wrap:anywhere}
+.mx-port-text small{font-size:10px;color:#64748b;overflow-wrap:anywhere}
+.mx-swatch{width:9px;height:20px;border:1px solid #0002;border-radius:2px;flex-shrink:0}
+.mx-status{font-size:8px;font-weight:800;color:#047857;background:#d1fae5;padding:3px 4px;border-radius:3px;flex-shrink:0}
+.mx-status.free{color:#64748b;background:#f1f5f9}
+.mx-empty{margin:12px;padding:14px;border:1px dashed #94a3b8;border-radius:6px;color:#64748b;font-size:12px}
+.route-card{margin:12px;border:1px solid #c7cbd1;background:#fff;box-shadow:3px 3px 0 #d5d9df}
+.route-card>header{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:#e9eef5;border-bottom:1px solid #c7cbd1}
+.route-card>header span{color:#555;font-weight:500}
+.route-flow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;padding:14px}
+.route-node{display:flex;align-items:center;gap:7px;border:1px solid #9ca3af;padding:7px 9px;background:#f9fafb;max-width:260px;overflow-wrap:anywhere;font-weight:600}
+.route-node small{display:inline-flex;align-items:center;justify-content:center;background:#2563eb;color:#fff;width:18px;height:18px;flex-shrink:0}
+.route-arrow{align-self:center;font-weight:800;color:#64748b}
+.route-summary{padding:10px 14px;background:#f8fafc;border-top:1px solid #e5e7eb;line-height:1.6;overflow-wrap:anywhere}
+@media(max-width:650px){.mx-device-ports.two-faces{grid-template-columns:1fr}.mx-face+.mx-face{border-left:0;border-top:2px solid #cbd5e1}.mx-count{display:none}.matrix-tools{align-items:flex-start}}
+
+
+/* Workspace matriz tipo inventario + paneles independientes */
+#viewTree{height:100%;min-height:0;overflow:auto;background:#edf1f5}
+#viewTree>.card{height:100%;min-height:0;display:flex;flex-direction:column}
+#treeViewList{flex:1;min-height:0}
+.mx-workspace{display:grid;grid-template-columns:300px minmax(0,1fr) 340px;min-height:620px;align-items:start}
+.mx-inventory{background:#f8fafc;border-right:1px solid #cbd5e1;min-width:0}
+.mx-inv-heading{padding:13px 12px 9px;background:#e6edf5;border-bottom:1px solid #cbd5e1;display:flex;flex-direction:column;gap:4px}
+.mx-inv-heading b{font-size:11px;letter-spacing:.04em;color:#334155}
+.mx-inv-heading small{font-size:10px;color:#64748b}
+.rack-heading{margin-top:8px;background:#dbeafe}
+.mx-inventory-item{display:flex;align-items:center;gap:8px;width:100%;padding:10px 9px;text-align:left;border:0;border-bottom:1px solid #e2e8f0;background:#fff;cursor:pointer;color:#1e293b}
+.mx-inventory-item:hover{background:#eff6ff}
+.mx-inv-type{display:inline-flex;align-items:center;justify-content:center;min-width:31px;max-width:45px;padding:4px 5px;color:#fff;border-radius:3px;font-size:9px;font-weight:800;overflow:hidden}
+.mx-inv-name{font-size:11px;line-height:1.35;flex:1;overflow-wrap:anywhere}
+.mx-inv-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:10px;background:#e2e8f0;color:#334155;font-size:10px}
+.mx-inv-arrow{font-size:21px;color:#64748b;line-height:1}
+.mx-inv-footer{padding:12px;font-size:10px;line-height:1.5;color:#64748b}
+.mx-workarea{min-width:0;padding:0 12px 20px}
+.mx-workarea-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid #d5dde8;margin-bottom:10px}
+.mx-workarea-head>div{display:flex;flex-direction:column;gap:4px}
+.mx-workarea-head b{font-size:14px}
+.mx-workarea-head small{font-size:11px;color:#64748b}
+.mx-live-status{white-space:nowrap;font-size:10px;color:#475569;background:#fff;border:1px solid #cbd5e1;border-radius:15px;padding:5px 8px}
+.mx-live-status i{display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:4px}
+.mx-panels{display:flex;flex-direction:column;gap:8px}
+.mx-accordion{background:#fff;border:1px solid #cbd5e1;border-radius:5px;overflow:hidden;box-shadow:0 1px 2px #0f172a0b;scroll-margin-top:8px}
+.mx-accordion-head{display:flex;align-items:center;gap:9px;width:100%;border:0;border-bottom:1px solid transparent;text-align:left;background:#5d9ed8;color:white;padding:10px 11px;cursor:pointer;min-height:45px}
+.mx-accordion-head:hover{background:#4c91cf}
+.mx-accordion-head.open{border-bottom-color:#cbd5e1}
+.mx-acc-type{font-size:9px;font-weight:800;color:#fff;background:#475569;border-radius:3px;padding:5px 6px;min-width:36px;text-align:center}
+.mx-acc-title{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.mx-acc-title b{font-size:12px;overflow-wrap:anywhere}
+.mx-acc-title small{font-size:10px;opacity:.9;font-weight:400}
+.mx-acc-count{font-size:10px;white-space:nowrap;background:#ffffff24;border:1px solid #ffffff40;border-radius:3px;padding:4px 6px}
+.mx-acc-chevron{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;font-size:19px;font-weight:400;flex-shrink:0}
+.mx-accordion-body.collapsed{display:none}
+.mx-accordion-body .mx-device-ports{grid-template-columns:1fr}
+.mx-accordion-body .mx-device-ports.two-faces{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mx-accordion-body .mx-face h4{position:sticky;top:0;z-index:1}
+.mx-accordion-body .mx-port{padding:8px 10px;min-height:39px}
+.mx-accordion-body .mx-port-text b{font-size:11px}
+.mx-accordion-body .mx-port-text small{font-size:10px}
+.mx-workarea .mx-section-title{margin:18px 0 8px}
+.mx-workarea .route-card{margin:8px 0}
+@media(max-width:1350px){.mx-workspace{grid-template-columns:270px minmax(0,1fr) 290px}}
+@media(max-width:1100px){.mx-workspace{grid-template-columns:240px minmax(0,1fr)}.mx-trace-panel{grid-column:1/-1;position:relative!important;top:auto!important;max-height:420px!important;margin:0 8px 12px}}
+@media(max-width:900px){.mx-workspace{grid-template-columns:220px minmax(0,1fr)}.mx-workarea{padding-left:8px;padding-right:8px}.mx-acc-count{display:none}}
+@media(max-width:650px){.mx-workspace{grid-template-columns:1fr}.mx-inventory{border-right:0;border-bottom:2px solid #cbd5e1}.mx-inventory-item{padding:8px}.mx-inv-footer{display:none}.mx-accordion-body .mx-device-ports.two-faces{grid-template-columns:1fr}.mx-accordion-body .mx-face+.mx-face{border-left:0;border-top:2px solid #cbd5e1}.mx-workarea-head{align-items:flex-start}.mx-acc-title small{font-size:9px}}
+
+
+/* Ergonomía de matriz: búsqueda, filtros, selección guiada y acciones masivas */
+.mx-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:#fff;border-bottom:1px solid #d7dee8}
+.mx-search{display:flex;align-items:center;gap:6px;flex:1 1 240px;min-width:180px;max-width:440px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;padding:0 7px;color:#64748b}
+.mx-search>span{font-size:20px;line-height:1}
+.mx-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;padding:9px 2px;color:#0f172a;font-size:12px}
+.mx-search button{border:0;background:transparent;color:#64748b;font-size:19px;cursor:pointer;padding:2px 5px}
+.mx-filter-group{display:flex;gap:3px;flex-wrap:wrap;background:#eef2f7;border-radius:6px;padding:3px}
+.mx-filter-group button{border:0;border-radius:4px;padding:6px 8px;background:transparent;color:#475569;font-size:10px;cursor:pointer}
+.mx-filter-group button.active{background:#fff;color:#1d4ed8;box-shadow:0 1px 3px #0f172a1c;font-weight:700}
+.mx-bulk-actions{display:flex;gap:5px;margin-left:auto}
+.mx-connect-prompt{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:11px 12px;border:1px solid #bfdbfe;border-radius:6px;background:#eff6ff;color:#1e3a8a}
+.mx-connect-prompt.selected{background:#fff7ed;border-color:#fdba74;color:#9a3412}
+.mx-connect-prompt.origin{background:#f0fdf4;border-color:#86efac;color:#166534}
+.mx-prompt-icon{display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;border-radius:50%;background:#dbeafe;font-weight:800}
+.mx-connect-prompt.selected .mx-prompt-icon{background:#ffedd5}
+.mx-connect-prompt.origin .mx-prompt-icon{background:#dcfce7}
+.mx-connect-prompt>div{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.mx-connect-prompt b{font-size:11px}
+.mx-connect-prompt small{font-size:10px;line-height:1.45;overflow-wrap:anywhere}
+.mx-connect-prompt .btn{flex-shrink:0}
+.mx-inventory-item[style*="display: none"],.mx-accordion[style*="display: none"]{display:none!important}
+.mx-accordion-head:focus-visible,.mx-inventory-item:focus-visible,.mx-filter-group button:focus-visible,.mx-search input:focus-visible{outline:2px solid #2563eb;outline-offset:-2px}
+.mx-accordion .mx-port.sel{outline:2px solid #f59e0b;outline-offset:-2px;background:#fffbeb}
+.mx-accordion .mx-port.org{outline:2px solid #16a34a;outline-offset:-2px;background:#f0fdf4}
+@media(max-width:1050px){.mx-toolbar{align-items:stretch}.mx-search{max-width:none;flex-basis:100%}.mx-bulk-actions{margin-left:0}}
+@media(max-width:650px){.mx-filter-group{flex:1}.mx-filter-group button{flex:1}.mx-bulk-actions{width:100%}.mx-bulk-actions button{flex:1}.mx-connect-prompt{align-items:flex-start;flex-wrap:wrap}.mx-connect-prompt>div{min-width:calc(100% - 50px)}.mx-connect-prompt .btn{margin-left:38px}}
+
+
+/* Trazabilidad fija a la derecha: flujo de enlaces en tiempo real */
+.mx-workarea{min-width:0;padding:0 12px 20px}
+.mx-work-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,350px);gap:12px;align-items:start}
+.mx-panel-column{min-width:0}
+.mx-trace-panel{min-width:0;background:#fff;border:1px solid #cbd5e1;border-radius:7px;box-shadow:0 2px 8px #0f172a0b;position:sticky;top:8px;max-height:calc(100vh - 145px);display:flex;flex-direction:column;overflow:hidden}
+.mx-trace-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 12px;background:#172f4d;color:#fff}
+.mx-trace-title{display:flex;align-items:center;gap:9px;min-width:0}
+.mx-trace-title>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mx-trace-title b{font-size:11px;letter-spacing:.035em}
+.mx-trace-title small{font-size:10px;color:#cbd5e1}
+.mx-trace-live-dot{width:9px;height:9px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 3px #4ade8025;flex-shrink:0}
+.mx-trace-total{display:flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:50%;background:#ffffff20;border:1px solid #ffffff40;font-size:12px;font-weight:800}
+.mx-trace-legend{display:flex;gap:10px;flex-wrap:wrap;padding:9px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0}
+.mx-trace-legend span{display:flex;align-items:center;gap:5px;font-size:9px;color:#475569}
+.mx-trace-legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.mx-legend-origin{background:#2563eb}.mx-legend-link{background:#64748b}.mx-legend-dest{background:#16a34a}
+.mx-trace-list{overflow:auto;min-height:180px;padding:12px 10px;overscroll-behavior:contain}
+.mx-trace-event{display:grid;grid-template-columns:25px minmax(0,1fr);gap:7px;position:relative}
+.mx-trace-step{display:flex;flex-direction:column;align-items:center;gap:0}
+.mx-trace-step span{display:flex;align-items:center;justify-content:center;width:22px;height:22px;background:#e2e8f0;color:#334155;border-radius:50%;font-size:10px;font-weight:800;z-index:1}
+.mx-trace-step i{width:2px;flex:1;min-height:12px;background:#cbd5e1}
+.mx-trace-event:last-child .mx-trace-step i{display:none}
+.mx-trace-content{min-width:0;border:1px solid #dbe2ea;border-radius:5px;margin-bottom:10px;overflow:hidden}
+.mx-trace-event-head{display:flex;justify-content:space-between;gap:5px;align-items:center;padding:7px 8px;background:#f1f5f9;border-bottom:1px solid #e2e8f0}
+.mx-trace-event-head b{font-size:10px;color:#1e293b}
+.mx-trace-event-head small{font-size:8px;color:#64748b;font-weight:800}
+.mx-trace-endpoint{display:flex;align-items:flex-start;gap:7px;padding:8px;font-size:10px;line-height:1.45;overflow-wrap:anywhere;color:#334155}
+.mx-trace-dot{width:8px;height:8px;border-radius:50%;background:#2563eb;flex-shrink:0;margin-top:3px}
+.mx-trace-dot.target{background:#16a34a}
+.mx-trace-linkline{height:13px;border-left:2px dashed #94a3b8;margin-left:11px}
+.mx-trace-route{border-top:1px solid #e2e8f0;background:#f8fafc}
+.mx-trace-route summary{padding:7px 8px;font-size:9px;font-weight:700;color:#2563eb;cursor:pointer}
+.mx-trace-route>div{padding:0 8px 8px}
+.mx-trace-route-step{display:flex;align-items:flex-start;gap:6px;padding:5px 0;border-top:1px dashed #dbe2ea;font-size:9px;line-height:1.4;overflow-wrap:anywhere}
+.mx-trace-route-step span{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex-shrink:0;background:#dbeafe;color:#1d4ed8;border-radius:50%;font-size:8px;font-weight:800}
+.mx-trace-empty{display:flex;align-items:center;flex-direction:column;text-align:center;gap:8px;padding:24px 10px;color:#64748b}
+.mx-trace-empty-icon{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border:1px dashed #94a3b8;border-radius:50%;font-size:23px;color:#2563eb}
+.mx-trace-empty b{font-size:12px;color:#334155}
+.mx-trace-empty p{font-size:10px;line-height:1.6;margin:0;max-width:230px}
+.mx-trace-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:9px;color:#64748b}
+@media(max-width:1350px){.mx-work-split{grid-template-columns:minmax(0,1fr) minmax(245px,290px)}}
+@media(max-width:1050px){.mx-work-split{grid-template-columns:1fr}.mx-trace-panel{position:relative;top:auto;max-height:420px}.mx-trace-list{max-height:310px}.mx-workarea{padding-left:8px;padding-right:8px}}
+@media(max-width:650px){.mx-trace-footer{align-items:flex-start;flex-direction:column}.mx-trace-header{padding:10px}.mx-trace-title b{font-size:10px}}
+
+
+/* ===== v15: 3 columnas (cables | trabajo | trazabilidad) ===== */
+#viewTree.mx{max-width:none;width:100%;margin:0;padding:12px 14px}
+.mx-device-grid{grid-template-columns:1fr}
+.mx-accordion-body .mx-device-ports.two-faces{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mx-inventory{position:sticky;top:0;max-height:calc(100vh - 150px);overflow:auto;align-self:start;padding-bottom:6px}
+.mx-inventory .mx-accordion{border-radius:0;border-left:0;border-right:0;box-shadow:none;margin:0}
+.mx-inventory .mx-accordion-body .mx-device-ports{max-height:360px;overflow:auto}
+.mx-inventory .mx-inv-footer{display:block}
+.mx-trace-panel{position:sticky;top:8px;align-self:start;margin:8px 8px 8px 0}
+.mx-trace-list{flex:1}
+.mx-trace-event.fresh .mx-trace-content{animation:trFresh 1.6s ease-out}
+@keyframes trFresh{0%{background:#fef9c3;box-shadow:0 0 0 2px #facc15}100%{background:#fff;box-shadow:none}}
+.mx-trace-event.del .mx-trace-step span{background:#fecaca;color:#991b1b}
+.mx-trace-event.add .mx-trace-step span{background:#bbf7d0;color:#166534}
+.mx-trace-kind{font-size:8px;font-weight:800;padding:2px 5px;letter-spacing:.05em}
+.mx-trace-kind.add{background:#dcfce7;color:#166534}.mx-trace-kind.del{background:#fee2e2;color:#991b1b}
+.mx-trace-tag{font-size:8px;font-weight:800;background:#2563eb;color:#fff;padding:1px 5px;margin-left:5px}
+.mx-trace-event.del .mx-trace-content{opacity:.75}
+.mx-trace-clear{border:1px solid #cbd5e1;background:#fff;font-size:9px;padding:4px 8px;cursor:pointer}
+
+/* ===== v16: modo edición de cadena ===== */
+#editBar{flex-shrink:0;position:relative;z-index:80;background:#fffbe6;border-bottom:1px solid #000;padding:7px 14px;display:flex;flex-direction:column;gap:5px}
+#editBar .eb-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px}
+#editBar .sp{flex:1}
+#editBar small{color:#555;font-size:10px}
+#editBar .eb-dot{width:9px;height:9px;background:#dc2626;animation:ebp 1s infinite}
+@keyframes ebp{50%{opacity:.25}}
+#editBar .eb-chip{background:#000;color:#fff;font-size:9px;font-weight:800;padding:3px 7px;letter-spacing:.05em}
+.btn.red{background:#fff;color:#d00;border-color:#d00}.btn.red:hover{background:#fee2e2}
+body.editing .tgt-no{opacity:.3;filter:grayscale(.7)}
+.tgt-ok{outline:2px solid #16a34a!important;outline-offset:1px;box-shadow:0 0 0 4px #16a34a33;position:relative;z-index:25;cursor:pointer}
+.tgt-tail{outline:2px dashed #2563eb!important;outline-offset:2px;position:relative;z-index:26;cursor:pointer;box-shadow:0 0 0 4px #2563eb2b}
+.tgt-cur{outline:3px solid #2563eb!important;outline-offset:2px;position:relative;z-index:27;animation:curp 1s ease-in-out infinite}
+@keyframes curp{50%{box-shadow:0 0 0 6px #2563eb55}}
+label.sg{display:flex;gap:9px;align-items:flex-start;border:1px solid #000;padding:9px;cursor:pointer}
+label.sg:hover{background:#f5f5f5}
+.mx-trace-event.chain .mx-trace-content{border-color:#16a34a}
+
+/* ===== v17: trazabilidad viva ===== */
+#editBar .eb-strip{display:flex;align-items:center;gap:5px;overflow-x:auto;padding:2px 0 4px;white-space:nowrap}
+.eb-n{display:inline-flex;flex-direction:column;border:1px solid #000;background:#fff;padding:2px 7px;font-size:10px}
+.eb-n i{font-style:normal;font-size:9px;color:#166534;font-weight:700}
+.eb-n.st-low i,.eb-n.st-high i{color:#b91c1c}
+.eb-n.origen{background:#000;color:#fff}.eb-n.origen i{color:#9be6b2}
+.eb-n.calle{border-style:dashed;background:#fff7e6}
+.eb-ar{color:#666;font-size:11px}
+.eb-ext{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;background:#fff7e6;border:1px dashed #d97706;padding:6px 8px;width:100%}
+.eb-ext input,.eb-ext select{border:1px solid #000;padding:4px 6px;background:#fff}
+.eb-final{background:#e8f8ee;border:1px solid #16a34a;padding:6px 10px;font-size:11px;width:100%}
+.btn.pulse{animation:fpulse 1s ease-in-out infinite}
+@keyframes fpulse{50%{box-shadow:0 0 0 4px #16a34a66}}
+.mx-trace-kind.live{background:#fee2e2;color:#b91c1c}
+.mx-trace-event.live .mx-trace-content{border-color:#dc2626;box-shadow:0 0 0 2px #dc262622}
+.mx-trace-event.live .mx-trace-step span{background:#fecaca;color:#991b1b}
+.tnl{padding:4px 0}
+.tn{display:grid;grid-template-columns:18px 10px minmax(0,1fr) auto;gap:6px;align-items:center;padding:5px 8px;border-top:1px dashed #e2e8f0;font-size:10px}
+.tn:first-child{border-top:0}
+.tn-i{font-size:8px;font-weight:800;color:#64748b}
+.tn-d{width:9px;height:9px;border:1px solid #111;background:#cbd5e1}
+.tn.origen .tn-d{background:#111}.tn.calle .tn-d{background:#d97706;border-color:#d97706}
+.tn-t{display:flex;flex-direction:column;min-width:0;overflow-wrap:anywhere}.tn-t small{font-size:8.5px;color:#64748b}
+.tn-p{font-weight:800;color:#166534;white-space:nowrap}
+.tn.st-low .tn-p,.tn.st-high .tn-p{color:#b91c1c}
+.tn-foot{padding:7px 8px;font-size:9.5px;background:#fef2f2;border-top:1px solid #fecaca;color:#991b1b;font-weight:700}
+.tn-foot.end{background:#f1f5f9;border-color:#e2e8f0;color:#334155}
+
+/* ===== v18: línea de metro + panel flotante ===== */
+.metro{padding:10px 12px 8px 36px;position:relative}
+.mrow{position:relative;display:flex;align-items:center;gap:8px;padding:6px 0}
+.mrow::before{content:"";position:absolute;left:-20px;top:-50%;bottom:50%;width:3px;background:#000}
+.mrow:first-child::before{display:none}
+.mrow .c{position:absolute;left:-29px;width:17px;height:17px;border:3px solid #000;background:#fff;z-index:1}
+.mrow.origen .c{background:#000}
+.mrow.calle .c{border-color:#d97706;background:#fff7e6}.mrow.calle::before{background:#d97706}
+.mrow .lb{flex:1;min-width:0;font-size:11px;font-weight:700;overflow-wrap:anywhere}
+.mrow .lb small{display:block;font-weight:400;color:#666;font-size:9px;margin-top:1px}
+.mrow .mp{font-weight:800;font-size:11px;color:#166534;white-space:nowrap}
+.mrow.st-low .mp,.mrow.st-high .mp{color:#b91c1c}
+.mrow.new{animation:mslide .35s ease-out}
+@keyframes mslide{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+#traceDock{position:fixed;right:12px;top:150px;width:300px;max-height:calc(100vh - 190px);overflow:auto;z-index:240;background:#fff;border:1px solid #000;box-shadow:5px 5px 0 #000}
+#traceDock .dk-h{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fffbe6;border-bottom:1px solid #000;font-size:10.5px;position:sticky;top:0;z-index:2}
+#traceDock .sp{flex:1}
+#traceDock .eb-dot{width:8px;height:8px;background:#dc2626}
+
+/* ===== v19: gabinetes y cables ===== */
+.rackwrap{max-width:960px}
+#cabBar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.cabtabs{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.cabtab{border:1px solid #000;background:#fff;padding:6px 12px;cursor:pointer;font-size:11px;display:flex;flex-direction:column;align-items:flex-start;border-top:4px solid var(--cc,#000)}
+.cabtab i{font-style:normal;font-size:9px;color:#666}.cabtab i.over,.over{color:#dc2626;font-weight:800}
+.cabtab.on{background:#000;color:#fff}.cabtab.on i{color:#bbb}
+.cabact{display:flex;gap:6px}
+.eqp.over{outline:2px solid #dc2626;outline-offset:-2px}
+.eqp.over .rail .u{color:#dc2626;font-weight:800}
+.eqact{margin-left:10px;display:inline-flex;gap:4px}
+.eqact button{border:1px solid #999;background:#fff;font-size:10px;padding:0 6px;cursor:pointer;line-height:16px}
+.eqact button:hover{background:#000;color:#fff}
+.sh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ctabs{display:flex;flex-direction:column}
+.ctab{border:0;border-bottom:1px solid #E5E5EA;background:#fff;text-align:left;padding:8px 12px;cursor:pointer;font-size:11px;font-weight:700;display:flex;justify-content:space-between;gap:8px;border-left:5px solid transparent}
+.ctab i{font-style:normal;font-weight:600;color:#666;font-size:10px}
+.ctab.on{background:#f5f5f5;border-left-color:#e08600}
+.cdest{margin-top:6px;font-size:10px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.cdest em{color:#999}
+.dchip{border:1px solid #000;background:#fff;padding:1px 6px;font-size:9.5px;font-weight:700}
+.cact{display:flex;gap:6px;margin-top:6px}
+.cact button{border:1px solid #999;background:#fff;font-size:9.5px;padding:2px 7px;cursor:pointer;font-weight:700}
+.cact button:hover{background:#000;color:#fff}
+.xtag{pointer-events:all;cursor:pointer}
+.xtag rect{fill:#fff;stroke:#000;stroke-width:1}.xtag text{font-size:9px;font-weight:700;fill:#000}
+.xtag:hover rect{fill:#fffbe6}
+.dcabs{display:flex;gap:5px;margin-left:12px}
+.dcab{border:1px solid #000;background:#fff;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;border-top:4px solid var(--cc,#000)}
+.dcab.on{background:#000;color:#fff}
+.mx-cab{border-left:5px solid var(--cc,#000);margin:6px 0 0}
+.mx-cab.active{background:#eff6ff}
+.mx-cab-h{display:flex;align-items:center;gap:8px;width:100%;border:0;border-bottom:1px solid #cbd5e1;background:#e6edf5;padding:9px 10px;cursor:pointer;text-align:left}
+.mx-cab-h b{font-size:11.5px}.mx-cab-h small{flex:1;font-size:9.5px;color:#64748b}
+.mx-cab-title{margin:14px 0 8px;padding:7px 10px;background:#fff;border:1px solid #cbd5e1;border-left:6px solid var(--cc,#000);font-size:11px}
+.mx-eq-actions{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:10px;flex-wrap:wrap}
+.mx-eq-actions span{flex:1;color:#64748b;font-weight:700}
+.mx-eq-actions button{border:1px solid #94a3b8;background:#fff;font-size:9.5px;padding:3px 8px;cursor:pointer;font-weight:700}
+.mx-eq-actions button:hover{background:#000;color:#fff}
+.mx-inv-heading{flex-direction:row!important;align-items:center;justify-content:space-between}
+.mx-inv-heading>div{display:flex;flex-direction:column;gap:4px}
+
+/* ===== v20 ===== */
+.hl{height:auto;min-height:24px;padding:3px 8px}
+.hl .hlt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.hchip{font-style:normal;font-size:9px;font-weight:700;border:1px solid #64748b;background:#f1f5f9;color:#334155;padding:0 5px;width:fit-content;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.hchip.x{border-color:#d97706;background:#fff7e6;color:#92400e}
+.hchip:hover{background:#000;color:#fff;border-color:#000}
+.conn.xc .xglow{filter:blur(3px)}
+.mx-cabsec{margin:0 0 10px;border:1px solid #cbd5e1;border-left:6px solid var(--cc,#000);background:#fff}
+button.mx-cab-title{display:flex;align-items:center;gap:10px;width:100%;margin:0;border:0;background:#f8fafc;padding:10px 12px;cursor:pointer;text-align:left;font-size:12px}
+button.mx-cab-title:hover{background:#eef2f7}
+.mx-cab-title .car{width:12px}.mx-cab-title small{color:#64748b;font-size:10px}.mx-cab-title .sp{flex:1}.mx-cab-title em{font-style:normal;font-size:10px;color:#64748b}
+.mx-cabbody{padding:8px 10px;border-top:1px solid #e2e8f0}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:7px 8px;margin-bottom:6px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px}
+.crumbs i{font-style:normal;color:#94a3b8}
+.crumbs .cr{border-left:4px solid var(--cc,#94a3b8);background:#fff;border-top:1px solid #cbd5e1;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;padding:1px 6px;font-weight:700}
+.crumbs .cr.calle{border-left-color:#d97706;background:#fff7e6}.crumbs .cr.cable{background:#fffbe6}
+.pwr-row{display:grid;grid-template-columns:70px 1fr 90px 30px;align-items:center;gap:8px;font-size:11px;padding:3px 0;border-bottom:1px solid #eee}
+.pwr-row span{color:#64748b;font-size:10px}.pwr-row input{border:1px solid #000;padding:4px 6px;text-align:right}.pwr-row i{font-style:normal;color:#64748b}
+.mx-acc-actions{display:flex;gap:4px}
+.mx-acc-actions button{border:1px solid rgba(255,255,255,.8);background:rgba(255,255,255,.18);color:#fff;font-size:12px;font-weight:700;min-width:28px;height:26px;cursor:pointer;line-height:1}
+.mx-acc-actions button:hover{background:#fff;color:#1e3a5f}
+#viewRack .pt,#viewRack .cell,#leftPanel .hl{cursor:default}
+
+.dacts{display:flex;gap:3px;flex-shrink:0}
+.dacts button{border:1px solid #888;background:#222;color:#fff;font-size:11px;min-width:22px;height:20px;cursor:pointer;line-height:1;padding:0 4px}
+.dacts button:hover{background:#fff;color:#000}
+.dbar .tb{display:flex;align-items:center;justify-content:center;padding:4px 9px}
+.dbar .tb.on{background:#f59e0b;color:#000}
+#dynSvg.dimmed .conn:not(.lit){opacity:.2}
+#dynSvg .tl,#dynSvg .tg{pointer-events:none}
+.conn.lit .under{stroke:#111}
+#hoverTrace{position:fixed;z-index:300;width:300px;max-height:70vh;overflow:auto;background:#fff;border:1px solid #000;box-shadow:5px 5px 0 #000;pointer-events:none}
+#hoverTrace .ht-h{display:flex;align-items:center;gap:8px;background:#0f1f3a;color:#fff;padding:8px 10px;font-size:10.5px}
+#hoverTrace .ht-h span{background:#fff;color:#000;font-size:9px;font-weight:800;padding:2px 6px}
+#hoverTrace .ht-msg{padding:9px 12px;font-size:11px;font-weight:700}
+#hoverTrace .metro,#hoverTrace .crumbs{margin:6px}
+
+.tlit.pt,.tlit.cell,.tlit.dport{outline:3px solid #f59e0b!important;outline-offset:1px;box-shadow:0 0 8px 2px #f59e0b}
+.hl.tlit{background:#fff3d6!important}
+.mx-port.tlit{background:#fff3d6;box-shadow:inset 4px 0 0 #f59e0b}
+.mx-accordion.tlit{outline:3px solid #f59e0b;outline-offset:-1px;box-shadow:0 0 12px #f59e0b88}
+.mx-trace-event.tlit{background:#fff3d6;outline:2px solid #f59e0b}
+.ctab.tlit{border-left-color:#f59e0b;background:#fff3d6}
+.cabtab.tlit{box-shadow:0 0 0 2px #f59e0b,0 0 10px #f59e0b}
+body.torchlock .conn:not(.lit){opacity:.25}
+.conn .tl,.conn .tg{pointer-events:none}
+#torchWin{position:fixed;right:14px;bottom:14px;width:290px;z-index:260;background:#fff;border:1px solid #000;border-top:4px solid #f59e0b;box-shadow:5px 5px 0 #000;font-size:11px}
+#torchWin .tw-h{display:flex;align-items:center;gap:8px;padding:7px 9px;background:#111;color:#fff}
+#torchWin .tw-h b{flex:1;font-size:10px;letter-spacing:.04em}
+#torchWin .tw-h button{border:1px solid #fff;background:#f59e0b;color:#000;font-weight:800;font-size:9.5px;padding:3px 8px;cursor:pointer}
+#torchWin .tw-ic svg{background:#fff;padding:1px}
+#torchWin .tw-b{padding:8px 10px;display:flex;flex-direction:column;gap:3px}
+#torchWin .tw-b small{color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:.05em}
+#torchWin .tw-b b{font-size:11px;word-break:break-word}#torchWin .tw-b em{font-style:normal;color:#555;font-size:10px}
+
+.eqtag{margin-left:8px;background:#e2e8f0;color:#334155;font-size:9px;font-weight:800;padding:1px 6px;border:1px solid #94a3b8}
+.est{margin-left:6px;font-size:9px;font-weight:800;padding:1px 6px;color:#fff}
+.est.e-Implementado{background:#15803d}.est.e-Enproyecto{background:#b45309}.est.e-Certificado{background:#1d4ed8}
+.dirbadge{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;margin:6px 8px 0;color:#fff}
+.dirbadge.pon{background:#0f766e}.dirbadge.dat{background:#1d4ed8}
+#torchWin .dirbadge{margin:4px 0 0;width:fit-content}
+#commLegend{position:fixed;left:14px;bottom:14px;width:340px;max-height:34vh;overflow:auto;z-index:255;background:#fff;border:1px solid #000;box-shadow:5px 5px 0 #000;font-size:10.5px}
+#commLegend .cl-h{background:#111;color:#fff;padding:6px 9px;font-size:9.5px;font-weight:800;letter-spacing:.04em;position:sticky;top:0}
+#commLegend .cl-r{display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:1px solid #eee}
+#commLegend .dirbadge{margin:0;flex-shrink:0}.cl-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ed-sec{display:flex;flex-direction:column;gap:8px;border-top:1px solid #ddd;padding-top:10px}
+.pgrp{flex-wrap:wrap}
+#dynScroll{cursor:grab}body.panning #dynScroll{cursor:grabbing}body.panning *{user-select:none}
+#dynScroll .dnode,#dynScroll .dport{cursor:default}
+</style>
+</head>
+<body>
+
+<svg class="cables-svg" id="cablesOverlay"><defs><filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="blur"/><feComposite in="SourceGraphic" in2="blur" operator="over"/></filter></defs></svg>
+
+<div class="top">
+  <div class="brand"><b>POP · CO_1</b><small>Central Office Principal · BASTIDOR_A1</small></div>
+  <div class="tab on" id="tRack" onclick="switchView('rack')">RACK 19"</div>
+  <div class="tab" id="tDyn" onclick="switchView('dyn')">PANEL DINÁMICO</div>
+  <div class="tab" id="tTree" onclick="switchView('tree')">MATRIZ</div>
+  <div class="spacer"></div>
+  <button class="btn sm" id="animToggle" onclick="toggleComm()" title="Envía pulsos de luz de ida y vuelta (origen ⇄ destino) por todas las rutas con señal, cada 1.5 s, hasta que lo apagues.">VER COMUNICACIÓN</button>
+  <label class="eqc">COLOR EQUIPOS <input type="color" id="equipColor" value="#dae2e1" oninput="EQUIP_COLOR=this.value;updateUI()"></label>
+  <button class="btn dark" onclick="openModal()">+ EQUIPO</button>
+</div>
+
+<div id="editBar" class="hidden"></div>
+<div class="body">
+  <aside class="side" id="leftPanel">
+    <div class="sh" id="cablesHead">Cables</div>
+    <div class="list" id="cablesList" onscroll="redraw()"></div>
+    <div class="help"><b>Vista de solo lectura:</b> aquí se ve cómo quedó el gabinete.<br>Para crear, editar o desconectar conexiones usa el <b>PANEL DINÁMICO</b> o la <b>MATRIZ</b>.<br><b>↗ chip</b> en un hilo o etiqueta en una línea: saltar al otro gabinete<br><b>=</b> color del hilo = cable → cara B<br><b>Esc</b>: cancelar</div>
+  </aside>
+
+  <section id="stage" onscroll="redraw()">
+    <div id="viewRack" class="rackwrap">
+      <div id="cabBar"></div>
+      <div class="rack" id="rackArea">
+        <div class="rack-h" id="rackHead"></div>
+        <div id="rackUnitsList"></div>
+      </div>
+    </div>
+
+    <div id="dynWrap" class="hidden">
+      <div class="dbar">
+        <span>Arrastra de un puerto a otro para trazar · cabecera = mover · clic en línea = desconectar · pasa el cursor por una línea para ver su trazabilidad · rueda = zoom · arrastra el fondo = mover la vista</span><span id="dynCabs" class="dcabs"></span>
+        <div class="r"><button class="btn sm tb" id="torchL" onclick="setTorch('L')" title="Linterna izquierda: pasa el cursor sobre una línea o puerto y la luz recorre las conexiones hacia la IZQUIERDA"><svg viewBox="0 0 26 24" width="22" height="18" fill="none" stroke="currentColor" stroke-width="1.7" style="transform:scaleX(-1)"><rect x="2" y="9" width="9" height="6" fill="currentColor"/><path d="M11 8 L15 6 V18 L11 16Z" fill="currentColor"/><path d="M18 8 L23 5 M19 12 H25 M18 16 L23 19"/></svg></button><button class="btn sm tb" id="torchR" onclick="setTorch('R')" title="Linterna derecha: pasa el cursor sobre una línea o puerto y la luz recorre las conexiones hacia la DERECHA"><svg viewBox="0 0 26 24" width="22" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="9" width="9" height="6" fill="currentColor"/><path d="M11 8 L15 6 V18 L11 16Z" fill="currentColor"/><path d="M18 8 L23 5 M19 12 H25 M18 16 L23 19"/></svg></button><span style="width:10px"></span><button class="btn sm" onclick="dynZoom(-0.1)">−</button><span class="zl" id="zoomLbl">100%</span><button class="btn sm" onclick="dynZoom(0.1)">+</button><button class="btn sm" style="margin-left:8px;border-right:1px solid #000" onclick="dynAutoLayout()">AUTO-ORDENAR</button></div>
+      </div>
+      <div id="dynScroll"><div id="dynSizer"><div id="dynWorld"><svg id="dynSvg" style="position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none"><defs><filter id="glow2" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="blur"/><feComposite in="SourceGraphic" in2="blur" operator="over"/></filter></defs></svg></div></div></div>
+    </div>
+
+    <div id="viewTree" class="mx hidden"><div class="card"><div class="sh">Matriz de conexiones</div><div id="treeViewList"></div></div></div>
+  </section>
+</div>
+
+<div id="lineMenu" class="hidden"><div class="k">CONEXIÓN</div><div id="lineMenuTxt"></div><div id="lineMenuExtra"></div>
+  <div class="bts"><button class="btn red" id="lineMenuDel">DESCONECTAR</button><button class="btn" onclick="hideLineMenu()">CERRAR</button></div></div>
+<div id="toast" class="hidden"></div>
+
+<div class="ov hidden" id="equipmentModal"><div class="modal">
+  <h2><span>Añadir equipo</span><span style="cursor:pointer" onclick="closeModal()">✕</span></h2>
+  <form id="equipmentForm" onsubmit="handleSaveEquipment(event)">
+    <div class="bd">
+      <div><label>Gabinete</label><select id="eqCab"></select></div>
+      <div><label>Tipo de equipo</label><select id="eqTipo"><option value="OLT">OLT</option><option value="ODF">ODF</option><option value="SWITCH">Switch</option><option value="SPLITTER">Splitter</option></select></div>
+      <div id="eqSplit" style="display:none;gap:10px;flex-direction:column"><div><label>Clase de splitter</label><select id="eqClase"><option value="AF">AF · Primario (feeder): recibe de PON o calle</option><option value="AC">AC · Cliente: cuelga de un AF</option></select></div><div><label>Modelo (balanceado)</label><select id="eqRatio"></select></div></div>
+      <div><label>Nombre</label><input id="eqNombre" required placeholder="Ej. OLT 2"></div>
+      <div><label>Etiqueta (opcional)</label><input id="eqEtiqueta" placeholder="Ej. Nodo Norte"></div>
+      <div><label>Estado</label><select id="eqEstado"></select></div>
+      <div><label>Tamaño (U)</label><select id="eqTamano"><option value="1">1U</option><option value="2">2U</option></select></div>
+    </div>
+    <div class="ft"><button type="button" class="btn" onclick="closeModal()">CANCELAR</button><button type="submit" class="btn dark">GUARDAR</button></div>
+  </form>
+</div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const FIBER_COLORS=[
+ {nombre:'Azul',hex:'#3b82f6',t:'#fff'},{nombre:'Naranja',hex:'#f97316',t:'#000'},{nombre:'Verde',hex:'#16a34a',t:'#fff'},{nombre:'Marrón',hex:'#92400e',t:'#fff'},
+ {nombre:'Gris',hex:'#9ca3af',t:'#000'},{nombre:'Blanco',hex:'#ffffff',t:'#000'},{nombre:'Rojo',hex:'#ef4444',t:'#fff'},{nombre:'Negro',hex:'#111111',t:'#fff'},
+ {nombre:'Amarillo',hex:'#facc15',t:'#000'},{nombre:'Violeta',hex:'#a855f7',t:'#fff'},{nombre:'Rosa',hex:'#f472b6',t:'#000'},{nombre:'Cian',hex:'#22d3ee',t:'#000'},
+ {nombre:'Reserva',hex:'#cbd5e1',t:'#000'},{nombre:'Reserva',hex:'#cbd5e1',t:'#000'},{nombre:'Reserva',hex:'#cbd5e1',t:'#000'},{nombre:'Reserva',hex:'#cbd5e1',t:'#000'}];
+/* ---- gabinetes y cables (POP → Gabinete → Equipo) ---- */
+const CAB_CATALOG=[{tipo:'Rack de piso 19"',sizes:[42,24,12]},{tipo:'Rack mural',sizes:[12,9,6]},{tipo:'Gabinete exterior / poste',sizes:[6,4]}];
+const CAB_COLORS=['#111111','#2563eb','#d97706','#16a34a','#7c3aed','#db2777','#0891b2'];
+const CABLE_SIZES=[4,8,12,16,24,48,96];
+let cabinets=[{id:'g1',nombre:'Gabinete 1',tipo:'Rack de piso 19"',u:12}];
+let cables=[{id:'C-GEN',nombre:'C-GEN_1X16',hilos:16,cabId:'g1',sub:'Loose 1 · entrada calle'}];
+let currentCabId='g1',currentCableId='C-GEN',matrixCab='all',dynCab='all';
+const TYPE_COLOR={CABLE:'#e08600',OLT:'#1d1d1f',SWITCH:'#1fa84f',SPLITTER:'#e08600',ODF:'#0071e3'};
+const LINE_COLOR={SWITCH:'#0071e3',OLT:'#1fa84f',SPLITTER:'#e08600'};
+const PORT_BG={OLT:'#d9f2e4',SWITCH:'#d6ebfb',SPLITTER:'#fde9c4',ODF:'#e3ecff'};
+
+let equipmentData=[
+ {id:1,tipo:'OLT',nombre:'OLT 1 (Huawei)',tamano:2},
+ {id:2,tipo:'ODF',nombre:'ODF 1 (Patch 16P)',tamano:1,faceBExpanded:true},
+ {id:3,tipo:'SWITCH',nombre:'Switch Core',tamano:1},
+ {id:4,tipo:'SPLITTER',nombre:'Splitter 1x16',tamano:1}];
+equipmentData.forEach(e=>{e.cabId='g1';e.etiqueta='';e.estado='Implementado';});
+/* ---- catálogo de splitters: AF = primario (feeder, recibe de PON/calle) · AC = cliente (cuelga de un AF) ---- */
+const SPLIT_CLASS={AF:'AF · Primario (feeder)',AC:'AC · Cliente'};
+const SPLIT_LOSS={2:3.7,4:7.3,8:10.7,16:14.0,32:17.5,64:21.0};   // dB típicos de splitter PLC balanceado 1:N (editables por equipo)
+const SPLIT_MODELS=[2,4,8,16,32,64];
+const ESTADOS=['Implementado','En proyecto','Certificado'];
+{const sp=equipmentData.find(e=>e.tipo==='SPLITTER');if(sp){sp.clase='AF';sp.ratio=16;sp.loss=null;sp.nota='';}}
+const eqById=id=>equipmentData.find(e=>String(e.id)===String(id));
+const splitN=id=>{const e=eqById(id);return e&&e.ratio?e.ratio:8;};
+const splitLoss=id=>{const e=eqById(id);return e?(e.loss!=null?e.loss:(SPLIT_LOSS[e.ratio]??LOSS.splitter)):LOSS.splitter;};
+const splitName=(clase,ratio)=>`Splitter ${clase} 1:${ratio}`;
+const eqBadges=e=>`${e.etiqueta?`<span class="eqtag">${escapeMatrixText(e.etiqueta)}</span>`:''}<span class="est e-${(e.estado||'Implementado').replace(/\s/g,'')}">${escapeMatrixText(e.estado||'Implementado')}</span>`;
+const eqMeta=e=>`${e.estado||'Implementado'}${e.etiqueta?' · '+e.etiqueta:''}`;
+let EQUIP_COLOR='#dae2e1';   // un solo color para todo lo que va del origen / cara A hacia equipos (editable arriba)
+const LOSS={conn:0.3,splice:0.1,splitter:10.7};          // dB teóricos (editables)
+const TX_DEFAULT={OLT:3,SWITCH:-2,SPLITTER:0,ODF:0,CABLE:0};   // dBm por defecto en un origen
+const originTx={};
+let energy=new Map();
+let connections=[],connSeq=0,selectedEndpoint=null,forcedOrigin=null,currentView='rack';
+
+/* ---------- modelo ---------- */
+const EP=new Map();
+function mkEp(eqId,type,port,face=null,extra={}){const key=`${eqId}|${type}|${face||'-'}|${port}`;const ep={eqId,type,port,face,extra,key};EP.set(key,ep);return ep;}
+const eqOf=ep=>equipmentData.find(e=>String(e.id)===String(ep.eqId));
+const cableById=id=>cables.find(c=>String(c.id)===String(id));
+const cabById=id=>cabinets.find(c=>c.id===id);
+const cabNameOf=id=>{const c=cabById(id);return c?c.nombre:'—';};
+const cabColorOf=id=>CAB_COLORS[Math.max(0,cabinets.findIndex(c=>c.id===id))%CAB_COLORS.length];
+const eqsOf=cabId=>equipmentData.filter(e=>e.cabId===cabId);
+const cabUsed=id=>eqsOf(id).reduce((n,e)=>n+e.tamano,0);
+function hiloInfo(cable,i){
+  if(cable.hilos===16)return FIBER_COLORS[i];                       // cable original: 12 colores + 4 reserva
+  const c=FIBER_COLORS[i%12],tubo=Math.floor(i/12)+1;                // TIA-598: 12 colores, se repite por tubo
+  return{nombre:c.nombre+(cable.hilos>12?` · Tubo ${tubo}`:''),hex:c.hex,t:c.t};
+}
+function hiloEp(cable,i){const h=hiloInfo(cable,i);return mkEp(cable.id,'CABLE',`Hilo ${i+1}`,null,{name:cable.nombre,hex:h.hex});}
+/* Identificador global de gabinete de un extremo: cable → su gabinete dueño · equipo → su gabinete */
+const rackIdOf=ep=>{if(!ep)return null;if(ep.type==='CABLE'){const k=cableById(ep.eqId);return k?k.cabId:null;}const e=eqOf(ep);return e?e.cabId:null;};
+const connMeta=c=>{const s=rackIdOf(c.from),t=rackIdOf(c.to);return{source_rack_id:s,target_rack_id:t,inter:!!(s&&t&&s!==t)};};
+const cableUsedCount=k=>connections.filter(c=>(c.from.type==='CABLE'&&String(c.from.eqId)===String(k.id))||(c.to.type==='CABLE'&&String(c.to.eqId)===String(k.id))).length;
+function epLabel(ep){
+  if(ep.type==='CABLE')return `${cableById(ep.eqId)?cableById(ep.eqId).nombre:'Cable'} · ${ep.port}`;
+  const eq0=eqOf(ep),n=(cabinets.length>1&&eq0&&cabById(eq0.cabId)?cabById(eq0.cabId).nombre+' › ':'')+(eq0?eq0.nombre:ep.type);
+  return ep.type==='ODF'?`${n} · P${ep.port} cara ${ep.face}`:`${n} · ${ep.port}`;
+}
+const connOf=ep=>connections.find(c=>c.from.key===ep.key||c.to.key===ep.key)||null;
+const otherEnd=ep=>{const c=connOf(ep);return c?(c.from.key===ep.key?c.to:c.from):null};
+const typeColor=ep=>ep.type==='CABLE'&&ep.extra.hex?ep.extra.hex:TYPE_COLOR[ep.type]||'#666';
+function baseColor(a,b){
+  for(const t of ['SWITCH','OLT','SPLITTER']) if(a.type===t||b.type===t) return LINE_COLOR[t];
+  if(a.type==='CABLE'&&a.extra.hex) return a.extra.hex;
+  if(b.type==='CABLE'&&b.extra.hex) return b.extra.hex;
+  return '#666';
+}
+function connColor(c){const ce=cableEnd(c);return ce?ce.extra.hex:EQUIP_COLOR;}   // hilo→cara B: color del hilo · resto: color de equipos
+const TX_KIND={PON:3,SFP:-2,RJ45:0,HILO:-2};   // dBm por defecto en un origen según el tipo de puerto
+const getTx=ep=>originTx[ep.key]!==undefined?originTx[ep.key]:(TX_KIND[portInfo(ep).kind]??0);
+const fmt=v=>`${v>0?'+':''}${v.toFixed(1)}`;
+const isOriginEp=ep=>connections.some(c=>c.origin&&c.from.key===ep.key);
+/* Recorre la red desde cada puerto marcado ORIGEN y calcula la potencia que llega a cada tramo */
+function computeEnergy(){
+  const res=new Map();
+  const walk=(cur,p,seen,dom,cu)=>{
+    const c=connOf(cur);if(!c||seen.has(c.id))return;seen.add(c.id);
+    const end=c.from.key===cur.key?c.to:c.from,pw=p-LOSS.conn;
+    if(!res.has(c.id))res.set(c.id,{start:cur,end,power:pw,domain:dom,copper:cu});
+    if(end.type==='ODF')walk(mkEp(end.eqId,'ODF',end.port,end.face==='A'?'B':'A',end.extra),pw-LOSS.splice,seen,dom,cu);
+    else if(end.type==='SPLITTER'&&end.port==='IN')for(let i=1;i<=splitN(end.eqId);i++)walk(mkEp(end.eqId,'SPLITTER',`OUT ${i}`),pw-splitLoss(end.eqId),seen,dom,cu);
+  };
+  connections.filter(c=>c.origin).forEach(oc=>walk(oc.from,getTx(oc.from),new Set(),domainOfOrigin(oc),portInfo(oc.from).media==='cobre'));
+  return res;
+}
+/* cadena = todo lo alcanzable: conexiones + paso interno ODF (A↔B) + splitter (IN↔OUT) */
+function chainOf(ep){
+  const seen=new Set([ep.key]),q=[ep],add=e=>{if(!seen.has(e.key)){seen.add(e.key);q.push(e);}};
+  while(q.length){const e=q.pop(),o=otherEnd(e);if(o)add(o);
+    if(e.type==='ODF')add(mkEp(e.eqId,'ODF',e.port,e.face==='A'?'B':'A',e.extra));
+    if(e.type==='SPLITTER'){if(e.port==='IN'){for(let i=1;i<=splitN(e.eqId);i++)add(mkEp(e.eqId,'SPLITTER',`OUT ${i}`));}else add(mkEp(e.eqId,'SPLITTER','IN'));}}
+  return seen;
+}
+const originsIn=(...eps)=>{const out=new Map();eps.forEach(ep=>{const s=chainOf(ep);connections.filter(c=>c.origin&&s.has(c.from.key)).forEach(c=>out.set(c.from.key,c.from));});return[...out.values()];};
+/* =====================================================================
+   NÚCLEO DE CONEXIONES  (sin DOM · portable a Map OLT)
+   1) PORT_TABLE: rol y dominio de cada puerto  → agregar un equipo/marca = agregar filas aquí
+   2) validateStep(a,b,opt): ÚNICO validador (hover, clic, arrastre, edición, carga de proyecto)
+   3) dominios: ACCESO (PON) y ENLACE (datos). Una cadena hereda el dominio de su origen.
+   ===================================================================== */
+const PORT_TABLE=[
+ {type:'OLT',   match:/^PON/,  kind:'PON',  domain:'ACCESO',active:true, origin:true, media:'fibra'},
+ {type:'OLT',   match:/^SFP/,  kind:'SFP',  domain:'ENLACE',active:true, origin:true, media:'fibra'},
+ {type:'OLT',   match:/^RJ45/, kind:'RJ45', domain:'ENLACE',active:true, origin:true, media:'cobre'},
+ {type:'SWITCH',match:/^SFP/,  kind:'SFP',  domain:'ENLACE',active:true, origin:true, media:'fibra'},
+ {type:'SWITCH',match:/^RJ45/, kind:'RJ45', domain:'ENLACE',active:true, origin:true, media:'cobre'},
+ {type:'CABLE', match:/./,     kind:'HILO', domain:null,    active:false,origin:true, needsSignal:true},
+ {type:'ODF',   match:/./,     kind:'ODF',  domain:null,    active:false,origin:false},
+ {type:'SPLITTER',match:/./,   kind:'SPLITTER',domain:null, active:false,origin:false}];
+const portInfo=ep=>PORT_TABLE.find(r=>r.type===ep.type&&r.match.test(String(ep.port)))||{kind:'?',domain:null,active:false,origin:false};
+/* umbrales de potencia por dominio (dBm): fuera de rango = chip rojo */
+const DOMAIN={ACCESO:{label:'ACCESO · PON',min:-28,max:null},ENLACE:{label:'ENLACE · datos',min:-14.4,max:0.5}};
+const DOMAIN_MSG='No se pueden mezclar señales de ACCESO (PON) con ENLACE de datos. Una PON nunca va directo al switch/core: el core solo recibe señal de los SFP de la OLT.';
+const bad=msg=>({ok:false,msg});
+function powerState(en){
+  if(!en||en.copper)return'ok';const t=DOMAIN[en.domain]||DOMAIN.ACCESO;
+  if(t.min!=null&&en.power<t.min)return'low';if(t.max!=null&&en.power>t.max)return'high';return'ok';
+}
+function originConnOf(ep){const s=chainOf(ep);return connections.find(c=>c.origin&&s.has(c.from.key))||null;}
+const domainOfOrigin=oc=>portInfo(oc.from).domain||oc.signal||null;
+const chainDomain=ep=>{const oc=originConnOf(ep);return oc?domainOfOrigin(oc):null;};
+function activeDomains(ep){const out=new Set();chainOf(ep).forEach(k=>{const e=EP.get(k);if(e){const pi=portInfo(e);if(pi.active&&pi.domain)out.add(pi.domain);}});return out;}
+function canBeOrigin(ep,signal){
+  const pi=portInfo(ep);
+  if(!pi.origin)return bad('El origen debe ser una PON/SFP/RJ45 de OLT o switch, o un hilo de cable. El ODF y el splitter solo transmiten la señal.');
+  if(isOriginEp(ep))return{ok:true};
+  const o=originsIn(ep);if(o.length)return bad(`Ya existe un origen en esta cadena (${epLabel(o[0])}). Solo un origen inicia la potencia.`);
+  if(pi.needsSignal&&!signal)return bad('Indica qué tipo de señal entra por este hilo (acceso o enlace).');
+  const d=pi.domain||signal,act=activeDomains(ep);
+  if(d&&[...act].some(x=>x!==d))return bad(DOMAIN_MSG);
+  return{ok:true};
+}
+const cableEnd=c=>c.from.type==='CABLE'?c.from:c.to.type==='CABLE'?c.to:null;
+const odfPortColor=(id,n)=>{const c=connOf(mkEp(id,'ODF',n,'B'))||connOf(mkEp(id,'ODF',n,'A'));return c?connColor(c):null};
+const role=ep=>ep.type==='CABLE'?'cable':ep.type==='ODF'?(ep.face==='B'?'odfB':'odfA'):'dev';
+const rank=ep=>({cable:1,dev:2,odfB:3,odfA:4})[role(ep)];
+function validateStep(a,b,opt={}){
+  const asOrigin=!!opt.asOrigin;
+  if(a.key===b.key)return bad('Origen y destino son el mismo puerto.');
+  const pa=portInfo(a),pb=portInfo(b);
+  const pair=[role(a),role(b)].sort().join('+');
+  const okPair=['cable+odfB','dev+odfA','cable+dev'].includes(pair)||(pair==='dev+dev'&&String(a.eqId)!==String(b.eqId));
+  if(!okPair)return bad(`Combinación no válida: ${epLabel(a)} ↔ ${epLabel(b)}. Usa cable → ODF cara B y ODF cara A → equipo.`);
+  {const ka=pa.kind,kb=pb.kind;
+   if((ka==='RJ45'||kb==='RJ45')&&ka!==kb)return bad('Un puerto RJ45 (cobre) solo se conecta con otro RJ45. No se puede unir con un SFP, un ODF, un hilo ni un splitter.');}
+  for(const ep of[a,b]){const o=otherEnd(ep);if(o)return bad(`${epLabel(ep)} ya está conectado con ${epLabel(o)}. Desconéctalo primero (clic sobre la línea).`);}
+  const spl=[a,b].filter(e=>e.type==='SPLITTER');
+  if(spl.length){
+    const okOther=ep=>ep.type==='SPLITTER'||ep.type==='ODF'||ep.type==='CABLE'||(ep.type==='OLT'&&portInfo(ep).kind==='PON');
+    if(!okOther(a)||!okOther(b))return bad('Un splitter solo se conecta a puertos PON, a otros splitters y a ODF (o a un cable de calle con señal PON). No se conecta a switches, routers ni a puertos SFP/RJ45.');
+    const isIn=ep=>ep.type==='SPLITTER'&&ep.port==='IN';
+    for(const x of spl){const y=x===a?b:a;
+      if((y.type==='CABLE'||portInfo(y).kind==='PON')&&!isIn(x))return bad('La PON o el cable de calle entran por la entrada IN del splitter.');
+      if(portInfo(y).kind==='PON'){const q=eqOf(x);if(q&&q.clase==='AC')return bad('Una PON solo puede conectarse a un splitter AF (primario), no a un AC (cliente).');}}
+    if(spl.length===2&&isIn(a)===isIn(b))return bad('Entre splitters conecta una salida OUT con una entrada IN.');
+  }
+  if(pb.kind==='PON'){   // la PON solo puede ser destino en "vista de subida": traza que nace en un hilo de ACCESO
+    const oc=originConnOf(a);
+    const upstream=asOrigin?(pa.kind==='HILO'&&opt.signal==='ACCESO'):!!(oc&&portInfo(oc.from).kind==='HILO'&&chainDomain(a)==='ACCESO');
+    if(!upstream)return bad('Una PON es origen. Solo puede recibir una conexión en vista de subida: la trazabilidad debe nacer en un hilo marcado como señal de ACCESO.');
+  }
+  if(pa.kind==='PON'&&!asOrigin)return bad('Una PON siempre es origen: inicia la edición desde ella.');
+  if(asOrigin){const co=canBeOrigin(a,opt.signal);if(!co.ok)return co;}
+  if(chainOf(a).has(b.key))return bad('Esta conexión cerraría un lazo dentro de la misma cadena.');
+  const doms=new Set([...activeDomains(a),...activeDomains(b)]);
+  const dA=asOrigin?(pa.domain||opt.signal||null):chainDomain(a),dB=chainDomain(b);
+  if(dA)doms.add(dA);if(dB)doms.add(dB);
+  if(doms.size>1)return bad(DOMAIN_MSG);
+  if(doms.has('ENLACE')&&[a,b].some(ep=>[...chainOf(ep)].some(k=>{const e=EP.get(k);return e&&e.type==='SPLITTER';})))return bad('Los splitters solo transportan señal PON (ACCESO). No se pueden usar en una cadena de enlace de datos.');
+  if(asOrigin){const ex=originsIn(a,b);if(ex.length)return bad(`Ya existe un origen en esta cadena (${epLabel(ex[0])}). Solo un origen inicia la potencia.`);}
+  else if(originsIn(a,b).length>1)return bad('Esta conexión uniría dos orígenes distintos. Solo un origen inicia la potencia.');
+  return{ok:true};
+}
+const canConnect=(a,b,asOrigin=false)=>validateStep(a,b,{asOrigin});
+function tryConnect(a,b,asOrigin=false,opt={}){
+  if(!asOrigin&&!opt.keepDir){   // una PON siempre es origen, aunque el usuario la toque en segundo lugar
+    if(portInfo(b).kind==='PON'&&portInfo(a).kind!=='PON'){const t=a;a=b;b=t;asOrigin=true;}
+    else if(portInfo(a).kind==='PON')asOrigin=true;
+  }
+  const r=validateStep(a,b,{asOrigin,signal:opt.signal});if(!r.ok)return r;
+  let from=a,to=b;if(!opt.keepDir&&!asOrigin&&rank(a)>rank(b)){from=b;to=a;}
+  const c={id:++connSeq,from,to,origin:asOrigin};
+  if(asOrigin&&portInfo(from).needsSignal)c.signal=opt.signal||null;
+  connections.push(c);
+  if(!opt.silent)logTrace('add',c);
+  return{ok:true,conn:c,msg:`Conectado: ${epLabel(from)} → ${epLabel(to)}${asOrigin?` · origen TX ${fmt(getTx(from))} dBm`:''}`};
+}
+function logTrace(kind,c){traceLog.push({n:++traceN,kind,ts:new Date(),connId:c.id,origin:!!c.origin,from:epLabel(c.from),to:epLabel(c.to),fromKey:c.from.key,fromType:c.from.type,toType:c.to.type,tx:c.origin?getTx(c.from):null});}
+const traceLog=[];let traceN=0;
+const removeConnection=id=>{
+  const c=connections.find(x=>x.id===id);if(c)logTrace('del',c);
+  connections=connections.filter(x=>x.id!==id);
+  traces.forEach(t=>{t.connIds=t.connIds.filter(x=>x!==id);if(c)[c.from,c.to].forEach(e=>{if(e.type==='CABLE')delete t.ext[e.key];});});
+  for(let i=traces.length-1;i>=0;i--)if(!traces[i].connIds.length&&!(session&&session.trace===traces[i]))traces.splice(i,1);
+};
+
+/* ---------- UI común ---------- */
+function toast(msg,kind='ok'){const t=$('toast');t.textContent=msg;t.className=kind==='err'?'err':'';clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.add('hidden'),3800);}
+let lastMenu={id:0,x:0,y:0};
+function setOrigin(id,which){
+  const c=connections.find(k=>k.id===id);if(!c)return;
+  const cand=which==='to'?c.to:c.from,pi=portInfo(cand);
+  const go=sig=>{
+    const ck=canBeOrigin(cand,sig);if(!ck.ok){toast(ck.msg,'err');return;}
+    if(which==='to'){const t=c.from;c.from=c.to;c.to=t;}
+    c.origin=true;if(sig)c.signal=sig;hideLineMenu();toast(`Origen marcado: ${epLabel(c.from)} · TX ${fmt(getTx(c.from))} dBm`);updateUI();
+  };
+  if(pi.needsSignal&&!pi.origin===false&&!isOriginEp(cand))askSignal(cand,(sg,tx)=>{originTx[cand.key]=tx;go(sg);});else go(null);
+}
+function clearOrigin(id){const c=connections.find(k=>k.id===id);if(c){c.origin=false;hideLineMenu();toast('Origen quitado');updateUI();}}
+function mkBtn(txt,fn,cls=''){const b=document.createElement('button');b.className='btn sm '+cls;b.textContent=txt;b.onclick=fn;return b;}
+function showLineMenu(id,x,y){
+  const c=connections.find(k=>k.id===id);if(!c)return;lastMenu={id,x,y};
+  const en=energy.get(id);
+  $('lineMenuTxt').innerHTML=`${epLabel(c.from)}<br><span style="color:#888">↓</span><br>${epLabel(c.to)}`+
+    (en?`<div style="margin-top:6px;font-weight:700;color:#0a74ff">${en.copper?'Enlace de datos (cobre)':`Potencia que llega al destino: ${fmt(en.power)} dBm`} · ${(DOMAIN[en.domain]||{label:''}).label}</div>`:`<div style="margin-top:6px;color:#888">Sin origen aguas arriba: sin potencia</div>`);
+  const ex=$('lineMenuExtra');ex.innerHTML='';
+  if(c.origin){
+    const l=document.createElement('label');l.textContent='TX DEL ORIGEN (dBm, + o −)';
+    const inp=document.createElement('input');inp.type='number';inp.step='0.1';inp.value=getTx(c.from);
+    inp.onchange=()=>{const v=parseFloat(inp.value);if(!isNaN(v)){originTx[c.from.key]=v;updateUI();showLineMenu(id,lastMenu.x,lastMenu.y);}};
+    ex.append(l,inp,mkBtn('QUITAR ORIGEN',()=>clearOrigin(id)));
+  }else{
+    const l=document.createElement('label');l.textContent='MARCAR ORIGEN EN…';
+    ex.append(l,mkBtn(epLabel(c.from),()=>setOrigin(id,'from')),mkBtn(epLabel(c.to),()=>setOrigin(id,'to')));
+  }
+  $('lineMenuDel').onclick=()=>{removeConnection(id);hideLineMenu();toast('Conexión eliminada');updateUI();};
+  const m=$('lineMenu');m.classList.remove('hidden');
+  m.style.left=Math.min(x+8,innerWidth-m.offsetWidth-8)+'px';m.style.top=Math.min(y+8,innerHeight-m.offsetHeight-8)+'px';
+}
+const hideLineMenu=()=>$('lineMenu').classList.add('hidden');
+const selCls=ep=>`${tl(ep)} ${isOriginEp(ep)?'is-origin':''} ${selectedEndpoint&&selectedEndpoint.key===ep.key?'sel':''} ${(forcedOrigin&&forcedOrigin.key===ep.key)||(session&&session.origin.key===ep.key&&!connOf(ep))?'org':''} ${connOf(ep)?'linked':''}`;
+const lcStyle=ep=>{const c=connOf(ep);return c?`--lc:${connColor(c)};`:''};
+
+/* ---------- línea ortogonal con esquinas redondeadas, borde negro ---------- */
+function roundedPath(pts,r=6){
+  const p=[pts[0]];for(let i=1;i<pts.length;i++)if(Math.hypot(pts[i].x-p[p.length-1].x,pts[i].y-p[p.length-1].y)>.5)p.push(pts[i]);
+  if(p.length<3)return`M ${p[0].x} ${p[0].y} L ${p[p.length-1].x} ${p[p.length-1].y}`;
+  let d=`M ${p[0].x} ${p[0].y}`;
+  for(let i=1;i<p.length-1;i++){
+    const a=p[i-1],b=p[i],c=p[i+1],l1=Math.hypot(b.x-a.x,b.y-a.y),l2=Math.hypot(c.x-b.x,c.y-b.y),rr=Math.min(r,l1/2,l2/2);
+    d+=` L ${b.x+(a.x-b.x)/l1*rr} ${b.y+(a.y-b.y)/l1*rr} Q ${b.x} ${b.y} ${b.x+(c.x-b.x)/l2*rr} ${b.y+(c.y-b.y)/l2*rr}`;
+  }
+  const z=p[p.length-1];return d+` L ${z.x} ${z.y}`;
+}
+const NS='http://www.w3.org/2000/svg';
+const svgEl=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+function midPoint(pts){   // centro del tramo recto más largo (no cae en una esquina)
+  let best=0,bi=1;for(let i=1;i<pts.length;i++){const l=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);if(l>best){best=l;bi=i;}}
+  return{x:(pts[bi-1].x+pts[bi].x)/2,y:(pts[bi-1].y+pts[bi].y)/2};
+}
+const CHIPS=[];
+const flushChips=svg=>{CHIPS.splice(0).forEach(ch=>svg.appendChild(ch));};
+/* pts siempre en el sentido ORIGEN → DESTINO cuando hay potencia, así los paquetes avanzan hacia el destino */
+function addConnGroup(svg,pts,c,r,glowId,startKey){
+  const en=energy.get(c.id);let sk=startKey||c.from.key;      // sk = extremo donde EMPIEZA el trazo (pts[0])
+  if(en&&sk!==en.start.key){pts=[...pts].reverse();sk=sk===c.from.key?c.to.key:c.from.key;}   // el trazo siempre empieza donde entra la señal
+  const d=roundedPath(pts,r),color=connColor(c),g=svgEl('g',{class:'conn','data-id':c.id});
+  g.appendChild(svgEl('path',{d,fill:'none',stroke:'transparent','stroke-width':14,class:'hit'}));
+  if(connMeta(c).inter){g.classList.add('xc');g.appendChild(svgEl('path',{d,fill:'none',stroke:'#f59e0b','stroke-width':11,'stroke-linejoin':'round',opacity:.38,class:'xglow'}));}
+  g.appendChild(svgEl('path',{d,fill:'none',stroke:'#111','stroke-width':commOn&&en?5.4:4.6,'stroke-linejoin':'round',opacity:.9,class:'under'}));
+  g.appendChild(svgEl('path',{d,fill:'none',stroke:color,'stroke-width':commOn&&en?3.6:2.6,'stroke-linejoin':'round',class:'core'}));
+  if(torchLock&&torchLock.ids.has(c.id)){
+    g.classList.add('lit');
+    const it=torchLock.items.find(x=>x.cid===c.id);
+    g.insertBefore(svgEl('path',{d,fill:'none',stroke:'#f59e0b','stroke-width':11,'stroke-linejoin':'round',opacity:.4,class:'tg'}),g.children[1]);
+    g.appendChild(svgEl('path',{d,fill:'none',stroke:'#fff','stroke-width':3.8,'stroke-linecap':'round','stroke-linejoin':'round',class:'tl','data-cid':c.id,'data-rev':it&&it.src!==sk?'1':'0','stroke-dasharray':`${PULSE_LEN} 99999`,style:'visibility:hidden'}));
+  }
+  if(commOn&&!en)g.style.opacity='.28';                       // "Ver comunicación": lo que no tiene señal se atenúa
+  if(commOn&&en)g.appendChild(svgEl('path',{d,fill:'none',stroke:'#fff','stroke-width':3.8,'stroke-linecap':'round','stroke-linejoin':'round',class:'sw','data-cid':c.id,'data-rev':sk!==en.start.key?'1':'0','stroke-dasharray':`${PULSE_LEN} 99999`,style:'visibility:hidden'}));
+  [pts[0],pts[pts.length-1]].forEach(p=>g.appendChild(svgEl('circle',{cx:p.x,cy:p.y,r:3.6,fill:color,stroke:'#111','stroke-width':1.2})));
+  if(en){
+    const m=midPoint(pts),txt=en.copper?'ETH':`${fmt(en.power)} dBm`,w=txt.length*5.4+10,bad=powerState(en)!=='ok';
+    const ch=svgEl('g',{class:'chip'+(bad?' bad':'')});
+    ch.appendChild(svgEl('rect',{x:m.x-w/2,y:m.y-8,width:w,height:16}));
+    const t=svgEl('text',{x:m.x,y:m.y+3.2,'text-anchor':'middle'});t.textContent=txt;ch.appendChild(t);CHIPS.push(ch);
+  }
+  svg.appendChild(g);
+}
+const clearSvg=svg=>Array.from(svg.children).forEach(c=>{if(c.tagName!=='defs'&&c.id!=='liveLine')c.remove();});
+const isFast=c=>c.from.type==='SWITCH'||c.to.type==='SWITCH';
+const lineR=c=>isFast(c)?8:(energy.has(c.id)&&!cableEnd(c)?16:36);
+
+/* ---------- eventos globales ---------- */
+function handleEndpointClick(ep,isRight,ev){
+  if(isRight)return rightClickEndpoint(ep);
+  if(session)return sessionClick(ep,ev);
+  const c=connOf(ep);if(c)return showLineMenu(c.id,ev.clientX,ev.clientY);
+  rightClickEndpoint(ep);   // todo clic parte de una trazabilidad: el primer punto debe ser un origen
+}
+document.addEventListener('click',e=>{
+  const xt=e.target.closest&&e.target.closest('.xtag');
+  if(xt){if(xt.dataset.cab){currentCabId=xt.dataset.cab;}if(xt.dataset.cable){const k=cableById(xt.dataset.cable);if(k){currentCabId=k.cabId;currentCableId=k.id;}}updateUI();return;}
+  const g=e.target.closest&&e.target.closest('.conn');
+  if(g&&(currentView==='rack'||torch.dir))return;      // en el Rack las conexiones no se manipulan · con la linterna activa tampoco
+  if(g){showLineMenu(+g.getAttribute('data-id'),e.clientX,e.clientY);return;}
+  if(e.target.closest('#lineMenu')||e.target.closest('.dport'))return;
+  hideLineMenu();
+  const el=e.target.closest('[data-ctx="rack"][data-ep]');if(el&&!el.closest('#viewRack,#leftPanel'))handleEndpointClick(EP.get(el.dataset.ep),false,e);
+});
+document.addEventListener('contextmenu',e=>{
+  const el=e.target.closest('[data-ep]');
+  if(el&&el.closest('#viewRack,#leftPanel')){e.preventDefault();return;}
+  if(el&&EP.get(el.dataset.ep)){e.preventDefault();rightClickEndpoint(EP.get(el.dataset.ep));}
+});
+document.addEventListener('keydown',e=>{
+  const typing=/INPUT|TEXTAREA|SELECT|BUTTON/.test((e.target&&e.target.tagName)||'');
+  if(e.key==='Escape'){
+    if(torch.dir){setTorch(torch.dir);return;}
+    if($('dynModal')){closeDynModal();return;}
+    if($('sigModal')){closeSignal();return;}
+    if(session){if(!session.steps.length)cancelSession();else toast('Hay tramos sin guardar: pulsa TERMINAR para conservarlos o CANCELAR para descartarlos.','err');return;}
+    selectedEndpoint=null;forcedOrigin=null;hideLineMenu();cancelLink();updateUI();
+  }else if(session&&e.key==='Enter'&&!typing&&!$('sigModal')){finishSession();}
+  else if(session&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!typing){e.preventDefault();undoStep();}
+});
+
+/* =================== RACK =================== */
+function cableDestinations(k){
+  const m=new Map();
+  connections.forEach(c=>{[[c.from,c.to],[c.to,c.from]].forEach(([a,b])=>{
+    if(a.type==='CABLE'&&String(a.eqId)===String(k.id)&&b.type!=='CABLE'){const e=eqOf(b);if(!e)return;const nm=e.cabId===k.cabId?e.nombre:`${cabNameOf(e.cabId)} › ${e.nombre}`;m.set(nm,(m.get(nm)||0)+1);}});});
+  return[...m.entries()].map(([n,c])=>`<span class="dchip">${escapeMatrixText(n)} × ${c}</span>`).join('');
+}
+/* chip [↗ Gabinete 2 ➔ ODF-02:P4] con el destino de cada hilo conectado; clic = saltar a ese gabinete */
+function hiloChip(ep){
+  const c=connOf(ep);if(!c)return '';
+  const peer=c.from.key===ep.key?c.to:c.from;if(peer.type==='CABLE')return '';
+  const eq=eqOf(peer);if(!eq)return '';
+  const own=cableById(ep.eqId),inter=own&&own.cabId!==eq.cabId;
+  const port=peer.type==='ODF'?`P${peer.port}${peer.face||''}`:String(peer.port).replace(/\s+/g,'');
+  const short=n=>{const m=/^gabinete\s*(\d+)$/i.exec(n);return m?'Gab'+m[1]:n;};
+  const txt=`${inter?'↗ '+short(cabNameOf(eq.cabId))+' ➔ ':'➔ '}${eq.nombre.replace(/\s*\(.*\)$/,'')}:${port}`;
+  return `<em class="hchip${inter?' x':''}" title="${escapeMatrixText(cabNameOf(eq.cabId)+' › '+eq.nombre+' · '+peer.port)}" onclick="event.stopPropagation();goCab('${eq.cabId}')">${escapeMatrixText(txt)}</em>`;
+}
+const goCab=id=>{currentCabId=id;updateUI();};
+function renderCables(){
+  const cab=cabById(currentCabId),list=$('cablesList'),prev=list.scrollTop,esc=escapeMatrixText;
+  const mine=cables.filter(c=>c.cabId===currentCabId);
+  if(!mine.find(c=>c.id===currentCableId))currentCableId=mine[0]?mine[0].id:null;
+  $('cablesHead').innerHTML=`<span>Cables · ${esc(cab.nombre)}</span><button class="btn sm" onclick="openCableModal()">+ CABLE</button>`;
+  if(!mine.length){list.innerHTML=`<div class="cable"><small>Este gabinete no tiene cables de entrada. Crea uno con + CABLE, o mueve un equipo que esté conectado a un cable.</small></div>`;return;}
+  const cur=cableById(currentCableId);
+  const tabs=mine.map(c=>`<button class="ctab ${c.id===currentCableId?'on':''}${torchLock&&torchLock.cableIds.has(String(c.id))?' tlit':''}" onclick="selectCable('${c.id}')">${esc(c.nombre)}<i>${cableUsedCount(c)}/${c.hilos}</i></button>`).join('');
+  const rows=Array.from({length:cur.hilos},(_,i)=>{const h=hiloInfo(cur,i),ep=hiloEp(cur,i);
+    return `<div class="hl ${selCls(ep)}" data-ep="${ep.key}" data-ctx="rack" style="${lcStyle(ep)}"><span class="sw" style="background:${h.hex}"></span><span class="hlt"><span>Hilo ${i+1} · ${h.nombre}</span>${hiloChip(ep)}</span><span class="pp"></span></div>`;}).join('');
+  list.innerHTML=`<div class="ctabs">${tabs}</div><div class="cable"><b>${esc(cur.nombre)}</b><small>${esc(cur.sub||'Cable de entrada')} · ${cur.hilos} hilos</small>
+    <div class="cdest"><small>VA A:</small> ${cableDestinations(cur)||'<em>sin conexiones todavía</em>'}</div>
+    <div class="cact"><button onclick="moveCable('${cur.id}')">⇄ MOVER</button><button onclick="deleteCable('${cur.id}')">✕ ELIMINAR</button></div>
+    <div class="hilos">${rows}</div></div>`;
+  list.scrollTop=prev;
+}
+const selectCable=id=>{currentCableId=id;renderCables();redraw();};
+function selectCab(id){currentCabId=id;updateUI();}
+function renderCabBar(){
+  const esc=escapeMatrixText;
+  $('cabBar').innerHTML=`<div class="cabtabs">${cabinets.map((c,i)=>{const u=cabUsed(c.id);return `<button class="cabtab ${c.id===currentCabId?'on':''}${torchLock&&torchLock.cabIds.has(c.id)?' tlit':''}" style="--cc:${CAB_COLORS[i%CAB_COLORS.length]}" onclick="selectCab('${c.id}')"><b>${esc(c.nombre)}</b><i class="${u>c.u?'over':''}">${u}/${c.u}U</i></button>`;}).join('')}</div>
+   <div class="cabact"><button class="btn sm dark" onclick="openCabModal()">+ GABINETE</button><button class="btn sm" onclick="openCabModal(currentCabId)">EDITAR</button><button class="btn sm red" onclick="deleteCabinet(currentCabId)">ELIMINAR</button></div>`;
+}
+function rport(ep){return `<span class="pt ${selCls(ep)}" data-ep="${ep.key}" data-ctx="rack" style="--pb:${PORT_BG[ep.type]};${lcStyle(ep)}" title="${ep.port}"></span>`;}
+function renderRackView(){
+  const cab=cabById(currentCabId)||cabinets[0],esc=escapeMatrixText;
+  let used=0,html='';
+  eqsOf(cab.id).forEach(item=>{
+    const top=cab.u-used,lo=top-item.tamano+1,over=lo<1;
+    const lbl=over?'EXCEDE':(item.tamano>1?`${top}–${lo}U`:`${top}U`);used+=item.tamano;
+    html+=chassis(item,lbl,over);
+  });
+  if(used<cab.u)html+=`<div class="free">${cab.u-used}U LIBRES</div>`;
+  $('rackUnitsList').innerHTML=html;
+  $('rackHead').innerHTML=`<b><span class="led"></span>${esc(cab.nombre)} · ${esc(cab.tipo)} · ${cab.u}U</b><small${used>cab.u?' style="color:#dc2626;font-weight:800"':''}>${used}/${cab.u}U en uso${used>cab.u?` · ⚠ excede ${used-cab.u}U`:''}</small>`;
+}
+const SCR='<span class="scr tl"></span><span class="scr tr"></span><span class="scr bl"></span><span class="scr br"></span>';
+const rail=(lbl,n)=>`<div class="rail"><span class="u">${lbl}</span><div class="hs">${'<i></i>'.repeat(Math.max(1,n)*2)}</div></div>`;
+const pwBtn=item=>'';   // el lápiz de potencia vive en el Panel dinámico y la Matriz
+const eqBtns=item=>`<span class="eqact">${pwBtn(item)}<button title="Mover a otro gabinete" onclick="moveEquipment(${item.id})">⇄</button><button title="Eliminar equipo" onclick="deleteEquipment(${item.id})">✕</button></span>`;
+function chassis(item,lbl,over){
+  const H=`min-height:${item.tamano*44}px`,tag=`<span class="tag" style="background:${TYPE_COLOR[item.tipo]}">${item.tipo}</span>`;
+  if(item.tipo==='ODF')return odfChassis(item,lbl,tag,over);
+  let ports='';
+  if(item.tipo==='OLT'){for(let i=1;i<=8;i++)ports+=rport(mkEp(item.id,'OLT',`PON ${i}`));ports=`<div class="pgrp"><span>PON</span>${ports}</div>`;let up='';for(let i=1;i<=2;i++)up+=`<span class="portnum">${i}${rport(mkEp(item.id,'OLT',`SFP+ ${i}`))}</span>`;up+=`<span class="portnum">1${rport(mkEp(item.id,'OLT','RJ45 1'))}</span>`;ports+=`<div class="pgrp"><span>UPLINK</span>${up}</div>`;}
+  else if(item.tipo==='SWITCH'){let r='',sf='';for(let i=1;i<=4;i++)sf+=`<span class="portnum">${i}${rport(mkEp(item.id,'SWITCH',`SFP+ ${i}`))}</span>`;for(let i=1;i<=8;i++)r+=`<span class="portnum">${i}${rport(mkEp(item.id,'SWITCH',`RJ45 ${i}`))}</span>`;ports=`<div class="pgrp"><span>SFP+</span>${sf}</div><div class="pgrp"><span>RJ45</span>${r}</div>`;}
+  else{let o='';for(let i=1;i<=splitN(item.id);i++)o+=rport(mkEp(item.id,'SPLITTER',`OUT ${i}`));
+    ports=`<div class="pgrp"><span>IN</span>${rport(mkEp(item.id,'SPLITTER','IN'))}</div><div class="pgrp"><span>OUT</span>${o}</div>`;}
+  const handle=item.tipo==='OLT'?'<div class="handle"></div>':'';
+  return `<div class="eqp${over?' over':''}" style="${H}">${rail(lbl,item.tamano)}<div class="fp">${SCR}<div class="eb"><div style="display:flex;align-items:center">${handle}${tag}<span class="ename">${item.nombre}</span>${eqBadges(item)}${eqBtns(item)}</div><div class="well">${ports}</div></div></div>${rail('',item.tamano)}</div>`;
+}
+function odfChassis(item,lbl,tag,over){
+  let colsB='',strip='',fused=0;
+  for(let n=1;n<=12;n++){
+    const eB=mkEp(item.id,'ODF',n,'B',{name:item.nombre}),eA=mkEp(item.id,'ODF',n,'A',{name:item.nombre});
+    const o=otherEnd(eB),d=otherEnd(eA);if(o&&d)fused++;
+    const lc=odfPortColor(item.id,n);
+    const cb=o?`<div class="dot" style="background:${typeColor(o)}"></div><span>${eqOf(o)?eqOf(o).nombre.split(' ')[0]:(cableById(o.eqId)?cableById(o.eqId).nombre:'Cable')}</span><span class="m">${String(o.port).replace('Hilo ','H')}</span>`:`<span>LIBRE</span>`;
+    const ca=d?`<span>P${n}</span><span class="m">${eqOf(d)?eqOf(d).nombre.split(' ')[0]:''}</span><span class="m">${d.port}</span>`:`<span>P${n}</span><span class="m">—</span>`;
+    colsB+=`<div class="col"><div class="cell ${o?'':'free2'} ${selCls(eB)}" data-ep="${eB.key}" data-ctx="rack">${cb}</div><div class="splice"><i class="${(o||d)?'on':''}" style="${lc?`--lc:${lc}`:''}"></i></div><div class="cell ${selCls(eA)}" data-ep="${eA.key}" data-ctx="rack" style="${d?'':'color:#999'}">${ca}</div></div>`;
+    strip+=`<div class="pn"><span class="pt ${selCls(eA)}" data-ep="${eA.key}" data-ctx="rack" style="--pb:${PORT_BG.ODF};${lcStyle(eA)}"></span><span class="n">${n}</span></div>`;
+  }
+  const ex=item.faceBExpanded;
+  return `<div class="eqp${over?' over':''}" style="min-height:44px">${rail(lbl,1)}<div class="fp">${SCR}
+    <div class="odf-h">${tag}<span class="ename">${item.nombre}</span>${eqBadges(item)}${eqBtns(item)}<span class="cnt">${fused}/12 ENLAZADOS${ex?' · ▲ CARA B (cables) · ▼ CARA A (equipos)':''}</span><span class="sp"></span>
+      <button class="btn sm" onclick="toggleODFFaceB(${item.id})">${ex?'OCULTAR CARA B':'VER CARA B (CABLES)'}</button></div>
+    ${ex?`<div class="odfx"><div class="grid16">${colsB}</div></div>`:`<div class="odf-strip"><span class="lb">CARA A</span>${strip}</div>`}
+  </div>${rail('',1)}</div>`;
+}
+const toggleODFFaceB=id=>{const e=equipmentData.find(x=>x.id===id);if(e){e.faceBExpanded=!e.faceBExpanded;updateUI();}};
+
+function rackAnchor(ep){
+  const el=document.querySelector(`[data-ctx="rack"][data-ep="${ep.key}"]`);if(!el)return null;
+  const r=el.getBoundingClientRect();if(!r.width||!r.height)return null;
+  const side=ep.type==='CABLE'?'right':ep.type==='ODF'?(ep.face==='B'?'top':'bottom'):'right';
+  const box=(ep.type==='CABLE'?$('cablesList'):$('stage')).getBoundingClientRect(),cy=r.top+r.height/2;
+  if(cy<box.top||cy>box.bottom)return null;
+  return{x:side==='right'?r.right:r.left+r.width/2,y:side==='right'?cy:(side==='top'?r.top:r.bottom),side,ep};
+}
+function rackPoints(A,B,i){
+  const R=$('rackArea').getBoundingClientRect(),L=$('leftPanel').getBoundingClientRect();
+  const lx=e=>e.ep.type==='CABLE'?L.right+4+(i%6)*4:R.right+10+(i%8)*6;
+  const ly=e=>{const k=((+e.ep.port||1)-1)%8;return e.side==='top'?e.y-6-k*3:e.y+6+k*3;};
+  if(A.side==='right'&&B.side==='right'){const X=Math.max(lx(A),lx(B));return[A,{x:X,y:A.y},{x:X,y:B.y},B];}
+  if(A.side==='right'||B.side==='right'){const v=A.side==='right'?A:B,h=v===A?B:A,X=lx(v),Y=ly(h);return[v,{x:X,y:v.y},{x:X,y:Y},{x:h.x,y:Y},h];}
+  if(A.side===B.side){const Y=A.side==='top'?Math.min(ly(A),ly(B)):Math.max(ly(A),ly(B));return[A,{x:A.x,y:Y},{x:B.x,y:Y},B];}
+  const X=R.right+10+(i%8)*6;return[A,{x:A.x,y:ly(A)},{x:X,y:ly(A)},{x:X,y:ly(B)},{x:B.x,y:ly(B)},B];
+}
+function clearOverlay(){clearSvg($('cablesOverlay'));}
+const rackHas=ep=>!!document.querySelector(`#rackUnitsList [data-ep="${ep.key}"],#cablesList [data-ep="${ep.key}"]`);
+function drawRackCables(){
+  clearOverlay();if(currentView!=='rack')return;
+  const svg=$('cablesOverlay'),R=$('rackArea').getBoundingClientRect();
+  connections.forEach((c,i)=>{
+    const A=rackAnchor(c.from),B=rackAnchor(c.to);
+    if(A&&B){const rp=rackPoints(A,B,i);addConnGroup(svg,rp,c,lineR(c),'glow',(rp[0]===A?A:B).ep.key);return;}
+    const vis=A||B;if(!vis)return;
+    const other=A?c.to:c.from;if(rackHas(other))return;           // el otro extremo está en pantalla pero fuera del scroll
+    const X=R.right+10+(i%8)*6;let pts;                                // el otro extremo está en OTRO gabinete / pestaña de cable
+    if(vis.ep.type==='CABLE')pts=[vis,{x:vis.x+30,y:vis.y}];
+    else if(vis.side==='right')pts=[vis,{x:X,y:vis.y},{x:X+34,y:vis.y}];
+    else{const k=((+vis.ep.port||1)-1)%8,Y=vis.side==='top'?vis.y-6-k*3:vis.y+6+k*3;pts=[vis,{x:vis.x,y:Y},{x:X,y:Y},{x:X+34,y:Y}];}
+    addConnGroup(svg,pts,c,lineR(c),'glow',vis.ep.key);
+    const e=pts[pts.length-1],raw=(other.type==='CABLE'?'◀ ':'→ ')+epLabel(other),txt=raw.length>34?raw.slice(0,33)+'…':raw,w=txt.length*5.3+14;
+    const g=svgEl('g',{class:'xtag'});
+    if(other.type==='CABLE'){g.dataset.cable=other.eqId;}else{const eq=eqOf(other);if(eq)g.dataset.cab=eq.cabId;}
+    const dy=vis.ep.type==='CABLE'?13:0;g.appendChild(svgEl('rect',{x:e.x+4,y:e.y-8+dy,width:w,height:16}));
+    const t=svgEl('text',{x:e.x+10,y:e.y+3.6+dy});t.textContent=txt;g.appendChild(t);svg.appendChild(g);
+  });
+  flushChips(svg);buildPulse();
+}
+
+/* =================== PANEL DINÁMICO =================== */
+const dyn={scale:1,layout:{},link:null,nodeDrag:null,raf:0};
+const COLX={cable:30,odf:380,dev:780};
+function dport(ep,side){const c=connOf(ep);return `<div class="dport ${side} ${c?'linked':''}${tl(ep)} ${isOriginEp(ep)?'is-origin':''} ${(forcedOrigin&&forcedOrigin.key===ep.key)||(session&&session.origin.key===ep.key&&!connOf(ep))?'org':''}" data-ep="${ep.key}" data-ctx="dyn" data-side="${side}" style="--pc:${c?connColor(c):'#fff'}"></div>`;}
+function dnode(id,title,sub,color,body,w,cc,acts){return `<div class="dnode" data-node="${id}" style="width:${w}px;border-left:6px solid ${cc||'#000'}"><div class="dhead"><div class="dt" style="background:${color}"></div><div style="flex:1;min-width:0"><b>${title}</b><small>${sub}</small></div>${acts?`<span class="dacts">${acts}</span>`:''}</div>${body}</div>`;}
+function selectDynCab(id){dynCab=id;renderDyn();}
+function renderDyn(){
+  $('dynCabs').innerHTML=`<button class="dcab ${dynCab==='all'?'on':''}" onclick="selectDynCab('all')">Todos</button>`+cabinets.map((c,i)=>`<button class="dcab ${dynCab===c.id?'on':''}" style="--cc:${CAB_COLORS[i%CAB_COLORS.length]}" onclick="selectDynCab('${c.id}')">${escapeMatrixText(c.nombre)}</button>`).join('');
+  const world=$('dynWorld');world.querySelectorAll('.dnode').forEach(n=>n.remove());
+  let html='';
+  cables.filter(k=>dynCab==='all'||k.cabId===dynCab).forEach(k=>{
+    html+=dnode(k.id,k.nombre,`${k.sub||'Cable'} · ${k.hilos} hilos · ${cabNameOf(k.cabId)}`,TYPE_COLOR.CABLE,
+      Array.from({length:k.hilos},(_,i)=>{const h=hiloInfo(k,i),ep=hiloEp(k,i);return `<div class="drow"><span class="sw" style="background:${h.hex}"></span><span class="lbl">Hilo ${i+1} · ${h.nombre}</span>${dport(ep,'right')}</div>`;}).join(''),220,cabColorOf(k.cabId),`<button title="Mover a otro gabinete" onclick="moveCable('${k.id}')">⇄</button><button title="Eliminar cable" onclick="deleteCable('${k.id}')">✕</button>`);
+  });
+  equipmentData.filter(e=>dynCab==='all'||e.cabId===dynCab).forEach(eq=>{
+    let body='',sub=`${eq.tipo}${eq.tipo==='SPLITTER'?' '+eq.clase+' 1:'+eq.ratio+' · '+splitLoss(eq.id).toFixed(1)+' dB':''} · ${eq.tamano}U · ${cabNameOf(eq.cabId)} · ${eqMeta(eq)}`;
+    if(eq.tipo==='ODF'){
+      body=`<div class="dcols"><span>◀ CARA B · CABLES</span><span>CARA A · EQUIPOS ▶</span></div>`;let f=0;
+      for(let n=1;n<=12;n++){const eB=mkEp(eq.id,'ODF',n,'B',{name:eq.nombre}),eA=mkEp(eq.id,'ODF',n,'A',{name:eq.nombre});const both=otherEnd(eB)&&otherEnd(eA);if(both)f++;
+        body+=`<div class="drow">${dport(eB,'left')}<span class="lbl c">P${n}${both?' ●':''}</span>${dport(eA,'right')}</div>`;}
+      sub=`ODF · ${f}/12 enlazados`;
+    }else if(eq.tipo==='OLT'){for(let i=1;i<=8;i++)body+=`<div class="drow">${dport(mkEp(eq.id,'OLT',`PON ${i}`),'left')}<span class="lbl">PON ${i}</span></div>`;for(let i=1;i<=2;i++)body+=`<div class="drow">${dport(mkEp(eq.id,'OLT',`SFP+ ${i}`),'left')}<span class="lbl">SFP+ ${i} · uplink</span></div>`;body+=`<div class="drow">${dport(mkEp(eq.id,'OLT','RJ45 1'),'left')}<span class="lbl">RJ45 1 · datos</span></div>`;}
+    else if(eq.tipo==='SWITCH'){for(let i=1;i<=4;i++)body+=`<div class="drow">${dport(mkEp(eq.id,'SWITCH',`SFP+ ${i}`),'left')}<span class="lbl"><b class="numtag">${i}</b> SFP+ ${i}</span></div>`;for(let i=1;i<=8;i++)body+=`<div class="drow">${dport(mkEp(eq.id,'SWITCH',`RJ45 ${i}`),'left')}<span class="lbl"><b class="numtag">${i}</b> RJ45 ${i}</span></div>`;}
+    else{for(let i=1;i<=splitN(eq.id);i++)body+=`<div class="drow">${i===1?dport(mkEp(eq.id,'SPLITTER','IN'),'left'):''}<span class="lbl">${i===1?'IN':''}</span><span class="lbl r">OUT ${i}</span>${dport(mkEp(eq.id,'SPLITTER',`OUT ${i}`),'right')}</div>`;}
+    html+=dnode(eq.id,eq.nombre,sub,TYPE_COLOR[eq.tipo],body,eq.tipo==='ODF'?250:200,cabColorOf(eq.cabId),eqActions(eq));
+  });
+  world.insertAdjacentHTML('beforeend',html);
+  const nodes=[...world.querySelectorAll('.dnode')];
+  nodes.forEach(n=>{
+    const id=n.dataset.node;
+    if(!dyn.layout[id]){const eq=equipmentData.find(e=>String(e.id)===id),col=cableById(id)?'cable':eq&&eq.tipo==='ODF'?'odf':'dev';
+      let y=24;nodes.forEach(m=>{const l=dyn.layout[m.dataset.node];if(l&&Math.abs(l.x-COLX[col])<40)y=Math.max(y,l.y+m.offsetHeight+26);});dyn.layout[id]={x:COLX[col],y};}
+    n.style.left=dyn.layout[id].x+'px';n.style.top=dyn.layout[id].y+'px';
+  });
+  applyZoom();drawDyn();
+}
+const dynAutoLayout=()=>{dyn.layout={};renderDyn();};
+function applyZoom(){
+  const w=$('dynWorld');let W=1200,H=700;
+  w.querySelectorAll('.dnode').forEach(n=>{W=Math.max(W,n.offsetLeft+n.offsetWidth+140);H=Math.max(H,n.offsetTop+n.offsetHeight+120);});
+  W+=520;H+=360;   // margen extra para poder desplazarse más allá de los equipos
+  w.style.width=W+'px';w.style.height=H+'px';w.style.transform=`scale(${dyn.scale})`;
+  $('dynSizer').style.width=W*dyn.scale+'px';$('dynSizer').style.height=H*dyn.scale+'px';$('zoomLbl').textContent=Math.round(dyn.scale*100)+'%';
+}
+/* ---- persistencia de la vista (zoom + posición) ---- */
+const dynView={l:0,t:0,loaded:false};
+function saveDynView(){
+  const sc=$('dynScroll');if(!sc||currentView!=='dyn')return;
+  dynView.l=sc.scrollLeft;dynView.t=sc.scrollTop;
+  try{localStorage.setItem('popDynView',JSON.stringify({scale:dyn.scale,l:dynView.l,t:dynView.t}));}catch(e){}
+}
+function restoreDynView(){
+  if(!dynView.loaded){dynView.loaded=true;try{const v=JSON.parse(localStorage.getItem('popDynView')||'null');if(v&&v.scale){dyn.scale=Math.min(2.5,Math.max(.25,v.scale));dynView.l=v.l||0;dynView.t=v.t||0;applyZoom();}}catch(e){}}
+  const sc=$('dynScroll'),go=()=>{sc.scrollLeft=dynView.l;sc.scrollTop=dynView.t;};
+  go();requestAnimationFrame(()=>{go();requestAnimationFrame(go);});
+}
+$('dynScroll').addEventListener('scroll',()=>{if(currentView==='dyn'){const sc=$('dynScroll');dynView.l=sc.scrollLeft;dynView.t=sc.scrollTop;}});
+/* ---- paneo: arrastrar el fondo (o botón central) ---- */
+let pan=null;
+$('dynScroll').addEventListener('mousedown',e=>{
+  const bg=!e.target.closest('.dnode,.conn,.dport,.xtag,.dhead,button');
+  if(!((e.button===0&&bg)||e.button===1))return;
+  if(e.button===1)e.preventDefault();
+  const sc=$('dynScroll');pan={x:e.clientX,y:e.clientY,l:sc.scrollLeft,t:sc.scrollTop};document.body.classList.add('panning');
+});
+document.addEventListener('mousemove',e=>{if(!pan)return;const sc=$('dynScroll');sc.scrollLeft=pan.l-(e.clientX-pan.x);sc.scrollTop=pan.t-(e.clientY-pan.y);});
+document.addEventListener('mouseup',()=>{if(pan){pan=null;document.body.classList.remove('panning');saveDynView();}});
+window.addEventListener('beforeunload',saveDynView);
+const ZMIN=.25,ZMAX=2.5;
+const dynZoom=d=>{dyn.scale=Math.min(ZMAX,Math.max(ZMIN,+(dyn.scale+d).toFixed(2)));applyZoom();drawDyn();saveDynView();};
+$('dynScroll').addEventListener('wheel',e=>{
+  if(currentView!=='dyn')return;e.preventDefault();
+  const sc=$('dynScroll'),r=sc.getBoundingClientRect(),old=dyn.scale,nw=Math.min(ZMAX,Math.max(ZMIN,+(old*(e.deltaY<0?1.1:1/1.1)).toFixed(3)));
+  if(nw===old)return;
+  const wx=(sc.scrollLeft+e.clientX-r.left)/old,wy=(sc.scrollTop+e.clientY-r.top)/old;
+  dyn.scale=nw;applyZoom();
+  sc.scrollLeft=wx*nw-(e.clientX-r.left);sc.scrollTop=wy*nw-(e.clientY-r.top);
+  drawDyn();saveDynView();
+},{passive:false});
+function portCenter(el){const r=el.getBoundingClientRect(),w=$('dynWorld').getBoundingClientRect();return{x:(r.left+r.width/2-w.left)/dyn.scale,y:(r.top+r.height/2-w.top)/dyn.scale};}
+function routeDyn(p1,s1,p2,s2,i){
+  const d=26,dir=s=>s==='right'?1:-1,e1=p1.x+dir(s1)*d,e2=p2.x+dir(s2)*d;
+  if(s1!==s2&&((s1==='right'&&e1<=e2)||(s1==='left'&&e2<=e1))){const mx=(e1+e2)/2+((i%5)-2)*5;return[p1,{x:mx,y:p1.y},{x:mx,y:p2.y},p2];}
+  if(s1===s2){const X=s1==='right'?Math.max(e1,e2):Math.min(e1,e2);return[p1,{x:X,y:p1.y},{x:X,y:p2.y},p2];}
+  const ym=(p1.y+p2.y)/2;return[p1,{x:e1,y:p1.y},{x:e1,y:ym},{x:e2,y:ym},{x:e2,y:p2.y},p2];
+}
+function drawDyn(){
+  const svg=$('dynSvg');clearSvg(svg);if(currentView!=='dyn')return;
+  connections.forEach((c,i)=>{
+    const a=document.querySelector(`[data-ctx="dyn"][data-ep="${c.from.key}"]`),b=document.querySelector(`[data-ctx="dyn"][data-ep="${c.to.key}"]`);if(!a||!b)return;
+    const p1=portCenter(a),p2=portCenter(b);addConnGroup(svg,routeDyn(p1,a.dataset.side,p2,b.dataset.side,i),c,lineR(c),'glow2');
+  });
+  flushChips(svg);buildPulse();}
+
+/* ---------- LINTERNA (izq/der) y TRAZABILIDAD AL PASAR EL CURSOR · Panel dinámico ---------- */
+const torch={dir:null};                 // dir = linterna armada (solo cambia el cursor) · torchLock = trazabilidad que se queda iluminada
+let torchLock=null;                      // {label,origin,roots:Set,items,ids,eps,eqIds,cableIds,cabIds}
+const torchSvg=d=>`<svg xmlns='http://www.w3.org/2000/svg' width='34' height='28' viewBox='0 0 26 24' fill='none' stroke='#000' stroke-width='1.7'${d==='L'?" transform='scale(-1,1)'":''}><rect x='2' y='9' width='9' height='6' fill='#f59e0b'/><path d='M11 8 L15 6 V18 L11 16Z' fill='#f59e0b'/><path d='M18 8 L23 5 M19 12 H25 M18 16 L23 19'/></svg>`;
+const torchCursor=d=>`url("data:image/svg+xml;utf8,${encodeURIComponent(torchSvg(d))}") ${d==='L'?6:28} 14, crosshair`;
+function setTorch(d){
+  torch.dir=torch.dir===d?null:d;hideHoverTrace();
+  $('torchL').classList.toggle('on',torch.dir==='L');$('torchR').classList.toggle('on',torch.dir==='R');
+  $('dynWorld').style.cursor=torch.dir?torchCursor(torch.dir):'';
+  document.body.classList.toggle('torching',!!torch.dir);
+}
+const partnersOf=ep=>ep.type==='ODF'?[oppFace(ep)]:ep.type==='SPLITTER'?(ep.port==='IN'?Array.from({length:splitN(ep.eqId)},(_,i)=>mkEp(ep.eqId,'SPLITTER',`OUT ${i+1}`)):[mkEp(ep.eqId,'SPLITTER','IN')]):[];
+function torchFill(L){
+  L.items=pulseItems().filter(i=>L.roots.has(i.root));
+  L.ids=new Set(L.items.map(i=>i.cid));L.eps=new Set();L.eqIds=new Set();L.cableIds=new Set();L.cabIds=new Set();
+  const addEp=k=>{const e=EP.get(k);if(!e)return;L.eps.add(k);if(e.type==='CABLE'){L.cableIds.add(String(e.eqId));const kb=cableById(e.eqId);if(kb)L.cabIds.add(kb.cabId);}else{L.eqIds.add(String(e.eqId));const q=eqOf(e);if(q)L.cabIds.add(q.cabId);}};
+  L.items.forEach(i=>{addEp(i.src);addEp(i.dst);});
+  L.eps.forEach(k=>{partnersOf(EP.get(k)).forEach(pp=>{const pc=connOf(pp);if(pc&&L.ids.has(pc.id))L.eps.add(pp.key);});});
+  const oi=L.items.find(i=>i.cid===L.originCid),oc=connections.find(c=>c.id===L.originCid);L.origin=oc?epLabel(oc.from):'—';
+}
+function torchSetLock(target){
+  const cids=[];
+  if(target.cid)cids.push(target.cid);
+  else{const c=connOf(target.ep);if(c)cids.push(c.id);partnersOf(target.ep).forEach(pp=>{const pc=connOf(pp);if(pc)cids.push(pc.id);});}
+  const all=pulseItems(),roots=new Set();
+  cids.forEach(id=>{const it=all.find(x=>x.cid===id);if(it)roots.add(it.root);});
+  if(!roots.size){toast('Ese elemento no pertenece a una trazabilidad con origen: no hay desde dónde enviar la luz.','err');return;}
+  const label=target.cid?(()=>{const c=connections.find(x=>x.id===target.cid);return 'Línea · '+epLabel(c.from)+' ⇄ '+epLabel(c.to);})():(()=>{const e=target.ep;return (e.type==='CABLE'?'Hilo · ':'Puerto · ')+epLabel(e);})();
+  const L={label,roots,originCid:[...roots][0]};torchFill(L);torchLock=L;
+  L.cableIds.forEach(id=>matrixOpenPanels.add('cable-'+id));L.eqIds.forEach(id=>matrixOpenPanels.add(id));L.cabIds.forEach(id=>matrixOpenCabs.add(id));
+  updateUI();
+}
+function torchClear(){torchLock=null;updateUI();}
+function torchSanitize(){
+  if(!torchLock)return;
+  torchFill(torchLock);
+  if(!torchLock.ids.size)torchLock=null;
+}
+const torchTrace=t=>!!(torchLock&&t.connIds.some(id=>torchLock.ids.has(id)));
+const tl=ep=>torchLock&&torchLock.eps.has(ep.key)?' tlit':'';
+function renderTorchWin(){
+  let w=$('torchWin');if(!w){w=document.createElement('div');w.id='torchWin';document.body.appendChild(w);}
+  document.body.classList.toggle('torchlock',!!torchLock);
+  if(!torchLock){w.classList.add('hidden');return;}
+  const L=torchLock;
+  w.classList.remove('hidden');
+  w.innerHTML=`<div class="tw-h"><span class="tw-ic">${torchSvg('R').replace(/width='34' height='28'/,"width='24' height='20'")}</span><b>PASANDO LUZ · ORIGEN → FINAL</b><button onclick="torchClear()" title="Apagar la luz">DETENER</button></div><div class="tw-b"><small>Elemento seleccionado</small><b>${escapeMatrixText(L.label)}</b><small>Sale desde el origen</small><b>${escapeMatrixText(L.origin)}</b>${(()=>{const d=chainDirection([...L.roots][0]);return d?`<div class="dirbadge ${d.kind==='PON'?'pon':'dat'}">${d.txt}</div>`:'';})()}<em>${L.ids.size} tramo(s) · ${L.eqIds.size+L.cableIds.size} equipo(s)/cable(s) · ${L.cabIds.size} gabinete(s)</em></div>`;
+  lightEnsure();
+}
+function applyTorchMarks(){
+  document.querySelectorAll('.tlit-mark').forEach(n=>n.classList.remove('tlit','tlit-mark'));
+  if(!torchLock)return;
+  const mark=el=>{if(el){el.classList.add('tlit','tlit-mark');}};
+  torchLock.eqIds.forEach(id=>mark($('mxpanel-'+id)));
+  torchLock.cableIds.forEach(id=>mark($('mxpanel-cable-'+id)));
+}
+/* --- panel flotante: historial de trazabilidad de la línea bajo el cursor --- */
+function hoverEl(){let d=$('hoverTrace');if(!d){d=document.createElement('div');d.id='hoverTrace';d.className='hidden';document.body.appendChild(d);}return d;}
+function hideHoverTrace(){const d=$('hoverTrace');if(d)d.classList.add('hidden');hov.key=null;}
+function showHoverMsg(msg){const d=hoverEl();d.innerHTML=`<div class="ht-msg">${escapeMatrixText(msg)}</div>`;d.classList.remove('hidden');hov.key='msg';placeHover(hov.x,hov.y);}
+const hov={key:null,x:0,y:0};
+function placeHover(x,y){const d=hoverEl(),w=d.offsetWidth,h=d.offsetHeight;let L=x+18,T=y+14;if(L+w>innerWidth-8)L=x-w-18;if(T+h>innerHeight-8)T=Math.max(8,innerHeight-h-8);d.style.left=Math.max(8,L)+'px';d.style.top=T+'px';}
+function traceOfConn(cid){
+  let t=traces.find(x=>x.connIds.includes(cid));if(t)return t;
+  const c=connections.find(x=>x.id===cid);if(!c)return null;
+  const set=chainOf(c.from),ids=connections.filter(k=>set.has(k.from.key)||set.has(k.to.key)).map(k=>k.id).sort((a,b)=>a-b);
+  const oc=originConnOf(c.from),o=oc?oc.from:c.from;
+  return{id:'—',origin:o,domain:chainDomain(c.from),copper:portInfo(o).media==='cobre',connIds:ids,ext:{},status:'closed',created:new Date(),updated:new Date()};
+}
+function showHoverTrace(cid,x,y){
+  const t=traceOfConn(cid);if(!t)return;
+  const live=session&&session.trace===t,dom=t.domain&&DOMAIN[t.domain]?DOMAIN[t.domain].label:'';
+  const d=hoverEl();
+  d.innerHTML=`<div class="ht-h"><b>TRAZABILIDAD ${t.id!=='—'?'#'+t.id:''} · ${live?'EN CURSO':'CERRADA'}</b>${dom?`<span>${escapeMatrixText(dom)}</span>`:''}</div>${metroRows(t,false)}`;
+  d.classList.remove('hidden');placeHover(x,y);
+}
+$('dynWrap').addEventListener('mousemove',e=>{
+  hov.x=e.clientX;hov.y=e.clientY;
+  if(dyn.link||dyn.nodeDrag||currentView!=='dyn'){hideHoverTrace();return;}
+  const g=e.target.closest('.conn'),pt=e.target.closest('.dport'),pEp=pt&&EP.get(pt.dataset.ep);
+  if(torch.dir){hideHoverTrace();return;}
+  let cid=g?+g.getAttribute('data-id'):null;
+  if(cid==null&&pEp){const c=connOf(pEp);if(c)cid=c.id;}
+  if(cid==null){hideHoverTrace();return;}
+  if(hov.key!=='t'+cid){hov.key='t'+cid;showHoverTrace(cid,e.clientX,e.clientY);}else placeHover(e.clientX,e.clientY);
+});
+$('dynWrap').addEventListener('mouseleave',()=>{hideHoverTrace();});
+$('dynWrap').addEventListener('click',e=>{
+  if(!torch.dir||dyn.link||dyn.nodeDrag)return;
+  const g=e.target.closest('.conn'),pt=e.target.closest('.dport'),pEp=pt&&EP.get(pt.dataset.ep);
+  if(g)torchSetLock({cid:+g.getAttribute('data-id')});else if(pEp)torchSetLock({ep:pEp});
+});
+$('dynWorld').addEventListener('mousedown',e=>{
+  if(e.button!==0)return;
+  if(torch.dir&&!e.target.closest('.dhead'))return;
+  const p=e.target.closest('.dport');
+  if(p){e.preventDefault();const ep=EP.get(p.dataset.ep),c=connOf(ep);if(c){showLineMenu(c.id,e.clientX,e.clientY);return;}
+    dyn.link={ep,from:portCenter(p),asOrigin:startsAsOrigin(ep)};document.body.classList.add('linking');
+    document.querySelectorAll('.dport').forEach(o=>{if(o!==p)o.classList.add(validateStep(ep,EP.get(o.dataset.ep),{asOrigin:dyn.link.asOrigin,signal:session&&session.signal}).ok?'ok':'dim');});
+    $('dynSvg').appendChild(svgEl('path',{id:'liveLine',fill:'none',stroke:'#000','stroke-width':2,'stroke-dasharray':'6 5','stroke-linejoin':'round'}));return;}
+  const h=e.target.closest('.dhead');
+  if(h&&!e.target.closest('.dacts')){const n=h.parentElement,id=n.dataset.node;dyn.nodeDrag={id,n,sx:e.clientX,sy:e.clientY,ox:dyn.layout[id].x,oy:dyn.layout[id].y};}
+});
+document.addEventListener('mousemove',e=>{
+  if(dyn.link){const w=$('dynWorld').getBoundingClientRect(),x=(e.clientX-w.left)/dyn.scale,y=(e.clientY-w.top)/dyn.scale,f=dyn.link.from,mx=(f.x+x)/2;
+    $('liveLine').setAttribute('d',roundedPath([f,{x:mx,y:f.y},{x:mx,y},{x,y}]));}
+  else if(dyn.nodeDrag){const d=dyn.nodeDrag,nx=Math.max(0,d.ox+(e.clientX-d.sx)/dyn.scale),ny=Math.max(0,d.oy+(e.clientY-d.sy)/dyn.scale);
+    dyn.layout[d.id]={x:nx,y:ny};d.n.style.left=nx+'px';d.n.style.top=ny+'px';if(!dyn.raf)dyn.raf=requestAnimationFrame(()=>{dyn.raf=0;drawDyn();});}
+});
+function cancelLink(){dyn.link=null;document.body.classList.remove('linking');document.querySelectorAll('.dport.ok,.dport.dim').forEach(o=>o.classList.remove('ok','dim'));const l=$('liveLine');if(l)l.remove();}
+document.addEventListener('mouseup',e=>{
+  if(dyn.link){const ep=dyn.link.ep,asO=dyn.link.asOrigin,t=document.elementFromPoint(e.clientX,e.clientY),tp=t&&t.closest&&t.closest('.dport');cancelLink();
+    if(tp&&tp.dataset.ep!==ep.key){
+      const tgt=EP.get(tp.dataset.ep);
+      if(session){
+        if(!(session.cursor&&session.cursor.key===ep.key)){
+          if(openEnds().some(x=>x.key===ep.key))session.cursor=ep;
+          else{toast('En edición solo puedes continuar desde un punto libre de la cadena (azul).','err');updateUI();return;}
+        }
+        sessionStep(tgt);return;
+      }
+      const pi=portInfo(ep);
+      if(connOf(ep)||!pi.origin)toast('Toda conexión pertenece a una trazabilidad: inicia en un origen (PON, SFP, RJ45 o hilo) con clic derecho.','err');
+      else if(pi.needsSignal)toast('Clic derecho en el hilo para elegir el tipo de señal y empezar la trazabilidad.','err');
+      else{const ck=canBeOrigin(ep);if(!ck.ok)toast(ck.msg,'err');else{beginSession(ep,null);sessionStep(tgt);return;}}
+    }else if(tp&&tp.dataset.ep===ep.key){handleEndpointClick(ep,false,e);return;}
+    updateUI();}
+  if(dyn.nodeDrag){dyn.nodeDrag=null;applyZoom();}
+});
+
+/* =================== MATRIZ =================== */
+function routeHistory(ep){
+  const seen=new Set(),q=[],ordered=[];
+  const add=e=>{if(e&&!seen.has(e.key)){seen.add(e.key);q.push(e);}};
+  add(ep);
+  while(q.length){
+    const e=q.shift();ordered.push(e);
+    const c=connOf(e);if(c)add(c.from.key===e.key?c.to:c.from);
+    if(e.type==='ODF')add(mkEp(e.eqId,'ODF',e.port,e.face==='A'?'B':'A',e.extra));
+    if(e.type==='SPLITTER'){if(e.port==='IN')for(let i=1;i<=splitN(e.eqId);i++)add(mkEp(e.eqId,'SPLITTER',`OUT ${i}`));else add(mkEp(e.eqId,'SPLITTER','IN'));}
+  }
+  return ordered;
+}
+function matrixPort(ep,label,color){
+  const c=connOf(ep),peer=c?(c.from.key===ep.key?c.to:c.from):null;
+  const swatch=color?`<span class="mx-swatch" style="background:${color}"></span>`:'';
+  return `<div class="mx-port ${c?'is-linked':''}${tl(ep)}">${swatch}${rport(ep)}<div class="mx-port-text"><b>${label}</b><small>${peer?'Conectado a: '+epLabel(peer):'Puerto libre'}</small></div>${c?'<span class="mx-status">CONECTADO</span>':'<span class="mx-status free">LIBRE</span>'}</div>`;
+}
+let matrixOpenPanels=new Set(),matrixOpenCabs=new Set();
+let matrixSearch='', matrixStatusFilter='all';
+function escapeMatrixText(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+function matrixExpandAll(){
+  matrixOpenCabs=new Set(cabinets.map(c=>c.id));matrixOpenPanels=new Set([...cables.map(k=>'cable-'+k.id),...equipmentData.map(e=>String(e.id))]);
+  renderTreeView();
+}
+function matrixCollapseAll(){matrixOpenPanels.clear();matrixOpenCabs.clear();renderTreeView();}
+function toggleMatrixCab(id){if(matrixOpenCabs.has(id))matrixOpenCabs.delete(id);else matrixOpenCabs.add(id);renderTreeView();}
+function matrixCancelSelection(){selectedEndpoint=null;forcedOrigin=null;updateUI();}
+function matrixConnectionPrompt(){
+  if(session)return `<div class="mx-connect-prompt origin"><span class="mx-prompt-icon">✎</span><div><b>Trazabilidad #${session.trace.id} en curso · origen ${escapeMatrixText(epLabel(session.origin))}</b><small>Puertos verdes = destinos válidos · azul punteado = puntos libres de la cadena. FINALIZAR TRAZABILIDAD la cierra; CANCELAR la descarta (barra superior).</small></div></div>`;
+  if(forcedOrigin)return `<div class="mx-connect-prompt origin"><span class="mx-prompt-icon">1</span><div><b>Origen seleccionado</b><small>${escapeMatrixText(epLabel(forcedOrigin))} · Ahora selecciona el puerto de destino.</small></div><button class="btn sm" onclick="matrixCancelSelection()">Cancelar</button></div>`;
+  if(selectedEndpoint)return `<div class="mx-connect-prompt selected"><span class="mx-prompt-icon">1</span><div><b>Primer puerto seleccionado</b><small>${escapeMatrixText(epLabel(selectedEndpoint))} · Ahora elige el segundo puerto compatible.</small></div><button class="btn sm" onclick="matrixCancelSelection()">Cancelar selección</button></div>`;
+  return `<div class="mx-connect-prompt"><span class="mx-prompt-icon">↔</span><div><b>Crear una conexión</b><small>Haz clic en un puerto libre y después en otro puerto compatible. Los puertos conectados muestran su destino.</small></div></div>`;
+}
+function filterMatrixItems(query){
+  matrixSearch=String(query||'').trim().toLowerCase();
+  applyMatrixFilters();
+}
+function setMatrixStatusFilter(value){
+  matrixStatusFilter=value;
+  document.querySelectorAll('[data-mx-filter]').forEach(b=>b.classList.toggle('active',b.dataset.mxFilter===value));
+  applyMatrixFilters();
+}
+function applyMatrixFilters(){
+  const q=matrixSearch;
+  document.querySelectorAll('#treeViewList .mx-inventory-item').forEach(el=>{
+    const match=(!q||el.textContent.toLowerCase().includes(q));
+    const linked=el.dataset.mxLinked==='true';
+    const status=matrixStatusFilter==='all'||(matrixStatusFilter==='connected'&&linked)||(matrixStatusFilter==='free'&&!linked);
+    el.style.display=match&&status?'':'none';
+  });
+  document.querySelectorAll('#treeViewList .mx-accordion').forEach(el=>{
+    const match=(!q||el.textContent.toLowerCase().includes(q));
+    const linked=el.dataset.mxLinked==='true';
+    const status=matrixStatusFilter==='all'||(matrixStatusFilter==='connected'&&linked)||(matrixStatusFilter==='free'&&!linked);
+    el.style.display=match&&status?'':'none';
+  });
+}
+function matrixPanelHeader(id,title,subtitle,type,count,open,actions){
+  return `<div class="mx-accordion-head ${open?'open':''}" role="button" tabindex="0" onclick="toggleMatrixPanel('${id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleMatrixPanel('${id}')}" aria-expanded="${open?'true':'false'}"><span class="mx-acc-type" style="background:${TYPE_COLOR[type]||'#475569'}">${type}</span><span class="mx-acc-title"><b>${title}</b><small>${subtitle}</small></span><span class="mx-acc-count">${count}</span>${actions?`<span class="mx-acc-actions" onclick="event.stopPropagation()">${actions}</span>`:''}<span class="mx-acc-chevron">${open?'−':'+'}</span></div>`;
+}
+const eqActions=eq=>`<button title="Editar nombre, etiqueta, estado y propiedades" onclick="openEditModal(${eq.id})">✎</button>`+`<button title="Mover a otro gabinete" onclick="moveEquipment(${eq.id})">⇄</button><button title="Eliminar equipo" onclick="deleteEquipment(${eq.id})">✕</button>`;
+function matrixCableCard(k){
+  const pid='cable-'+k.id,open=matrixOpenPanels.has(pid),linked=cableUsedCount(k);
+  const ports=Array.from({length:k.hilos},(_,i)=>{const h=hiloInfo(k,i);return matrixPort(hiloEp(k,i),`Hilo ${i+1} · ${h.nombre}`,h.hex);}).join('');
+  return `<section class="mx-accordion" id="mxpanel-${pid}" data-mx-linked="${linked>0?'true':'false'}">${matrixPanelHeader(pid,escapeMatrixText(k.nombre),`Cable de entrada · ${k.hilos} hilos · ${escapeMatrixText(cabNameOf(k.cabId))}`,'CABLE',`${linked} enlaces`,open,`<button title="Mover a otro gabinete" onclick="moveCable('${k.id}')">⇄</button><button title="Eliminar cable" onclick="deleteCable('${k.id}')">✕</button>`)}<div class="mx-accordion-body ${open?'':'collapsed'}"><div class="mx-device-ports">${ports}</div></div></section>`;
+}
+const setMatrixCab=id=>{matrixCab=(matrixCab===id)?'all':id;renderTreeView();};
+function matrixEquipmentCard(eq){
+  const id=String(eq.id),open=matrixOpenPanels.has(id);
+  let ports='',subtitle=`${eq.tipo} · ${eq.tamano}U`;
+  if(eq.tipo==='ODF'){
+    let a='',b='';
+    for(let n=1;n<=12;n++){
+      a+=matrixPort(mkEp(eq.id,'ODF',n,'A',{name:eq.nombre}),`Cara A · Puerto ${n}`);
+      b+=matrixPort(mkEp(eq.id,'ODF',n,'B',{name:eq.nombre}),`Cara B · Puerto ${n}`);
+    }
+    ports=`<div class="mx-face"><h4>CARA A · EQUIPOS</h4>${a}</div><div class="mx-face"><h4>CARA B · CABLES</h4>${b}</div>`;
+    subtitle='12 puertos por cara · 24 puntos de conexión';
+  }else if(eq.tipo==='OLT'){
+    for(let i=1;i<=8;i++)ports+=matrixPort(mkEp(eq.id,'OLT',`PON ${i}`),`PON ${i} · origen`);
+    for(let i=1;i<=2;i++)ports+=matrixPort(mkEp(eq.id,'OLT',`SFP+ ${i}`),`SFP+ ${i} · uplink`);
+    ports+=matrixPort(mkEp(eq.id,'OLT','RJ45 1'),'RJ45 1 · datos');
+    subtitle='8 PON · 2 SFP+ uplink · 1 RJ45 datos';
+  }else if(eq.tipo==='SWITCH'){
+    let sf='',rj='';
+    for(let i=1;i<=4;i++)sf+=matrixPort(mkEp(eq.id,'SWITCH',`SFP+ ${i}`),`SFP+ ${i}`);
+    for(let i=1;i<=8;i++)rj+=matrixPort(mkEp(eq.id,'SWITCH',`RJ45 ${i}`),`RJ45 ${i}`);
+    ports=`<div class="mx-face"><h4>SFP+ · 1–4</h4>${sf}</div><div class="mx-face"><h4>RJ45 · 1–8</h4>${rj}</div>`;
+    subtitle='4 puertos SFP+ · 8 puertos RJ45';
+  }else if(eq.tipo==='SPLITTER'){
+    ports+=matrixPort(mkEp(eq.id,'SPLITTER','IN'),'ENTRADA · IN');
+    for(let i=1;i<=splitN(eq.id);i++)ports+=matrixPort(mkEp(eq.id,'SPLITTER',`OUT ${i}`),`SALIDA · OUT ${i}`);
+    subtitle=`${eq.clase} · 1:${eq.ratio} · ${splitLoss(eq.id).toFixed(1)} dB`;
+  }
+  const total=(ports.match(/class="mx-port /g)||[]).length;
+  const connected=(ports.match(/class="mx-port is-linked"/g)||[]).length;
+  return `<section class="mx-accordion" id="mxpanel-${id}" data-mx-linked="${connected>0?'true':'false'}">${matrixPanelHeader(id,eq.nombre,subtitle,eq.tipo,`${connected}/${total} conectados`,open,eqActions(eq))}<div class="mx-accordion-body ${open?'':'collapsed'}"><div class="mx-device-ports ${eq.tipo==='ODF'||eq.tipo==='SWITCH'?'two-faces':''}">${ports}</div></div></section>`;
+}
+function toggleMatrixPanel(id){
+  id=String(id);
+  if(matrixOpenPanels.has(id))matrixOpenPanels.delete(id);else matrixOpenPanels.add(id);
+  renderTreeView();
+}
+function focusMatrixPanel(id){
+  id=String(id);matrixOpenPanels.add(id);{const eq=equipmentData.find(e=>String(e.id)===id);if(eq){matrixOpenCabs.add(eq.cabId);if(matrixCab!=='all'&&matrixCab!==eq.cabId)matrixCab=eq.cabId;}}renderTreeView();
+  requestAnimationFrame(()=>{const el=document.getElementById('mxpanel-'+id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});});
+}
+
+function renderTreeView(){
+  const box=$('treeViewList');
+  const esc=escapeMatrixText;
+  const visCables=cables.filter(k=>matrixCab==='all'||k.cabId===matrixCab);
+  const cablePanels=visCables.map(matrixCableCard).join('');
+  const cabList=cabinets.map((cab,ci)=>{
+    const eqs=eqsOf(cab.id),act=matrixCab===cab.id,u=cabUsed(cab.id);
+    const items=eqs.map(eq=>{const count=connections.filter(c=>String(c.from.eqId)===String(eq.id)||String(c.to.eqId)===String(eq.id)).length;
+      return `<button class="mx-inventory-item" data-mx-linked="${count>0?'true':'false'}" onclick="focusMatrixPanel('${String(eq.id)}')"><span class="mx-inv-type" style="background:${TYPE_COLOR[eq.tipo]||'#475569'}">${esc(eq.tipo)}</span><span class="mx-inv-name">${esc(eq.nombre)}</span><span class="mx-inv-count" title="${count} conexiones">${count}</span><span class="mx-inv-arrow">›</span></button>`;}).join('');
+    return `<div class="mx-cab ${act?'active':''}" style="--cc:${CAB_COLORS[ci%CAB_COLORS.length]}"><button class="mx-cab-h" onclick="setMatrixCab('${cab.id}')" title="Clic para ver solo este gabinete"><b>${esc(cab.nombre)}</b><small>${esc(cab.tipo)} · <span class="${u>cab.u?'over':''}">${u}/${cab.u}U</span></small><span class="mx-inv-count">${eqs.length}</span></button>${items||'<div class="mx-inv-footer">Sin equipos</div>'}</div>`;}).join('');
+  const deviceCards=(matrixCab==='all'?cabinets:cabinets.filter(c=>c.id===matrixCab)).map(cab=>{
+    const eqs=eqsOf(cab.id),u=cabUsed(cab.id);
+    const open=matrixOpenCabs.has(cab.id),over=u>cab.u,nLink=eqs.reduce((n,e)=>n+connections.filter(c=>String(c.from.eqId)===String(e.id)||String(c.to.eqId)===String(e.id)).length,0);
+    return `<section class="mx-cabsec ${open?'open':''}" style="--cc:${cabColorOf(cab.id)}"><button type="button" class="mx-cab-title" onclick="toggleMatrixCab('${cab.id}')" aria-expanded="${open}"><span class="car">${open?'▾':'▸'}</span><b>${esc(cab.nombre)}</b><small>${esc(cab.tipo)} · <span class="${over?'over':''}">${u}/${cab.u}U${over?' · ⚠ excede '+(u-cab.u)+'U':''}</span></small><span class="sp"></span><em>${eqs.length} equipo(s) · ${nLink} enlaces</em></button>${open?`<div class="mx-cabbody">${eqs.length?eqs.map(matrixEquipmentCard).join(''):'<div class="mx-empty">Gabinete vacío. Usa + EQUIPO para agregar uno.</div>'}</div>`:''}</section>`;}).join('');
+  const tm=d=>d.toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  const liveT=session&&session.trace;
+  const items=[];
+  traces.forEach(t=>{
+    const live=liveT===t,nodes=traceNodes(t),dom=t.domain&&DOMAIN[t.domain]?DOMAIN[t.domain].label:'';
+    const rows=metroRows(t,live);
+    const last=nodes[nodes.length-1],foot=live?`<div class="tn-foot">${session.exit?'▸ Sale a la calle: agrega puntos en la barra superior':session.final?'▸ Puerto final alcanzado: pulsa FINALIZAR TRAZABILIDAD':session.cursor?'▸ Continúa desde '+esc(epLabel(session.cursor)):'▸ Elige un punto libre (azul punteado)'}</div>`:(last&&last.power!=null?`<div class="tn-foot end">Potencia al final: <b>${last.copper?'ETH':fmt(last.power)+' dBm'}</b></div>`:'');
+    items.push({ts:live?Infinity:t.updated.getTime(),html:`<div class="mx-trace-event add${live?' live':''}${torchTrace(t)?' tlit':''}"><div class="mx-trace-step"><span>${t.id}</span><i></i></div><div class="mx-trace-content"><div class="mx-trace-event-head"><b><span class="mx-trace-kind ${live?'live':'add'}">${live?'EN CURSO':'CERRADA'}</span>${dom?`<span class="mx-trace-tag">${esc(dom)}</span>`:''}</b><small>${tm(t.updated)}</small></div><div class="tnl">${rows}</div>${foot}</div></div>`});
+  });
+  traceLog.filter(e=>e.kind==='del').forEach(e=>items.push({ts:e.ts.getTime(),html:`<div class="mx-trace-event del"><div class="mx-trace-step"><span>✕</span><i></i></div><div class="mx-trace-content"><div class="mx-trace-event-head"><b><span class="mx-trace-kind del">DESCONECTADO</span></b><small>${tm(e.ts)}</small></div><div class="mx-trace-endpoint"><span class="mx-trace-dot"></span><div>${esc(e.from)}</div></div><div class="mx-trace-linkline"></div><div class="mx-trace-endpoint"><span class="mx-trace-dot target"></span><div>${esc(e.to)}</div></div></div></div>`}));
+  items.sort((x,y)=>y.ts-x.ts);
+  const traceItems=items.length?items.map(x=>x.html).join(''):`<div class="mx-trace-empty"><span class="mx-trace-empty-icon">⇄</span><b>Sin trazabilidades todavía</b><p>Haz clic derecho en un origen (PON, SFP, RJ45 o hilo). La trazabilidad aparecerá aquí y crecerá con cada punto que agregues, hasta que pulses FINALIZAR.</p></div>`;
+  const tracePanel=`<aside class="mx-trace-panel"><div class="mx-trace-header"><div class="mx-trace-title"><span class="mx-trace-live-dot"></span><div><b>HISTORIAL Y TRAZABILIDAD</b><small>Se actualiza con cada conexión</small></div></div><span class="mx-trace-total" title="Trazabilidades">${traces.length}</span></div><div class="mx-trace-legend"><span><i class="mx-legend-origin"></i>Desde</span><span><i class="mx-legend-dest"></i>Hacia</span><span><i style="background:#d97706"></i>Calle</span><span><i style="background:#dc2626"></i>Desconectado</span></div><div class="mx-trace-list">${traceItems}</div><div class="mx-trace-footer"><span>${connections.length} enlaces activos</span><button class="mx-trace-clear" onclick="clearHistory()">Limpiar historial</button></div></aside>`;
+  box.innerHTML=`<div class="matrix-tools"><div><b>MATRIZ DE CONEXIONES</b><small>Encuentra equipos rápido, abre varios paneles y conecta puertos desde aquí.</small></div><div class="mx-actions"><button class="btn sm" onclick="switchView('rack')">MODO FÍSICO</button><button class="btn sm" onclick="switchView('dyn')">PANEL DINÁMICO</button><button class="btn sm" onclick="openModal()">+ EQUIPO</button></div></div><div class="mx-toolbar"><label class="mx-search"><span>⌕</span><input id="matrixSearchInput" type="search" placeholder="Buscar cable, equipo o puerto…" value="${escapeMatrixText(matrixSearch)}" oninput="filterMatrixItems(this.value)"><button type="button" onclick="filterMatrixItems('');const i=document.getElementById('matrixSearchInput');if(i)i.value='';" title="Limpiar búsqueda">×</button></label><div class="mx-filter-group"><button data-mx-filter="all" class="${matrixStatusFilter==='all'?'active':''}" onclick="setMatrixStatusFilter('all')">Todos</button><button data-mx-filter="connected" class="${matrixStatusFilter==='connected'?'active':''}" onclick="setMatrixStatusFilter('connected')">Con enlaces</button><button data-mx-filter="free" class="${matrixStatusFilter==='free'?'active':''}" onclick="setMatrixStatusFilter('free')">Sin enlaces</button></div><div class="mx-bulk-actions"><button class="btn sm" onclick="matrixExpandAll()">Abrir todos</button><button class="btn sm" onclick="matrixCollapseAll()">Cerrar todos</button></div></div><div class="mx-workspace"><aside class="mx-inventory"><div class="mx-inv-heading"><div><b>CABLES</b><small>${visCables.length} cable(s)${matrixCab!=='all'?' · '+esc(cabNameOf(matrixCab)):''}</small></div><button class="btn sm" onclick="openCableModal()">+ CABLE</button></div>${cablePanels||'<div class="mx-inv-footer">Este gabinete no tiene cables.</div>'}<div class="mx-inv-heading rack-heading"><div><b>GABINETES</b><small>${cabinets.length} · clic en uno para filtrar</small></div><button class="btn sm" onclick="openCabModal()">+ GABINETE</button></div>${cabList}<div class="mx-inv-footer">Pulsa un equipo para abrir su panel en el área de trabajo.</div></aside><main class="mx-workarea"><div class="mx-panels">${deviceCards}</div></main>${tracePanel}</div>`;
+  applyMatrixFilters();
+}
+
+/* =================== TRAZABILIDAD VIVA + SESIÓN DE EDICIÓN =================== */
+/* La trazabilidad es un OBJETO que crece con cada clic (se ve en el panel derecho mientras se construye)
+   y solo se cierra con FINALIZAR TRAZABILIDAD. El hilo nunca es final: sigue "hacia la calle".
+   Estados:  REPOSO ─origen→ EN CURSO ─FINALIZAR→ CERRADA        EN CURSO ─CANCELAR→ descartada        */
+const traces=[];let traceSeq=0;
+let session=null;   // {trace, origin, cursor, steps:[connId], signal, newOrigin, exit:ep|null, final:bool, extSnap}
+const EXT_TYPES={fusion:{label:'Fusión',loss:0.1},conector:{label:'Conector',loss:0.3},manga:{label:'Manga',loss:0},caja:{label:'Caja / CTO',loss:0},
+  s12:{label:'Splitter 1:2',loss:3.7},s14:{label:'Splitter 1:4',loss:7.3},s18:{label:'Splitter 1:8',loss:10.7},s116:{label:'Splitter 1:16',loss:14.0}};
+const ATT_KM=0.35;   // dB por km de fibra (editable; en Map OLT vendrá del catálogo de cable)
+const oppFace=e=>mkEp(e.eqId,'ODF',e.port,e.face==='A'?'B':'A',e.extra);
+const isSplitOut=e=>e.type==='SPLITTER'&&/^OUT/.test(String(e.port));
+const startsAsOrigin=ep=>portInfo(ep).kind==='PON'||!!(session&&session.newOrigin&&!session.steps.length&&session.origin.key===ep.key);
+function openEnds(){
+  if(!session)return[];
+  const out=[],set=chainOf(session.origin);
+  set.forEach(k=>{const e=EP.get(k);if(!e||connOf(e))return;
+    if(e.key===session.origin.key){out.push(e);return;}
+    const pi=portInfo(e);if(pi.kind==='ODF'||pi.kind==='SPLITTER')out.push(e);});
+  return out;
+}
+function sessionDomain(){
+  if(!session)return null;
+  return chainDomain(session.origin)||portInfo(session.origin).domain||session.signal||session.trace.domain||null;
+}
+function powerAtOpenEnd(e){
+  if(session&&e.key===session.origin.key&&!connOf(e))return getTx(e);
+  let partner=null,loss=0;
+  if(e.type==='ODF'){partner=oppFace(e);loss=LOSS.splice;}
+  else if(isSplitOut(e)){partner=mkEp(e.eqId,'SPLITTER','IN');loss=splitLoss(e.eqId);}
+  if(!partner)return null;
+  const c=connOf(partner),en=c&&energy.get(c.id);return en?en.power-loss:null;
+}
+/* lista ordenada de puntos de una trazabilidad con la potencia en cada uno (incluye el camino por la calle) */
+function traceNodes(t){
+  const nodes=[],dom=t.domain,cu=!!t.copper;
+  const mk=(ep,power,kind)=>({key:ep.key,label:epLabel(ep),power,kind,copper:cu,hex:ep.type==='CABLE'&&ep.extra&&ep.extra.hex||null,state:power==null?'ok':powerState({power,domain:dom,copper:cu})});
+  const cs=t.connIds.map(id=>connections.find(c=>c.id===id)).filter(Boolean);
+  if(!cs.length){if(t.origin)nodes.push(mk(t.origin,getTx(t.origin),'origen'));return nodes;}
+  cs.forEach((c,i)=>{
+    const en=energy.get(c.id),a=en?en.start:c.from,b=en?en.end:c.to;
+    if(!nodes.length||nodes[nodes.length-1].key!==a.key)nodes.push(mk(a,en?en.power+LOSS.conn:null,c.origin?'origen':'punto'));
+    nodes.push(mk(b,en?en.power:null,'punto'));
+    if(b.type==='CABLE'&&t.ext[b.key]){
+      let p=en?en.power:null;
+      t.ext[b.key].forEach(x=>{const l=x.loss+(x.km||0)*ATT_KM;if(p!=null)p-=l;
+        nodes.push({key:'ext|'+b.key+'|'+nodes.length,label:`${EXT_TYPES[x.type].label} · ${x.name}`,power:p,kind:'calle',km:x.km,loss:l,copper:false,hex:null,state:p==null?'ok':powerState({power:p,domain:dom,copper:false})});});
+    }
+  });
+  return nodes;
+}
+/* posición X estimada de un puerto en el Panel dinámico (con o sin DOM) */
+function portXEst(ep){
+  const id=String(ep.eqId),eq=eqById(id),isCable=ep.type==='CABLE',col=isCable?'cable':eq&&eq.tipo==='ODF'?'odf':'dev';
+  const w=isCable?220:col==='odf'?250:200,x0=dyn.layout[id]?dyn.layout[id].x:COLX[col];
+  const right=isCable||(ep.type==='ODF'&&ep.face==='A')||(ep.type==='SPLITTER'&&/^OUT/.test(String(ep.port)));
+  return right?x0+w:x0;
+}
+/* sentido de la comunicación de una cadena: origen → final, izquierda o derecha en el Panel dinámico */
+function chainDirection(rootCid){
+  const items=pulseItems().filter(i=>i.root===rootCid);if(!items.length)return null;
+  const by=new Map(items.map(i=>[i.cid,i])),depth=i=>{let d=0,g=0;while(i.parent!=null&&by.has(i.parent)&&g++<200){i=by.get(i.parent);d++;}return d;};
+  const first=by.get(rootCid),last=items.reduce((m,i)=>depth(i)>=depth(m)?i:m,first);
+  const o=EP.get(first.src),f=EP.get(last.dst);if(!o||!f)return null;
+  const dx=portXEst(f)-portXEst(o),dir=Math.abs(dx)<8?'vertical':dx>0?'derecha':'izquierda';
+  const en=energy.get(rootCid),kind=en&&en.domain==='ACCESO'?'PON':'Datos';
+  return{kind,dir,txt:`${kind} ${dir==='derecha'?'▶':dir==='izquierda'?'◀':'▼'} ${dir}`,origin:epLabel(o),end:epLabel(f)};
+}
+function traceCrumbs(t){
+  const nodes=traceNodes(t),out=[];let calle=false;
+  const short=n=>{const m=/^gabinete\s*(\d+)$/i.exec(n);return m?'Gab'+m[1]:n;};
+  nodes.forEach(n=>{
+    if(n.kind==='calle'){if(!calle){out.push({t:'Calle',cls:'calle'});calle=true;}return;}
+    const ep=EP.get(n.key);if(!ep)return;
+    let name,cab=null;
+    if(ep.type==='CABLE'){const k=cableById(ep.eqId);name=k?k.nombre:'Cable';cab=k?k.cabId:null;}
+    else{const e=eqOf(ep);name=e?e.nombre.replace(/\s*\(.*\)$/,''):ep.type;cab=e?e.cabId:null;}
+    const id=ep.type+'|'+ep.eqId;if(out.length&&out[out.length-1].id===id)return;
+    out.push({id,t:name+(cab&&cabinets.length>1?' '+short(cabNameOf(cab)):''),cab,cls:ep.type==='CABLE'?'cable':''});
+  });
+  const oc=t.origin&&connections.find(c=>c.origin&&c.from.key===t.origin.key),dr=oc&&energy.has(oc.id)?chainDirection(oc.id):null;
+  return (dr?`<div class="dirbadge ${dr.kind==='PON'?'pon':'dat'}">${dr.txt}</div>`:'')+`<div class="crumbs">${out.map(x=>`<span class="cr ${x.cls}" ${x.cab?`style="--cc:${cabColorOf(x.cab)}"`:''}>${escapeMatrixText(x.t)}</span>`).join('<i>➔</i>')}</div>`;
+}
+function metroRows(t,live){
+  const nodes=traceNodes(t);
+  return traceCrumbs(t)+`<div class="metro">${nodes.map((n,i)=>{
+    const sub=n.kind==='calle'?`CALLE · ${n.km?n.km+' km · ':''}pérdida ${n.loss.toFixed(1)} dB`:n.kind==='origen'?'ORIGEN · gabinete':(n.hex?'sale del gabinete':'GABINETE');
+    return `<div class="mrow ${n.kind} st-${n.state}${live&&i===nodes.length-1?' new':''}"><span class="c" ${n.hex?`style="background:${n.hex}"`:''}></span><div class="lb">${escapeMatrixText(n.label)}<small>${sub}</small></div><span class="mp">${n.power==null?'—':n.copper?'ETH':fmt(n.power)+' dBm'}</span></div>`;}).join('')}</div>`;
+}
+let dockOpen=true;
+function toggleDock(){dockOpen=!dockOpen;renderDock();renderEditBar();}
+function renderDock(){
+  let d=$('traceDock');if(!d){d=document.createElement('div');d.id='traceDock';document.body.appendChild(d);}
+  if(!session||!dockOpen||currentView==='tree'){d.classList.add('hidden');return;}
+  const t=session.trace;
+  d.classList.remove('hidden');
+  d.innerHTML=`<div class="dk-h"><span class="eb-dot"></span><b>TRAZABILIDAD #${t.id} · EN CURSO</b><span class="sp"></span><button class="btn sm" onclick="toggleDock()">×</button></div>${metroRows(t,true)}<div class="tn-foot">${session.exit?'▸ Sale a la calle: agrega puntos en la barra superior':session.final?'▸ Puerto final: pulsa FINALIZAR TRAZABILIDAD':session.cursor?'▸ Continúa desde '+escapeMatrixText(epLabel(session.cursor)):'▸ Elige un punto libre (azul punteado)'}</div>`;
+}
+function beginSession(ep,signal){
+  hideLineMenu();
+  const t={id:++traceSeq,origin:ep,domain:portInfo(ep).domain||signal||null,copper:portInfo(ep).media==='cobre',connIds:[],ext:{},status:'open',created:new Date(),updated:new Date()};
+  traces.push(t);
+  session={trace:t,origin:ep,cursor:ep,steps:[],signal:signal||null,newOrigin:true,exit:null,final:false,extSnap:'{}'};
+  toast(`Trazabilidad #${t.id} iniciada en ${epLabel(ep)} · TX ${fmt(getTx(ep))} dBm. Elige los puertos verdes en orden.`);
+  updateUI();
+}
+function startContinue(originEp,cursor){
+  hideLineMenu();
+  const set=chainOf(originEp),ids=connections.filter(c=>set.has(c.from.key)||set.has(c.to.key)).map(c=>c.id).sort((x,y)=>x-y);
+  let t=traces.find(x=>x.connIds.some(id=>ids.includes(id)));
+  if(!t){const oc=originConnOf(originEp),o=oc?oc.from:originEp;
+    t={id:++traceSeq,origin:o,domain:chainDomain(originEp),copper:portInfo(o).media==='cobre',connIds:ids,ext:{},status:'closed',created:new Date(),updated:new Date()};traces.push(t);}
+  t.status='open';
+  session={trace:t,origin:originEp,cursor:cursor||null,steps:[],signal:null,newOrigin:false,exit:null,final:false,extSnap:JSON.stringify(t.ext)};
+  const ends=openEnds();if(!session.cursor&&ends.length===1)session.cursor=ends[0];
+  toast(`Retomaste la trazabilidad #${t.id}. Sigue agregando puntos y pulsa FINALIZAR al terminar.`);updateUI();
+}
+function rightClickEndpoint(ep){
+  const pi=portInfo(ep),c=connOf(ep);
+  if(session){
+    if(openEnds().some(e=>e.key===ep.key)){session.cursor=ep;session.exit=null;session.final=false;updateUI();return;}
+    toast('Ya hay una trazabilidad en curso. Pulsa FINALIZAR o CANCELAR antes de iniciar otra.','err');return;}
+  const oc=originConnOf(ep);
+  if(c){
+    if(oc){
+      if(pi.kind==='HILO'&&!isOriginEp(ep)){startContinue(oc.from,null);session.exit=ep;session.cursor=null;toast('Sale del gabinete por este hilo: agrega los puntos del camino en la barra superior.');updateUI();return;}
+      const sv=session;session={origin:oc.from,steps:[]};const ends=openEnds();session=sv;
+      if(!ends.length){toast('Esta trazabilidad no tiene puntos libres. Clic derecho sobre un hilo conectado para agregar puntos en la calle.','err');return;}
+      return startContinue(oc.from,null);}
+    toast('Ese puerto ya está conectado. Haz clic en su línea y elige "Marcar origen".','err');return;}
+  if(oc){
+    if(pi.kind==='ODF'||pi.kind==='SPLITTER')return startContinue(oc.from,ep);
+    toast('Ese puerto es un extremo final de la cadena; no se continúa desde él.','err');return;}
+  const ck=canBeOrigin(ep,pi.needsSignal?'ENLACE':null);
+  if(!ck.ok){toast(pi.origin?ck.msg:'Toda trazabilidad empieza en un origen: PON, SFP, RJ45 o hilo. Selecciona uno de ellos primero.','err');return;}
+  if(pi.needsSignal)return askSignal(ep,(sg,tx)=>{originTx[ep.key]=tx;beginSession(ep,sg);});
+  beginSession(ep,null);
+}
+function sessionClick(ep,ev){
+  const ends=openEnds();
+  if(session.cursor&&ep.key===session.cursor.key)return;
+  if(ends.some(e=>e.key===ep.key)){session.cursor=ep;session.exit=null;session.final=false;return updateUI();}
+  const c=connOf(ep);if(c)return showLineMenu(c.id,ev.clientX,ev.clientY);
+  sessionStep(ep);
+}
+function sessionStep(target){
+  const s=session;
+  if(!s.cursor){toast(s.exit?'Estás en la salida del gabinete: agrega puntos de la calle en la barra, o FINALIZAR.':s.final?'Ya llegaste a un puerto final: pulsa FINALIZAR TRAZABILIDAD (o DESHACER).':'Elige primero desde qué punto libre continuar (azul punteado).','err');return;}
+  const first=s.newOrigin&&!s.steps.length;
+  const r=tryConnect(s.cursor,target,first,{keepDir:true,silent:true,signal:s.signal});
+  if(!r.ok){toast(r.msg,'err');return;}
+  s.steps.push(r.conn.id);s.trace.connIds.push(r.conn.id);s.trace.updated=new Date();
+  if(first&&!s.trace.origin)s.trace.origin=s.origin;
+  const pi=portInfo(target);s.exit=null;s.final=false;
+  if(target.type==='ODF'&&!connOf(oppFace(target)))s.cursor=oppFace(target);
+  else if(pi.kind==='HILO'){s.cursor=null;s.exit=target;toast(`${epLabel(target)}: el trazado sale del gabinete. Agrega los puntos del camino (fusión, manga, caja…) o FINALIZAR.`);}
+  else if(pi.active){s.cursor=null;s.final=true;toast(`Llegaste a ${epLabel(target)}, un puerto final. Pulsa FINALIZAR TRAZABILIDAD (o DESHACER).`);}
+  else{const b=openEnds().filter(e=>!isSplitOut(e));s.cursor=b.length===1?b[0]:null;toast(r.msg);}
+  updateUI();
+}
+function addExt(){
+  if(!session||!session.exit){toast('Los puntos de la calle se agregan después de un hilo (salida del gabinete).','err');return;}
+  const type=$('extType').value,name=($('extName').value||'').trim(),km=Math.max(0,parseFloat($('extKm').value)||0),d=EXT_TYPES[type];
+  const k=session.exit.key,arr=session.trace.ext[k]=session.trace.ext[k]||[];
+  arr.push({type,name:name||`${d.label} ${arr.length+1}`,km,loss:d.loss});
+  session.trace.updated=new Date();updateUI();
+}
+function undoStep(){
+  if(!session)return;
+  if(session.exit){const arr=session.trace.ext[session.exit.key];if(arr&&arr.length){arr.pop();session.trace.updated=new Date();toast('Último punto de la calle deshecho');updateUI();return;}}
+  if(!session.steps.length){toast('No hay tramos que deshacer.','err');return;}
+  const id=session.steps.pop(),c=connections.find(x=>x.id===id);
+  session.trace.connIds=session.trace.connIds.filter(x=>x!==id);
+  connections=connections.filter(x=>x.id!==id);
+  if(c)[c.from,c.to].forEach(e=>{if(e.type==='CABLE')delete session.trace.ext[e.key];});
+  session.exit=null;session.final=false;
+  const ends=openEnds();
+  session.cursor=(c&&ends.find(e=>e.key===c.from.key))||(ends.length===1?ends[0]:null);
+  session.trace.updated=new Date();toast('Último tramo deshecho');updateUI();
+}
+function finishSession(){
+  if(!session)return;const t=session.trace;
+  if(!t.connIds.length){traces.splice(traces.indexOf(t),1);session=null;toast('Trazabilidad vacía descartada.');return updateUI();}
+  t.status='closed';t.updated=new Date();session=null;
+  toast(`Trazabilidad #${t.id} finalizada.`);updateUI();
+}
+function cancelSession(){
+  if(!session)return;const s=session,t=s.trace,ids=new Set(s.steps),n=s.steps.length;
+  connections=connections.filter(c=>!ids.has(c.id));t.connIds=t.connIds.filter(id=>!ids.has(id));
+  if(s.newOrigin){const i=traces.indexOf(t);if(i>=0)traces.splice(i,1);}else{t.ext=JSON.parse(s.extSnap);t.status='closed';}
+  session=null;toast(n?`Trazabilidad cancelada: ${n} tramo(s) descartado(s).`:'Trazabilidad cancelada.');updateUI();
+}
+function clearHistory(){traceLog.length=0;for(let i=traces.length-1;i>=0;i--)if(traces[i].status==='closed'&&!(session&&session.trace===traces[i]))traces.splice(i,1);renderTreeView();}
+function sessionSanitize(){
+  if(!session)return;
+  session.steps=session.steps.filter(id=>connections.some(c=>c.id===id));
+  if(session.exit&&!connOf(session.exit))session.exit=null;
+  const ends=openEnds();
+  if(session.cursor&&!ends.some(e=>e.key===session.cursor.key))session.cursor=(session.exit||session.final)?null:(ends.length===1?ends[0]:null);
+}
+/* ---- diálogo: tipo de señal de un hilo marcado como origen ---- */
+const closeSignal=()=>{const m=$('sigModal');if(m)m.remove();};
+function askSignal(ep,cb){
+  closeSignal();
+  const m=document.createElement('div');m.id='sigModal';m.className='ov';m.style.zIndex='400';
+  m.innerHTML=`<div class="modal" style="width:470px"><div class="sh">Origen en ${escapeMatrixText(epLabel(ep))}</div><div style="padding:14px;display:flex;flex-direction:column;gap:10px;font-size:11px">
+    <b style="font-size:12px">¿Qué señal entra por este hilo?</b>
+    <label class="sg"><input type="radio" name="sg" value="ENLACE" checked><span><b>ENLACE de datos</b><br><small>Viene de un SFP (OLT, switch o core). Podrá conectarse a puertos de switch, core u OLT.</small></span></label>
+    <label class="sg"><input type="radio" name="sg" value="ACCESO"><span><b>ACCESO (PON)</b><br><small>Señal de la red de acceso. Podrá terminar en una PON (vista de subida), pero nunca en un puerto de enlace (switch/core).</small></span></label>
+    <label><b>POTENCIA QUE LLEGA AL HILO (dBm, + o −)</b><input id="sgTx" type="number" step="0.1" value="-2" style="width:100%;border:1px solid #000;padding:7px;margin-top:5px"></label>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="sgNo">CANCELAR</button><button class="btn dark" id="sgOk">EMPEZAR</button></div></div></div>`;
+  document.body.appendChild(m);
+  let touched=false;const tx=$('sgTx');tx.oninput=()=>{touched=true;};
+  m.querySelectorAll('input[name=sg]').forEach(r=>r.onchange=()=>{if(!touched)tx.value=r.value==='ACCESO'?0:-2;});
+  $('sgNo').onclick=closeSignal;
+  $('sgOk').onclick=()=>{const v=parseFloat(tx.value),sg=m.querySelector('input[name=sg]:checked').value;closeSignal();cb(sg,isNaN(v)?0:v);};
+  $('sgOk').focus();
+}
+/* ---- barra de edición ---- */
+function renderEditBar(){
+  const b=$('editBar');
+  if(!session){b.classList.add('hidden');return;}
+  b.classList.remove('hidden');
+  const dom=sessionDomain(),dl=dom?DOMAIN[dom].label:'—',tp=session.cursor?powerAtOpenEnd(session.cursor):null,t=session.trace;
+  const nodes=traceNodes(t);
+  const strip=nodes.map(n=>`<span class="eb-n st-${n.state} ${n.kind}"><b>${escapeMatrixText(n.label)}</b>${n.power==null?'':`<i>${n.copper?'ETH':fmt(n.power)+' dBm'}</i>`}</span>`).join('<span class="eb-ar">→</span>');
+  let third=`<small>Verde = destino válido · azul punteado = punto libre de la cadena · gris = no permitido (pasa el mouse para ver el motivo)</small>`;
+  if(session.exit){
+    third=`<div class="eb-ext"><b>SALE DEL GABINETE POR ${escapeMatrixText(epLabel(session.exit))} → agrega los puntos del camino:</b>
+      <select id="extType">${Object.entries(EXT_TYPES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select>
+      <input id="extName" placeholder="Nombre (ej. M-12)" style="width:130px">
+      <input id="extKm" type="number" min="0" step="0.01" placeholder="km desde el punto anterior" style="width:170px">
+      <button class="btn sm dark" onclick="addExt()">+ AGREGAR PUNTO</button><small>Pérdida = fusión/splitter + ${ATT_KM} dB/km</small></div>`;
+  }else if(session.final){
+    third=`<div class="eb-final">Llegaste a un puerto final. Pulsa <b>FINALIZAR TRAZABILIDAD</b> para cerrarla (o DESHACER TRAMO para corregir).</div>`;
+  }
+  b.innerHTML=`<div class="eb-row"><span class="eb-dot"></span><b>TRAZABILIDAD #${t.id} · EN CURSO</b><span class="eb-chip">${escapeMatrixText(dl)}</span>
+    <span>Continúa desde: <b>${session.cursor?escapeMatrixText(epLabel(session.cursor)):(session.exit?'la calle':session.final?'— fin —':'elige un punto azul')}</b></span>
+    ${tp!=null?`<span>Potencia ahí: <b>${fmt(tp)} dBm</b></span>`:''}<span>Puntos: <b>${nodes.length}</b></span>
+    <span class="sp"></span>${currentView!=='tree'?`<button class="btn sm" onclick="toggleDock()">${dockOpen?'OCULTAR TRAZA':'VER TRAZA'}</button>`:''}<button class="btn sm" onclick="undoStep()">DESHACER</button><button class="btn sm dark${session.final?' pulse':''}" onclick="finishSession()">FINALIZAR TRAZABILIDAD</button><button class="btn sm red" onclick="cancelSession()">CANCELAR</button></div>
+    <div class="eb-row">${third}</div>`;
+}
+function applySessionMarks(){
+  document.body.classList.toggle('editing',!!session);
+  document.querySelectorAll('.tgt-ok,.tgt-no,.tgt-tail,.tgt-cur').forEach(el=>{el.classList.remove('tgt-ok','tgt-no','tgt-tail','tgt-cur');if(el.dataset.t0!==undefined){el.title=el.dataset.t0;}});
+  if(!session)return;
+  const ends=new Set(openEnds().map(e=>e.key)),first=session.newOrigin&&!session.steps.length;
+  document.querySelectorAll('[data-ep]').forEach(el=>{
+    const ep=EP.get(el.dataset.ep);if(!ep)return;
+    if(session.cursor&&ep.key===session.cursor.key){el.classList.add('tgt-cur');return;}
+    if(ends.has(ep.key)){el.classList.add('tgt-tail');return;}
+    if(el.dataset.t0===undefined)el.dataset.t0=el.title||'';
+    if(!session.cursor){el.classList.add('tgt-no');return;}
+    const r=validateStep(session.cursor,ep,{asOrigin:first,signal:session.signal});
+    if(r.ok)el.classList.add('tgt-ok');else{el.classList.add('tgt-no');el.title=r.msg;}
+  });
+}
+
+/* =================== ORQUESTA =================== */
+function redraw(){energy=computeEnergy();if(currentView==='rack')drawRackCables();else{clearOverlay();if(currentView==='dyn')drawDyn();}}
+function updateUI(){document.documentElement.style.setProperty('--eq',EQUIP_COLOR);if(!cabById(currentCabId))currentCabId=cabinets[0].id;sessionSanitize();energy=computeEnergy();torchSanitize();renderCabBar();renderCables();renderRackView();renderTreeView();if(currentView==='dyn')renderDyn();renderEditBar();renderDock();applySessionMarks();applyTorchMarks();renderTorchWin();renderCommLegend();requestAnimationFrame(()=>requestAnimationFrame(redraw));}
+function switchView(v){
+  if(currentView==='dyn'&&v!=='dyn')saveDynView();
+  if(torch.dir)setTorch(torch.dir);hideHoverTrace();
+  currentView=v;cancelLink();hideLineMenu();
+  [['rack','tRack','viewRack'],['dyn','tDyn','dynWrap'],['tree','tTree','viewTree']].forEach(([k,t,c])=>{$(t).classList.toggle('on',k===v);$(c).classList.toggle('hidden',k!==v);});
+  $('leftPanel').classList.toggle('hidden',v==='dyn'||v==='tree');
+  $('stage').style.overflow=v==='dyn'?'hidden':'auto';
+  if(v==='dyn'){renderDyn();restoreDynView();}renderEditBar();renderDock();applySessionMarks();setTimeout(redraw,60);
+}
+function openModal(){
+  syncAddModal();
+  $('eqCab').innerHTML=cabinets.map(c=>`<option value="${c.id}" ${c.id===(currentView==='tree'&&matrixCab!=='all'?matrixCab:currentCabId)?'selected':''}>${escapeMatrixText(c.nombre)} · ${cabUsed(c.id)}/${c.u}U</option>`).join('');
+  $('equipmentModal').classList.remove('hidden');
+}
+const closeModal=()=>$('equipmentModal').classList.add('hidden');
+function syncAddModal(){
+  const t=$('eqTipo').value,sp=t==='SPLITTER';
+  $('eqSplit').style.display=sp?'flex':'none';
+  if(!$('eqRatio').options.length)$('eqRatio').innerHTML=SPLIT_MODELS.map(n=>`<option value="${n}" ${n===8?'selected':''}>1:${n} · ${SPLIT_LOSS[n].toFixed(1)} dB</option>`).join('');
+  if(!$('eqEstado').options.length)$('eqEstado').innerHTML=ESTADOS.map(x=>`<option>${x}</option>`).join('');
+  if(sp&&(!$('eqNombre').value||/^Splitter (AF|AC) 1:\d+$/.test($('eqNombre').value)))$('eqNombre').value=splitName($('eqClase').value,$('eqRatio').value);
+}
+function handleSaveEquipment(e){
+  e.preventDefault();
+  const cabId=$('eqCab').value,cab=cabById(cabId),size=parseInt($('eqTamano').value);
+  if(cabUsed(cabId)+size>cab.u){toast(`${cab.nombre} no tiene espacio: ${cab.u-cabUsed(cabId)}U libres y el equipo necesita ${size}U. Elige otro gabinete.`,'err');return;}
+  const tipo=$('eqTipo').value,ne={id:Date.now(),cabId,tipo,nombre:$('eqNombre').value,tamano:size,faceBExpanded:false,etiqueta:$('eqEtiqueta').value.trim(),estado:$('eqEstado').value};
+  if(tipo==='SPLITTER'){ne.clase=$('eqClase').value;ne.ratio=parseInt($('eqRatio').value);ne.loss=null;ne.nota='';}
+  equipmentData.push(ne);
+  currentCabId=cabId;updateUI();closeModal();$('equipmentForm').reset();
+}
+/* ---- modales dinámicos ---- */
+const closeDynModal=()=>{const m=$('dynModal');if(m)m.remove();};
+function openDynModal(html){closeDynModal();const m=document.createElement('div');m.id='dynModal';m.className='ov';m.style.zIndex='400';m.innerHTML=html;document.body.appendChild(m);m.addEventListener('mousedown',e=>{if(e.target===m)closeDynModal();});return m;}
+function askConfirm(title,text,okLabel,cb){
+  openDynModal(`<div class="modal" style="width:430px"><div class="sh">${escapeMatrixText(title)}</div><div style="padding:14px;font-size:11.5px;line-height:1.6">${text}</div><div class="ft"><button class="btn" id="dmNo">CANCELAR</button><button class="btn red" id="dmOk">${okLabel}</button></div></div>`);
+  $('dmNo').onclick=closeDynModal;$('dmOk').onclick=()=>{closeDynModal();cb();};
+}
+function askSelect(title,label,opts,noteFn,okLabel,cb){
+  openDynModal(`<div class="modal" style="width:450px"><div class="sh">${escapeMatrixText(title)}</div><div style="padding:14px;font-size:11.5px;display:flex;flex-direction:column;gap:8px"><label><b>${label}</b></label><select id="dmSel" style="border:1px solid #000;padding:7px">${opts.map(o=>`<option value="${o.v}">${escapeMatrixText(o.t)}</option>`).join('')}</select><div id="dmNote" style="min-height:30px;font-size:10.5px;line-height:1.5"></div></div><div class="ft"><button class="btn" id="dmNo">CANCELAR</button><button class="btn dark" id="dmOk">${okLabel}</button></div></div>`);
+  const upd=()=>{$('dmNote').innerHTML=noteFn?noteFn($('dmSel').value):'';};$('dmSel').onchange=upd;upd();
+  $('dmNo').onclick=closeDynModal;$('dmOk').onclick=()=>{const v=$('dmSel').value;closeDynModal();cb(v);};
+}
+/* ---- potencia de salida por puerto (PON / SFP) ---- */
+function powerPorts(eq){
+  const o=[];
+  if(eq.tipo==='OLT'){for(let i=1;i<=8;i++)o.push(mkEp(eq.id,'OLT',`PON ${i}`));for(let i=1;i<=2;i++)o.push(mkEp(eq.id,'OLT',`SFP+ ${i}`));}
+  else if(eq.tipo==='SWITCH'){for(let i=1;i<=4;i++)o.push(mkEp(eq.id,'SWITCH',`SFP+ ${i}`));}
+  return o;
+}
+function openEditModal(id){
+  const eq=eqById(id);if(!eq)return;const esc=escapeMatrixText;
+  const ports=powerPorts(eq);
+  const sp=eq.tipo==='SPLITTER';
+  const splitHtml=sp?`<div class="ed-sec"><b>Splitter</b>
+    <div><label>Clase</label><select id="edClase">${Object.entries(SPLIT_CLASS).map(([k,v])=>`<option value="${k}" ${eq.clase===k?'selected':''}>${v}</option>`).join('')}</select></div>
+    <div><label>Modelo (balanceado)</label><select id="edRatio">${SPLIT_MODELS.map(n=>`<option value="${n}" ${eq.ratio===n?'selected':''}>1:${n} · ${SPLIT_LOSS[n].toFixed(1)} dB predefinidos</option>`).join('')}</select></div>
+    <div><label>Atenuación / pérdida (dB) <small id="edLossHint"></small></label><div style="display:flex;gap:6px"><input id="edLoss" type="number" step="0.1" min="0" max="40" value="${splitLoss(eq.id)}" style="flex:1"><button type="button" class="btn sm" id="edLossReset">RESTAURAR</button></div></div>
+    <div><label>Nota / observaciones</label><textarea id="edNota" rows="2" style="border:1px solid #000;padding:6px;font:inherit">${esc(eq.nota||'')}</textarea></div></div>`:'';
+  const pwHtml=ports.length?`<div class="ed-sec"><b>Potencia de salida (dBm)</b><small style="color:#555">TX con la que cada puerto inicia una trazabilidad (−40 a +10 dBm).</small>${ports.map(ep=>`<label class="pwr-row"><b>${esc(ep.port)}</b><span>${portInfo(ep).kind==='PON'?'PON · acceso':'SFP · enlace'}</span><input type="number" step="0.1" min="-40" max="10" data-k="${ep.key}" value="${getTx(ep)}"><i>dBm</i></label>`).join('')}</div>`:'';
+  openDynModal(`<div class="modal" style="width:470px;max-height:90vh;overflow:auto"><h2><span>✎ Editar · ${esc(eq.nombre)}</span><span style="cursor:pointer" onclick="closeDynModal()">✕</span></h2><div class="bd" style="gap:10px">
+    <div><label>Nombre</label><input id="edNombre" value="${esc(eq.nombre)}"></div>
+    <div><label>Etiqueta</label><input id="edEtiqueta" value="${esc(eq.etiqueta||'')}" placeholder="Ej. Nodo Norte"></div>
+    <div><label>Estado</label><select id="edEstado">${ESTADOS.map(x=>`<option ${eq.estado===x?'selected':''}>${x}</option>`).join('')}</select></div>
+    ${splitHtml}${pwHtml}</div><div class="ft"><button class="btn" id="edNo">CANCELAR</button><button class="btn dark" id="edOk">GUARDAR</button></div></div>`);
+  if(sp){
+    const hint=()=>{$('edLossHint').textContent=`(predefinido 1:${$('edRatio').value} = ${SPLIT_LOSS[$('edRatio').value].toFixed(1)} dB)`;};
+    hint();$('edRatio').onchange=()=>{$('edLoss').value=SPLIT_LOSS[$('edRatio').value];hint();};
+    $('edLossReset').onclick=()=>{$('edLoss').value=SPLIT_LOSS[$('edRatio').value];};
+  }
+  $('edNo').onclick=closeDynModal;
+  $('edOk').onclick=()=>{
+    const nombre=$('edNombre').value.trim();if(!nombre){toast('El nombre no puede estar vacío.','err');return;}
+    if(sp){
+      const ratio=parseInt($('edRatio').value),clase=$('edClase').value,loss=parseFloat($('edLoss').value);
+      if(isNaN(loss)||loss<0||loss>40){toast('La atenuación debe estar entre 0 y 40 dB.','err');return;}
+      const maxOut=Math.max(0,...connections.flatMap(c=>[c.from,c.to]).filter(e=>e.type==='SPLITTER'&&String(e.eqId)===String(eq.id)&&/^OUT/.test(e.port)).map(e=>+String(e.port).replace(/\D/g,'')));
+      if(ratio<maxOut){toast(`No puedes bajar a 1:${ratio}: la salida OUT ${maxOut} está conectada.`,'err');return;}
+      const inC=connOf(mkEp(eq.id,'SPLITTER','IN'));
+      if(clase==='AC'&&inC){const o=inC.from.key===`${eq.id}|SPLITTER|-|IN`?inC.to:inC.from;if(portInfo(o).kind==='PON'){toast('Un splitter con una PON conectada directo debe ser AF; desconecta la PON para cambiarlo a AC.','err');return;}}
+      eq.ratio=ratio;eq.clase=clase;eq.loss=Math.abs(loss-SPLIT_LOSS[ratio])<1e-9?null:loss;eq.nota=$('edNota').value.trim();
+    }
+    document.querySelectorAll('#dynModal input[data-k]').forEach(i=>{const v=parseFloat(i.value);if(!isNaN(v)&&v>=-40&&v<=10)originTx[i.dataset.k]=v;});
+    eq.nombre=nombre;eq.etiqueta=$('edEtiqueta').value.trim();eq.estado=$('edEstado').value;
+    closeDynModal();updateUI();toast(`${nombre} actualizado.`);
+  };
+}
+const openPowerModal=openEditModal;
+/* ---- gabinetes ---- */
+function openCabModal(id){
+  const ed=id?cabById(id):null,esc=escapeMatrixText;
+  const m=openDynModal(`<div class="modal" style="width:450px"><h2><span>${ed?'Editar gabinete':'Nuevo gabinete'}</span><span style="cursor:pointer" onclick="closeDynModal()">✕</span></h2><div class="bd">
+    <div><label>Nombre</label><input id="cbNombre" value="${esc(ed?ed.nombre:'Gabinete '+(cabinets.length+1))}"></div>
+    <div><label>Tipo de gabinete</label><select id="cbTipo">${CAB_CATALOG.map(t=>`<option value="${esc(t.tipo)}">${esc(t.tipo)}</option>`).join('')}<option value="__c">Personalizado…</option></select><input id="cbTipoC" placeholder="Nombre del tipo" style="display:none;margin-top:6px"></div>
+    <div><label>Tamaño (U)</label><select id="cbU"></select><input id="cbUC" type="number" min="1" max="60" placeholder="Número de U" style="display:none;margin-top:6px"></div></div>
+    <div class="ft"><button class="btn" id="cbNo">CANCELAR</button><button class="btn dark" id="cbOk">GUARDAR</button></div></div>`);
+  const fill=()=>{const t=CAB_CATALOG.find(x=>x.tipo===$('cbTipo').value),sizes=t?t.sizes:[12];
+    $('cbU').innerHTML=sizes.map(u=>`<option value="${u}">${u}U</option>`).join('')+'<option value="__o">Otro tamaño…</option>';
+    $('cbTipoC').style.display=$('cbTipo').value==='__c'?'':'none';$('cbUC').style.display='none';};
+  $('cbTipo').onchange=fill;fill();
+  $('cbU').onchange=()=>{$('cbUC').style.display=$('cbU').value==='__o'?'':'none';};
+  if(ed){const known=CAB_CATALOG.find(x=>x.tipo===ed.tipo);if(known){$('cbTipo').value=ed.tipo;fill();}else{$('cbTipo').value='__c';fill();$('cbTipoC').value=ed.tipo;}
+    if([...$('cbU').options].some(o=>o.value===String(ed.u)))$('cbU').value=String(ed.u);else{$('cbU').value='__o';$('cbUC').style.display='';$('cbUC').value=ed.u;}}
+  $('cbNo').onclick=closeDynModal;
+  $('cbOk').onclick=()=>{
+    const nombre=$('cbNombre').value.trim();if(!nombre){toast('Escribe un nombre para el gabinete.','err');return;}
+    const tipo=$('cbTipo').value==='__c'?($('cbTipoC').value.trim()||'Gabinete'):$('cbTipo').value;
+    const u=$('cbU').value==='__o'?parseInt($('cbUC').value):parseInt($('cbU').value);
+    if(!(u>=1&&u<=60)){toast('Indica un tamaño válido en U (1–60).','err');return;}
+    if(ed){if(u<cabUsed(ed.id)){toast(`${ed.nombre} tiene ${cabUsed(ed.id)}U instaladas; no puedes reducirlo a ${u}U.`,'err');return;}ed.nombre=nombre;ed.tipo=tipo;ed.u=u;}
+    else{const nc={id:'g'+Date.now(),nombre,tipo,u};cabinets.push(nc);currentCabId=nc.id;}
+    closeDynModal();updateUI();toast(ed?'Gabinete actualizado.':`Gabinete "${nombre}" creado (${u}U).`);
+  };
+}
+function deleteCabinet(id){
+  const cab=cabById(id);if(!cab)return;
+  if(cabinets.length<=1){toast('Debe existir al menos un gabinete.','err');return;}
+  const ne=eqsOf(id).length,nc=cables.filter(k=>k.cabId===id).length;
+  if(ne||nc){toast(`No se puede eliminar ${cab.nombre}: tiene ${ne} equipo(s) y ${nc} cable(s). Muévelos primero (⇄).`,'err');return;}
+  askConfirm('Eliminar gabinete',`¿Eliminar <b>${escapeMatrixText(cab.nombre)}</b>? Está vacío.`,'ELIMINAR',()=>{
+    cabinets=cabinets.filter(c=>c.id!==id);if(currentCabId===id)currentCabId=cabinets[0].id;if(matrixCab===id)matrixCab='all';if(dynCab===id)dynCab='all';updateUI();toast('Gabinete eliminado.');});
+}
+/* ---- cables ---- */
+function openCableModal(){
+  const esc=escapeMatrixText;
+  openDynModal(`<div class="modal" style="width:450px"><h2><span>Nuevo cable de entrada</span><span style="cursor:pointer" onclick="closeDynModal()">✕</span></h2><div class="bd">
+    <div><label>Nombre</label><input id="kNombre" value="Cable ${cables.length+1}"></div>
+    <div><label>Número de hilos</label><select id="kHilos">${CABLE_SIZES.map(n=>`<option value="${n}" ${n===12?'selected':''}>${n} hilos</option>`).join('')}</select></div>
+    <div><label>Gabinete al que llega</label><select id="kCab">${cabinets.map(c=>`<option value="${c.id}" ${c.id===(currentView==='tree'&&matrixCab!=='all'?matrixCab:currentCabId)?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select></div></div>
+    <div class="ft"><button class="btn" id="kNo">CANCELAR</button><button class="btn dark" id="kOk">CREAR CABLE</button></div></div>`);
+  $('kNo').onclick=closeDynModal;
+  $('kOk').onclick=()=>{const nombre=$('kNombre').value.trim();if(!nombre){toast('Escribe un nombre para el cable.','err');return;}
+    if(cables.some(k=>k.nombre.toLowerCase()===nombre.toLowerCase())){toast('Ya existe un cable con ese nombre.','err');return;}
+    const k={id:'K'+Date.now(),nombre,hilos:parseInt($('kHilos').value),cabId:$('kCab').value,sub:'Entrada'};
+    cables.push(k);currentCabId=k.cabId;currentCableId=k.id;matrixOpenPanels.add('cable-'+k.id);closeDynModal();updateUI();toast(`Cable "${nombre}" creado (${k.hilos} hilos).`);};
+}
+function moveCable(id){
+  const k=cableById(id);if(!k)return;
+  const dests=cabinets.filter(c=>c.id!==k.cabId);if(!dests.length){toast('Crea otro gabinete para poder mover el cable.','err');return;}
+  askSelect(`Mover ${k.nombre}`,'Gabinete destino',dests.map(c=>({v:c.id,t:c.nombre})),()=>`Las conexiones del cable se mantienen; las que lleguen a equipos de otro gabinete se verán como enlaces entre gabinetes.`,'MOVER',v=>{
+    k.cabId=v;currentCabId=v;currentCableId=k.id;updateUI();toast(`${k.nombre} ahora entra a ${cabNameOf(v)}.`);});
+}
+function deleteCable(id){
+  const k=cableById(id);if(!k)return;
+  const n=cableUsedCount(k);if(n){toast(`${k.nombre} tiene ${n} hilo(s) conectado(s). Desconéctalos primero.`,'err');return;}
+  askConfirm('Eliminar cable',`¿Eliminar <b>${escapeMatrixText(k.nombre)}</b> (${k.hilos} hilos)?`,'ELIMINAR',()=>{cables=cables.filter(x=>x.id!==id);updateUI();toast('Cable eliminado.');});
+}
+/* ---- equipos: mover / eliminar ---- */
+function attachedCables(eq){
+  const out=new Map();
+  connections.forEach(c=>{[[c.from,c.to],[c.to,c.from]].forEach(([a,b])=>{if(String(a.eqId)===String(eq.id)&&b.type==='CABLE'){const k=cableById(b.eqId);if(k)out.set(k.id,k);}});});
+  return[...out.values()];
+}
+function cableOtherUsers(k,eq){
+  const names=new Set();
+  connections.forEach(c=>{[[c.from,c.to],[c.to,c.from]].forEach(([a,b])=>{if(a.type==='CABLE'&&String(a.eqId)===String(k.id)&&b.type!=='CABLE'&&String(b.eqId)!==String(eq.id)){const e=eqOf(b);if(e)names.add(e.nombre);}});});
+  return[...names];
+}
+function moveEquipment(id){
+  if(session){toast('Finaliza la trazabilidad en curso antes de mover equipos.','err');return;}
+  const eq=equipmentData.find(e=>String(e.id)===String(id));if(!eq)return;
+  const dests=cabinets.filter(c=>c.id!==eq.cabId);
+  if(!dests.length){toast('Crea otro gabinete para poder mover equipos.','err');return;}
+  const cs=attachedCables(eq);
+  askSelect(`Mover ${eq.nombre}`,'Gabinete destino',dests.map(c=>({v:c.id,t:`${c.nombre} · ${cabUsed(c.id)}/${c.u}U`})),v=>{
+    const d=cabById(v),free=d.u-cabUsed(v),ex=eq.tamano-free;
+    const moved=cs.filter(k=>k.cabId!==v&&!cableOtherUsers(k,eq).length),stay=cs.filter(k=>k.cabId!==v&&cableOtherUsers(k,eq).length);
+    return (ex>0?`<span style="color:#b91c1c"><b>⚠ Sin espacio suficiente:</b> quedará excedido por ${ex}U; se coloca igual.</span><br>`:`Espacio libre en destino: ${free}U.<br>`)+
+      (moved.length?`Se moverán también los cables: <b>${moved.map(k=>escapeMatrixText(k.nombre)).join(', ')}</b>.`:'No hay cables que mover con este equipo.')+(stay.length?`<br><span style="color:#92400e"><b>Cable compartido:</b> ${stay.map(k=>`${escapeMatrixText(k.nombre)} (también conecta con ${cableOtherUsers(k,eq).map(escapeMatrixText).join(', ')})`).join('; ')} se queda en su gabinete; esos hilos pasan a ser enlaces entre gabinetes.</span>`:'');
+  },'MOVER',v=>{
+    const moved=cs.filter(k=>k.cabId!==v&&!cableOtherUsers(k,eq).length);
+    eq.cabId=v;moved.forEach(k=>{k.cabId=v;});
+    currentCabId=v;if(matrixCab!=='all')matrixCab=v;if(moved.length)currentCableId=moved[0].id;
+    updateUI();
+    const over=cabUsed(v)>cabById(v).u;
+    toast(`${eq.nombre} movido a ${cabNameOf(v)}${moved.length?` junto con ${moved.length} cable(s)`:''}${over?` · ⚠ excede ${cabUsed(v)-cabById(v).u}U`:''}.`,over?'err':'ok');
+  });
+}
+function deleteEquipment(id){
+  if(session){toast('Finaliza la trazabilidad en curso antes de eliminar equipos.','err');return;}
+  const eq=equipmentData.find(e=>String(e.id)===String(id));if(!eq)return;
+  const n=connections.filter(c=>String(c.from.eqId)===String(eq.id)||String(c.to.eqId)===String(eq.id)).length;
+  if(n){toast(`${eq.nombre} tiene ${n} conexión(es). Desconéctalas primero (clic sobre la línea).`,'err');return;}
+  askConfirm('Eliminar equipo',`¿Eliminar <b>${escapeMatrixText(eq.nombre)}</b> de ${escapeMatrixText(cabNameOf(eq.cabId))}?`,'ELIMINAR',()=>{
+    equipmentData=equipmentData.filter(e=>e.id!==eq.id);delete dyn.layout[String(eq.id)];matrixOpenPanels.delete(String(eq.id));updateUI();toast('Equipo eliminado.');});
+}
+window.addEventListener('resize',redraw);
+/* ===== PULSO DE LUZ ÚNICO (VER COMUNICACIÓN y linternas) =====
+   Un pulso corto que SALE DEL ORIGEN de cada trazabilidad y recorre la cadena hasta el final (solo ida, sin regresar).
+   Todas las cadenas salen a la vez y el ciclo se repite cada 1.5 s. Un solo requestAnimationFrame, solo mientras algo está encendido. */
+const PULSE_SPEED=300,PULSE_GAP=1500,PULSE_LEN=26;   // px/s · ms · px
+let commOn=false;const light={raf:0};
+const partnerOfEp=ep=>ep.type==='ODF'?oppFace(ep):(ep.type==='SPLITTER'&&/^OUT/.test(String(ep.port))?mkEp(ep.eqId,'SPLITTER','IN'):null);
+/* todos los tramos con señal, en orden de recorrido: {cid,src,dst,parent,root} (root = conexión de origen de la cadena) */
+function pulseItems(){
+  if(pulseItems.e===energy&&pulseItems.c)return pulseItems.c;
+  const items=[],by=new Map();
+  energy.forEach((en,cid)=>{const it={cid,src:en.start.key,dst:en.end.key,parent:null,root:cid,off:0,len:0};by.set(cid,it);items.push(it);});
+  items.forEach(it=>{const c=connections.find(x=>x.id===it.cid);if(c&&!c.origin){const pr=partnerOfEp(EP.get(it.src)),pc=pr&&connOf(pr);if(pc&&by.has(pc.id))it.parent=pc.id;}});
+  items.forEach(it=>{let r=it,g=0;while(r.parent!=null&&by.has(r.parent)&&g++<200)r=by.get(r.parent);it.root=r.cid;});
+  pulseItems.e=energy;pulseItems.c=items;return items;
+}
+const lenOfEl=el=>{if(!el._len)el._len=el.getTotalLength();return el._len;};
+function frameLight(t,items,sel){
+  const els=new Map();document.querySelectorAll(sel).forEach(el=>{if(!el.closest('.hidden'))els.set(+el.dataset.cid,el);});
+  if(!els.size)return;
+  const by=new Map(items.map(i=>[i.cid,i]));
+  items.forEach(i=>{const el=els.get(i.cid);i.len=el?lenOfEl(el):0;});
+  const offOf=(i,g=0)=>{const pr=i.parent!=null&&by.get(i.parent);return pr&&g<200?offOf(pr,g+1)+pr.len:0;};
+  let total=0;items.forEach(i=>{i.off=offOf(i);total=Math.max(total,i.off+i.len);});
+  const v=PULSE_SPEED/1000,dur=total/v,tc=t%(dur+PULSE_GAP);
+  items.forEach(i=>{const el=els.get(i.cid);if(!el)return;
+    const s=v*tc-i.off,rev=el.dataset.rev==='1';let vis=false;
+    if(tc<dur&&s>=0&&s<=i.len+PULSE_LEN){vis=true;el.style.strokeDashoffset=rev?(s-i.len):(PULSE_LEN-s);}
+    el.style.visibility=vis?'visible':'hidden';});
+}
+function lightTick(t){
+  if(!commOn&&!torchLock){light.raf=0;return;}
+  if(commOn)frameLight(t,pulseItems(),'path.sw');
+  if(torchLock)frameLight(t,torchLock.items,'path.tl');
+  light.raf=requestAnimationFrame(lightTick);
+}
+const lightEnsure=()=>{if((commOn||torchLock)&&!light.raf)light.raf=requestAnimationFrame(lightTick);};
+function buildPulse(){}   // (compatibilidad: ya no hace falta precalcular)
+function renderCommLegend(){
+  let w=$('commLegend');if(!w){w=document.createElement('div');w.id='commLegend';document.body.appendChild(w);}
+  if(!commOn){w.classList.add('hidden');return;}
+  const roots=[...new Set(pulseItems().map(i=>i.root))],rows=roots.map(r=>chainDirection(r)).filter(Boolean);
+  w.classList.remove('hidden');
+  w.innerHTML=`<div class="cl-h">COMUNICACIÓN · sentido de cada trazabilidad</div>${rows.length?rows.map(d=>`<div class="cl-r"><span class="dirbadge ${d.kind==='PON'?'pon':'dat'}">${d.txt}</span><span class="cl-t">${escapeMatrixText(d.origin)} → ${escapeMatrixText(d.end)}</span></div>`).join(''):'<div class="cl-r"><span class="cl-t">Sin trazabilidades con señal.</span></div>'}`;
+}
+function toggleComm(){
+  commOn=!commOn;const b=$('animToggle');
+  b.textContent=commOn?'VER COMUNICACIÓN ✓':'VER COMUNICACIÓN';b.classList.toggle('dark',commOn);
+  renderCommLegend();redraw();lightEnsure();
+}
+['eqTipo','eqClase','eqRatio'].forEach(id=>$(id).addEventListener('change',()=>{if(id!=='eqTipo'&&$('eqTipo').value==='SPLITTER')$('eqNombre').value=splitName($('eqClase').value,$('eqRatio').value);syncAddModal();}));
+window.onload=()=>{switchView('rack');updateUI();};
+</script>
+</body>
+</html>

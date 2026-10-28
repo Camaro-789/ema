@@ -186,46 +186,66 @@ const FTTHPlantillaFibra = (() => {
    * @param {number} [cable.fibrasLoose] hilos por buffer del tipo (solo «con buffer»)
    * @param {string} [cable.estructura]  'con_buffer' | 'drop'
    * @param {Array}  [cable.hilosReales] hilos de la BD (color/estado reales, opcional)
+   * @param {string} [cable.orientacion] 'in' (normal) | 'out' (SALIDA: reflejada y con
+   *                                     los hilos en orden invertido, para que miren
+   *                                     de frente a los de la entrada)
    * @returns {string} SVG listo para insertar ('' si el tipo no declara hilos)
    */
-  function svgFibra({ hilos, looses, fibrasLoose, estructura, hilosReales } = {}) {
+  function svgFibra({ hilos, looses, fibrasLoose, estructura, hilosReales, orientacion, idCable } = {}) {
     const contenedores = repartirHilos({ hilos, looses, fibrasLoose, estructura });
     const total = contenedores.reduce((n, c) => n + c.hilos, 0);
     if (!total) return '';
+
+    // Orientación: 'out' (lado SALIDA) dibuja el abanico ESPEJADO (la punta mira al
+    // lado contrario) y con el orden de los hilos invertido, de modo que el hilo 1
+    // de la salida quede frente al hilo 1 de la entrada en la fusión.
+    const haciaFuera = String(orientacion || '').toLowerCase() === 'out';
+    const MX = (x) => (haciaFuera ? VIEW_W - x : x);                 // espeja un punto
+    const MXR = (x, w) => (haciaFuera ? VIEW_W - (x + w) : x);        // espeja un rect
 
     const reales = Array.isArray(hilosReales) ? hilosReales : [];
     const viewH = Math.max(ALTO_MIN, total * HILO_SEP + 40);
     const centroY = viewH / 2;
     const yPrimero = centroY - ((total - 1) * HILO_SEP) / 2;
+    const yDe = (n) => yPrimero + n * HILO_SEP;
 
-    let svg = `<svg viewBox="0 0 ${VIEW_W} ${viewH}" xmlns="http://www.w3.org/2000/svg" class="pv-fibra-svg" style="width:100%;height:auto;overflow:visible;display:block;">`;
+    let svg = `<svg viewBox="0 0 ${VIEW_W} ${viewH}" xmlns="http://www.w3.org/2000/svg" class="pv-fibra-svg" data-orientacion="${haciaFuera ? 'out' : 'in'}" style="width:100%;height:auto;overflow:visible;display:block;">`;
 
     // ── Chaqueta exterior (jacket) ─────────────────────────────────────────
     const jacketH = Math.min(60, Math.max(40, total * HILO_SEP * 0.45));
-    svg += `<rect x="${X_CHAQUETA}" y="${centroY - jacketH / 2}" width="${ANCHO_CHAQUETA}" height="${jacketH}" rx="10" fill="#1e293b"/>`;
+    const onclickProps = idCable ? `onclick="if(window.showPropertiesModalById) window.showPropertiesModalById(${idCable});" style="cursor:pointer;"` : '';
+    svg += `<g class="fiber-jacket" ${onclickProps}>`;
+    svg += `<title>Ver propiedades del cable</title>`;
+    svg += `<rect x="${MXR(X_CHAQUETA, ANCHO_CHAQUETA)}" y="${centroY - jacketH / 2}" width="${ANCHO_CHAQUETA}" height="${jacketH}" rx="10" fill="#1e293b"/>`;
+    svg += `</g>`;
 
     let nHilo = 0;                                   // posición 1..N dentro del cable
     contenedores.forEach((cont) => {
-      const yIni = yPrimero + nHilo * HILO_SEP;
-      const yFin = yPrimero + (nHilo + cont.hilos - 1) * HILO_SEP;
+      const yIni = yDe(nHilo);
+      const yFin = yDe(nHilo + cont.hilos - 1);
       const yMedio = (yIni + yFin) / 2;
 
       if (cont.esBuffer) {
         const colBuf = colorDePosicion(cont.bufferNo);
         const alto = Math.max(HILO_SEP + 20, cont.hilos * HILO_SEP - 6);
+        const xBuffer = MXR(X_BUFFER, ANCHO_BUFFER);
+        const xTexto = MX(X_BUFFER + ANCHO_BUFFER / 2);
         // Caja del buffer (fondo con el color del buffer)
-        svg += `<rect x="${X_BUFFER}" y="${yMedio - alto / 2}" width="${ANCHO_BUFFER}" height="${alto}" rx="8" fill="${escapeHtml(colBuf.hex)}"/>`;
-        svg += `<text x="${X_BUFFER + ANCHO_BUFFER / 2}" y="${yMedio - 4}" text-anchor="middle" font-size="8.5" font-weight="800" fill="#ffffff" letter-spacing="0.5px" pointer-events="none">BUFFER</text>`;
-        svg += `<text x="${X_BUFFER + ANCHO_BUFFER / 2}" y="${yMedio + 8}" text-anchor="middle" font-size="8.5" font-weight="800" fill="#ffffff" letter-spacing="0.5px" pointer-events="none">${escapeHtml(String(colBuf.nombre).toUpperCase())}</text>`;
+        svg += `<g class="fiber-buffer-group" ${onclickProps}>`;
+        svg += `<title>Buffer ${escapeHtml(String(colBuf.nombre))} · Clic para propiedades</title>`;
+        svg += `<rect x="${xBuffer}" y="${yMedio - alto / 2}" width="${ANCHO_BUFFER}" height="${alto}" rx="8" fill="${escapeHtml(colBuf.hex)}"/>`;
+        svg += `<text x="${xTexto}" y="${yMedio - 4}" text-anchor="middle" font-size="8.5" font-weight="800" fill="#ffffff" letter-spacing="0.5px" pointer-events="none">BUFFER</text>`;
+        svg += `<text x="${xTexto}" y="${yMedio + 8}" text-anchor="middle" font-size="8.5" font-weight="800" fill="#ffffff" letter-spacing="0.5px" pointer-events="none">${escapeHtml(String(colBuf.nombre).toUpperCase())}</text>`;
+        svg += `</g>`;
         // Conector chaqueta → buffer
-        svg += `<path d="M${X_CHAQUETA + ANCHO_CHAQUETA},${centroY} L${X_BUFFER},${yMedio}" fill="none" stroke="#94a3b8" stroke-width="2" opacity="0.5"/>`;
+        svg += `<path d="M${MX(X_CHAQUETA + ANCHO_CHAQUETA)},${centroY} L${MX(X_BUFFER)},${yMedio}" fill="none" stroke="#94a3b8" stroke-width="2" opacity="0.5"/>`;
         // Nodo concéntrico de salida del buffer
-        svg += `<circle cx="${X_NODO}" cy="${yMedio}" r="7" fill="#ffffff" stroke="${escapeHtml(colBuf.hex)}" stroke-width="3"/>`;
-        svg += `<circle cx="${X_NODO}" cy="${yMedio}" r="3" fill="${escapeHtml(colBuf.hex)}"/>`;
+        svg += `<circle cx="${MX(X_NODO)}" cy="${yMedio}" r="7" fill="#ffffff" stroke="${escapeHtml(colBuf.hex)}" stroke-width="3"/>`;
+        svg += `<circle cx="${MX(X_NODO)}" cy="${yMedio}" r="3" fill="${escapeHtml(colBuf.hex)}"/>`;
       }
 
       for (let k = 0; k < cont.hilos; k++) {         // ← tantos hilos como diga el tipo
-        const y = yPrimero + nHilo * HILO_SEP;
+        const y = yDe(nHilo);
         const real = reales[nHilo] || null;
         // Manda el color REAL del hilo (BD); si no viene, su posición en el contenedor
         const colHilo = (real && real.color_hex)
@@ -235,20 +255,26 @@ const FTTHPlantillaFibra = (() => {
         const estado = (real && real.estado && real.estado !== 'libre') ? real.estado : '';
         const xOrigen = cont.esBuffer ? X_NODO : X_CHAQUETA + ANCHO_CHAQUETA;
         const yOrigen = cont.esBuffer ? yMedio : centroY;
-        const d = `M ${xOrigen},${yOrigen} L ${X_QUIEBRE},${y} L ${X_TERMINAL},${y}`;
+        const d = `M ${MX(xOrigen)},${yOrigen} L ${MX(X_QUIEBRE)},${y} L ${MX(X_TERMINAL)},${y}`;
 
         // Potencia del hilo: MEDIDA si existe, si no la TEÓRICA, si no '— dBm'
         const pot = potenciaDeHilo(real);
         const dbmTexto = fDbm(pot.valor);
 
-        svg += `<g class="strand" data-hilo-global="${nHilo + 1}" data-buffer="${cont.bufferNo || 0}" data-color="${escapeHtml(colHilo.nombre)}" data-hex="${escapeHtml(colHilo.hex)}" data-dbm="${escapeHtml(dbmTexto)}" data-dbm-origen="${pot.origen}" data-estado="${escapeHtml(estado)}">`;
+        const hiloId = real ? (real.fibra_id || real.id || (nHilo + 1)) : (nHilo + 1);
+        const extremoVal = haciaFuera ? 'salida' : 'entrada';
+        const cableIdVal = idCable != null ? idCable : (real ? (real.cable_id || '') : '');
+        const endpointKey = `cable_${cableIdVal}:hilo_${hiloId}:${extremoVal}`;
+
+        svg += `<g class="strand" data-cable-id="${cableIdVal}" data-hilo-id="${hiloId}" data-extremo="${extremoVal}" data-endpoint-key="${endpointKey}" data-hilo-global="${nHilo + 1}" data-buffer="${cont.bufferNo || 0}" data-color="${escapeHtml(colHilo.nombre)}" data-hex="${escapeHtml(colHilo.hex)}" data-dbm="${escapeHtml(dbmTexto)}" data-dbm-origen="${pot.origen}" data-estado="${escapeHtml(estado)}">`;
         // 1) Línea + conector (trazado invisible de 16px para el cursor, y el visible)
         svg += `<path d="${d}" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" pointer-events="stroke"/>`;
         svg += `<path class="strand-line" d="${d}" fill="none" stroke="${escapeHtml(trazo)}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
         // 2) Punto terminal del hilo
-        svg += `<circle class="strand-dot" cx="${X_TERMINAL}" cy="${y}" r="6.5" fill="${escapeHtml(colHilo.hex)}" stroke="${escapeHtml(trazo)}" stroke-width="1.4"/>`;
+        svg += `<circle class="strand-dot" data-cable-id="${cableIdVal}" data-hilo-id="${hiloId}" data-extremo="${extremoVal}" data-endpoint-key="${endpointKey}" cx="${MX(X_TERMINAL)}" cy="${y}" r="6.5" fill="${escapeHtml(colHilo.hex)}" stroke="${escapeHtml(trazo)}" stroke-width="1.4"/>`;
         // 3) Etiqueta de potencia en la punta (aparece al pasar el cursor por el hilo)
-        svg += `<text class="strand-dbm" x="${X_TERMINAL - 11}" y="${y + 3.5}" text-anchor="end">${escapeHtml(dbmTexto)}</text>`;
+        const xDbm = haciaFuera ? (MX(X_TERMINAL) + 11) : (X_TERMINAL - 11);
+        svg += `<text class="strand-dbm" x="${xDbm}" y="${y + 3.5}" text-anchor="${haciaFuera ? 'start' : 'end'}">${escapeHtml(dbmTexto)}</text>`;
         svg += `</g>`;
         nHilo++;
       }
@@ -296,17 +322,23 @@ const FTTHPlantillaFibra = (() => {
     const idCable = numero(d.cable_id != null ? d.cable_id : d.id);
     const attrBorrar = idCable === null ? '' : ` data-borrar="cable:${idCable}"`;
 
-    // ── HTML de la tarjeta de fibra ───────────────────────────────────────
-    let html = `<div class="pv-fibra fiber-card" data-cable-id="${idCable || ''}" data-pv-plantilla="${escapeHtml(CLAVE)}" data-estructura="${escapeHtml(estructura)}"${attrBorrar}>`;
+    // ── Elemento PURO de fibra (sin recuadro de tarjeta, fondo transparente) ────
+    let html = `<div class="pv-fibra pv-fibra--pura fiber-card" data-cable-id="${idCable || ''}" data-pv-plantilla="${escapeHtml(CLAVE)}" data-estructura="${escapeHtml(estructura)}"${attrBorrar} style="background:transparent!important;border:none!important;box-shadow:none!important;display:flex;flex-direction:column;align-items:center;">`;
 
-    // Cabecera
-    html += `<div class="pv-fibra__cab fiber-header">`;
-    html += `<div class="pv-fibra__titulo fiber-title">${escapeHtml(modelo)}</div>`;
-    html += `<div class="pv-fibra__subtitulo fiber-subtitle">${escapeHtml(subDescripcion)}</div>`;
+    // Etiqueta mínima superior (lado, nombre y total de hilos)
+    const esEntrada = d.orientacion === 'in';
+    const tagLado = esEntrada
+      ? '<span style="background:#dbeafe;color:#1d4ed8;font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:999px;text-transform:uppercase;">Entrada</span>'
+      : '<span style="background:#dcfce7;color:#15803d;font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:999px;text-transform:uppercase;">Salida</span>';
+
+    html += `<div class="fiber-meta" style="margin-bottom:6px;display:flex;align-items:center;gap:8px;background:#ffffff;border:1px solid #e2e8f0;padding:3px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,0.04);">`;
+    html += tagLado;
+    html += `<strong style="font-size:11px;color:#0f172a;cursor:pointer;" onclick="if(window.showPropertiesModalById) window.showPropertiesModalById(${idCable || 0})">${escapeHtml(modelo)}</strong>`;
+    html += `<span style="font-size:11px;color:#64748b;font-weight:500;">${total} Hilos</span>`;
     html += `</div>`;
 
     // SVG de la fibra: tantos hilos como declare el tipo
-    html += `<div class="pv-fibra__svg-wrap fiber-canvas">`;
+    html += `<div class="pv-fibra__svg-wrap fiber-canvas" style="background:transparent!important;overflow:visible;">`;
     if (total) {
       html += svgFibra({
         hilos,
@@ -314,18 +346,14 @@ const FTTHPlantillaFibra = (() => {
         fibrasLoose: d.fibrasLoose,
         estructura,
         hilosReales: d.hilosReales,
+        orientacion: d.orientacion,
+        idCable: idCable,
       });
     } else {
       html += '<div class="pv-fibra__aviso">Este tipo no declara sus hilos: '
         + 'ponle «Número total de fibras» (con buffer) o «Número total de hilos» (drop) '
         + 'en Tipos de objetos.</div>';
     }
-    html += `</div>`;
-
-    // Pie con ocupación e interacción
-    html += `<div class="pv-fibra__pie fiber-footer">`;
-    html += `<span>Ocupación: <strong>${ocupacion.usadas || 0}/${total}</strong></span>`;
-    html += `<span class="click-hint"><i class="fa-solid fa-computer-mouse"></i> Clic derecho → Propiedades</span>`;
     html += `</div>`;
 
     html += `</div>`;

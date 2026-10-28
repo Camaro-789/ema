@@ -9,14 +9,15 @@
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=v1790299701501">
-    <link rel="stylesheet" href="css/prop-modal.css?v=v1790299701501">
-    <link rel="stylesheet" href="css/hilos.css?v=v1790299701501">
-    <link rel="stylesheet" href="css/diagrama.css?v=v1790299701501">
-    <link rel="stylesheet" href="css/lienzo-diagrama.css?v=v1790299701501">
-    <link rel="stylesheet" href="css/tipos-pro.css?v=v1790299701501">
-    <link rel="stylesheet" href="css/plantillas-visuales.css?v=v1790299701501">
-    <link rel="stylesheet" href="css/capas-minimal.css?v=v1790299701501">
+    <link rel="stylesheet" href="css/style.css?v=v1791246558753">
+    <link rel="stylesheet" href="css/prop-modal.css?v=v1791246558753">
+    <link rel="stylesheet" href="css/hilos.css?v=v1791246558753">
+    <link rel="stylesheet" href="css/diagrama.css?v=v1791246558753">
+    <link rel="stylesheet" href="css/pop-papel-dinamico.css?v=202610271848">
+    <link rel="stylesheet" href="css/lienzo-diagrama.css?v=v1791246558753">
+    <link rel="stylesheet" href="css/tipos-pro.css?v=v1791246558753">
+    <link rel="stylesheet" href="css/plantillas-visuales.css?v=v1791246558753">
+    <link rel="stylesheet" href="css/capas-minimal.css?v=v1791246558753">
     <style>
       /* --- Variables y Reset Global --------------------------- */
       :root {
@@ -310,13 +311,13 @@
       .tech-panel.min .cell:not(.toggle),
       .tech-panel.min .section-gap { display: none; }
 
-      .tech-panel .cell.toggle { width: 32px; }
+      .tech-panel .cell.toggle { width: 26px; padding-top: 5px; padding-bottom: 5px; }
 
       .tech-panel .cell:last-child { border-right: none; }
       .tech-panel .cell:hover { background: #F5F5F5; }
       .tech-panel .cell img { width: 12px; height: 12px; display: block; filter: brightness(0); }
       .tech-panel .cell i { font-size: 12px; color: #000000; }
-      .tech-panel .cell.toggle i { font-size: 14px; }
+      .tech-panel .cell.toggle i { font-size: 11px; }
       .tech-panel .cell.modo i { font-size: 14px; }
       .tech-panel .cell span {
         font-size: 9px;
@@ -372,10 +373,12 @@
       .tech-panel .cell.toggle .badge-count { display: none; }
       .tech-panel.min .cell.toggle .badge-count.mostrar { display: flex; }
 
-      /* Aviso bajo la barra: la sigue cuando cambia de tamano (recogida/abierta) */
+      /* Tooltip del boton (+): solo visible al pasar el cursor por encima */
       .tech-hint {
-        margin-top: 10px;
-        max-width: 300px;
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        white-space: nowrap;
         padding: 5px 8px;
         background: #ffffff;
         border: 1px solid #000000;
@@ -383,6 +386,16 @@
         font-size: 10px;
         font-weight: 600;
         color: #000000;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        z-index: 31;
+      }
+
+      /* Solo mostrar cuando el panel esté recogido (min) y el cursor esté en el toggle */
+      .tech-panel.min #techToggle:hover ~ * .tech-hint,
+      .tech-dock:has(.tech-panel.min #techToggle:hover) .tech-hint {
+        opacity: 1;
       }
 
       .objects-submenu {
@@ -1035,7 +1048,7 @@
                     <div class="section-gap"></div>
 
                     <div class="group" id="modeGroup">
-                        <div class="cell modo active" id="techIlimitado" onclick="toggleIlimitado()" title="Ilimitados: sigue colocando el mismo tipo. Pulsa para colocar uno solo."><i class="fa-solid fa-infinity"></i></div>
+                        <div class="cell modo" id="techIlimitado" onclick="toggleIlimitado()" title="Ilimitados: sigue colocando el mismo tipo. Pulsa para colocar uno solo."><i class="fa-solid fa-infinity"></i></div>
                     </div>
 
                     <div class="section-gap"></div>
@@ -1502,18 +1515,20 @@
 
 <!-- Scripts JS -->
 <script src="js/app.js"></script>
-<script src="js/ftth-iconos.js?v=v1790299701501"></script>
-<script src="js/ftth-colores.js?v=v1790299701501"></script>
-<script src="js/ftth-plantillas.js?v=v1790299701501"></script>
+<script src="js/ftth-iconos.js?v=v1791246558753"></script>
+<script src="js/ftth-colores.js?v=v1791246558753"></script>
+<script src="js/ftth-plantillas.js?v=v1791246558753"></script>
 <script src="js/ftth-proyectos.js"></script>
-<script src="js/ftth-cable-reglas.js?v=v1790299701501"></script>
-<script src="js/ftth-tipos.js?v=v1790299701501"></script>
-<script src="js/ftth-mapa.js?v=v1790299701501"></script>
-<script src="js/ftth-hilos.js?v=v1790299701501"></script>
-<script src="js/plantillas-visuales/splitter.js?v=v1790299701501"></script>
-<script src="js/plantillas-visuales/fibra.js?v=v1790299701501"></script>
-<script src="js/ftth-fibra-inspector.js?v=v1790299701501"></script>
-<script src="js/ftth-diagrama.js?v=v1790299701501"></script>
+<script src="js/ftth-cable-reglas.js?v=v1791246558753"></script>
+<script src="js/ftth-tipos.js?v=v1791246558753"></script>
+<script src="js/ftth-mapa.js?v=v1791246558753"></script>
+<script src="js/ftth-pop-papel.js?v=202610271941"></script>
+<script src="js/ftth-hilos.js?v=v1791246558753"></script>
+<script src="js/plantillas-visuales/splitter.js?v=v1791246558753"></script>
+<script src="js/plantillas-visuales/fibra.js?v=v1791246558753"></script>
+<script src="js/ftth-fibra-inspector.js?v=v1791246558753"></script>
+<script src="js/ftth-fusiones.js?v=202610271938"></script>
+<script src="js/ftth-diagrama.js?v=v1791246558753"></script>
 <script src="js/ftth-carpetas.js"></script>
 
 <script>
@@ -1553,12 +1568,20 @@
 
   // -- Panel tecnico de objetos: barra recogida, modo ilimitado y GUARDAR ----
   let _panelAbierto = false;    // la barra arranca recogida: solo se ve el boton (+)
-  let _ilimitado = true;        // (infinito) sigue colocando el mismo tipo sin soltarlo
+  let _ilimitado = null;        // null = ninguno seleccionado; true = ∞ Varios; false = uno solo
   let _pendientesPanel = 0;     // ultima cuenta de pendientes que anuncio el mapa
 
   function techHint(msg) {
     const el = document.getElementById('techHint');
     if (el) el.textContent = msg;
+  }
+
+  // Limpia el modo de colocacion: ni (+) ni (∞) quedan marcados como activos
+  function resetModoPanel() {
+    _ilimitado = null;
+    const celda = document.getElementById('techIlimitado');
+    if (celda) celda.classList.remove('active');
+    if (window.FTTHMapa && FTTHMapa.setModoSimple) FTTHMapa.setModoSimple(false);
   }
 
   // (+) recoge / despliega la barra horizontal con todos los elementos
@@ -1568,10 +1591,14 @@
     _panelAbierto = !_panelAbierto;
     panel.classList.toggle('min', !_panelAbierto);
     if (_panelAbierto) {
-      techHint(_ilimitado
+      techHint(_ilimitado === true
         ? 'Ilimitados: elige un tipo y sigue haciendo clic en el mapa'
-        : 'Uno solo: elige un tipo y se coloca un objeto');
+        : _ilimitado === false
+          ? 'Uno solo: elige un tipo y se coloca un objeto'
+          : 'Elige modo: ∞ Varios o una sola colocación');
     } else {
+      // Al cerrar el panel sin guardar: resetear el modo
+      resetModoPanel();
       techHint('Pulsa + para agregar objetos');
     }
   }
@@ -1583,13 +1610,14 @@
 
   // (infinito): encendido = ilimitados · apagado = se coloca uno y se suelta el tipo
   function aplicarIlimitado() {
+    if (_ilimitado === null) return;  // sin modo seleccionado: no tocar nada
     if (window.FTTHMapa && FTTHMapa.setModoSimple) FTTHMapa.setModoSimple(!_ilimitado);
     const celda = document.getElementById('techIlimitado');
     if (celda) celda.classList.toggle('active', _ilimitado);
   }
 
   function toggleIlimitado() {
-    _ilimitado = !_ilimitado;
+    _ilimitado = (_ilimitado !== true);  // null/false → true; true → false
     aplicarIlimitado();
     techHint(_ilimitado
       ? 'Ilimitados: sigue colocando el mismo tipo hasta que lo sueltes'
@@ -1597,8 +1625,16 @@
   }
 
   // GUARDAR: manda al servidor TODO lo que quedo pendiente en esta sesion
-  function guardarObjetosDock() {
-    if (window.FTTHMapa && FTTHMapa.guardarObjetos) FTTHMapa.guardarObjetos();
+  async function guardarObjetosDock() {
+    if (window.FTTHMapa && FTTHMapa.guardarObjetos) {
+      await FTTHMapa.guardarObjetos();
+    }
+    // Tras guardar: cerrar la barra y resetear modo
+    const panel = document.getElementById('techPanel');
+    if (panel) panel.classList.add('min');
+    _panelAbierto = false;
+    resetModoPanel();
+    techHint('Pulsa + para agregar objetos');
   }
 
   // El mapa avisa cuantos objetos estan pendientes: badge y boton encendido
@@ -1624,7 +1660,7 @@
     }
   });
 
-  aplicarIlimitado();   // estado inicial: ilimitados encendido (default de siempre)
+  // El modo arranca sin seleccionar: el usuario elige en cada apertura del panel
 
   function toggleSubmenuTipos() {
     toggleSubmenu('submenu-tipos', 'btn-menu-tipos');

@@ -75,8 +75,133 @@ const FTTHMapa = (() => {
     }, 260));
   }
 
+  // ── Tooltip de hover sobre elementos del mapa ─────────────────────────────
+  // Un único <div> reciclado para todos los elementos — ligero y sin interferir
+  // con el mapa (pointer-events:none en CSS).
+
+  /** Categorías para las que se muestra el tooltip al pasar el cursor. */
+  const CATS_TOOLTIP = new Set([
+    'poste', 'postes', 'cajanap', 'manga', 'splitter', 'fusion',
+    'odf', 'olt', 'armario', 'switches', 'luminaria', 'reserva'
+  ]);
+
+  let _tooltipEl = null;
+  let _tooltipTimeout = null;
+
+  function _getTooltipEl() {
+    if (!_tooltipEl) {
+      _tooltipEl = document.createElement('div');
+      _tooltipEl.id = 'ftth-map-tooltip';
+      document.body.appendChild(_tooltipEl);
+    }
+    return _tooltipEl;
+  }
+
+  function _mostrarTooltip(x, y, tipoNombre, numero) {
+    const el = _getTooltipEl();
+    clearTimeout(_tooltipTimeout);
+    el.innerHTML =
+      `<span class="tt-tipo">${tipoNombre}</span>` +
+      (numero != null ? `<span class="tt-num">#${numero}</span>` : '');
+    // Offset desde el cursor (12px arriba-derecha para no tapar el ícono)
+    el.style.left = `${x + 14}px`;
+    el.style.top  = `${y - 36}px`;
+    el.classList.add('visible');
+  }
+
+  function _ocultarTooltip() {
+    const el = _getTooltipEl();
+    el.classList.remove('visible');
+  }
+
+  let _activeRadarMarker = null;
+  let _radarTimer = null;
+
+  function _dispararRadarEnPunto(map, coords) {
+    if (_activeRadarMarker) {
+      try { _activeRadarMarker.remove(); } catch (e) {}
+      _activeRadarMarker = null;
+    }
+    clearTimeout(_radarTimer);
+
+    const el = document.createElement('div');
+    el.className = 'ftth-radar-beacon';
+    el.innerHTML = `
+      <div class="radar-core"></div>
+      <div class="radar-wave"></div>
+      <div class="radar-wave"></div>
+      <div class="radar-wave"></div>
+    `;
+
+    _activeRadarMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
+      .setLngLat(coords)
+      .addTo(map);
+
+    _radarTimer = setTimeout(() => {
+      if (_activeRadarMarker) {
+        try { _activeRadarMarker.remove(); } catch (e) {}
+        _activeRadarMarker = null;
+      }
+    }, 3800);
+  }
+
+  // ── Resaltar un elemento desde el inspector (clic en lista de postes) ──────
+  /**
+   * Centra el mapa suavemente en el elemento con ese ID (compensando el ancho
+   * del panel lateral derecho para que no quede tapado) y dispara una sonda radar.
+   *
+   * @param {number|string} id  ID del elemento a resaltar
+   */
+  async function resaltarElemento(id) {
+    const map = getMap();
+    if (!map || id == null) return;
+    const numId = Number(id);
+    if (!Number.isFinite(numId)) return;
+
+    // 1. Buscar la feature en memoria
+    let feat = (_currentFeatures || []).find(
+      f => f && (Number(f.id) === numId || (f.properties && Number(f.properties.id) === numId))
+    );
+
+    // 2. Si no está en memoria local, obtener de la API
+    if (!feat) {
+      try {
+        const res = await fetch(apiUrl(`/api/elementos/${numId}`));
+        if (res.ok) feat = await res.json();
+      } catch (e) {
+        console.warn('[FTTHMapa] No se pudo cargar elemento para resaltar:', e);
+      }
+    }
+
+    if (!feat || !feat.geometry) return;
+
+    // 3. Extraer coordenadas (Point o centro de LineString)
+    let center = null;
+    if (feat.geometry.type === 'Point' && Array.isArray(feat.geometry.coordinates)) {
+      center = feat.geometry.coordinates;
+    } else if (feat.geometry.type === 'LineString' && Array.isArray(feat.geometry.coordinates)) {
+      const pts = feat.geometry.coordinates;
+      center = pts[Math.floor(pts.length / 2)];
+    }
+
+    if (!center || center.length < 2) return;
+
+    // 4. Centrar suavemente en el mapa compensando el panel lateral derecho
+    const panelAbierto = Boolean(document.querySelector('.inspector-root.active'));
+    const padRight = panelAbierto ? Math.min(window.innerWidth * 0.45, 450) : 0;
+    map.easeTo({
+      center: [center[0], center[1]],
+      duration: 650,
+      padding: { top: 40, bottom: 40, left: 40, right: padRight },
+      essential: true,
+    });
+
+    // 5. Emitir ondas concéntricas de sonda/radar sobre el punto del poste
+    _dispararRadarEnPunto(map, [center[0], center[1]]);
+  }
+
   const DEFAULT_DEFS = {
-    poste:     { nombre: 'Poste Estándar 9m', color: '#8b4513', props: { material: 'Concreto', altura_m: 9.0, tipo_poste: 'Sencillo' } },
+    poste:     { nombre: 'Poste Estándar 9m', color: '#64748b', props: { material: 'Concreto', altura_m: 9.0, tipo_poste: 'Sencillo' } },
     cajanap:   { nombre: 'Caja NAP 16P',     color: '#eab308', props: { capacidad_puertos: '16 Puertos', tipo_instalacion: 'Aérea en Poste', splitter_interno: '1x16 PLC' } },
     manga:     { nombre: 'Manga Fusión 48H', color: '#a855f7', props: { tipo_manga: 'Aérea', capacidad_fusion: '48 hilos', puertos_entrada: 4 } },
     ducto:     { nombre: 'Ducto HDPE 110mm', color: '#ff5722', props: { tipo_ducto: 'HDPE' } },
@@ -161,7 +286,14 @@ const FTTHMapa = (() => {
    * Devuelve true si la geometría quedó aplicada (lo importante para repintar).
    */
   function _pintarColeccion(map, features) {
-    const coleccion = { type: 'FeatureCollection', features: features || [] };
+    const normalizadas = (features || []).map(f => {
+      if (!f) return f;
+      const rawId = f.id != null ? f.id : (f.properties && f.properties.id != null ? f.properties.id : null);
+      const parsedNum = Number(rawId);
+      const finalId = (rawId != null && !isNaN(parsedNum)) ? parsedNum : rawId;
+      return finalId != null && f.id !== finalId ? { ...f, id: finalId } : f;
+    });
+    const coleccion = { type: 'FeatureCollection', features: normalizadas };
     const src = map.getSource('ftth-elementos');
 
     if (src && typeof src.setData === 'function') {
@@ -194,71 +326,116 @@ const FTTHMapa = (() => {
     }
   }
 
-  // Crea la capa de etiquetas una vez que los íconos SVG están registrados en MapLibre.
+  // Crea las capas de etiquetas e íconos:
+  // 1) ftth-postes-layer: capa de símbolos SDF para los postes (cuadrados coloreados dinámicamente)
+  // 2) ftth-labels-layer: capa de símbolos no-SDF para cajas, mangas, etc. (SVGs a color)
+  // Al estar separadas en dos capas distintas, WebGL no mezcla SDF y no-SDF en un mismo buffer.
   function _addLabelsLayerWhenReady(map, srcId) {
     const crear = () => {
-      if (map.getLayer('ftth-labels-layer')) return;
-      try {
-        map.addLayer({
-          id: 'ftth-labels-layer',
-          type: 'symbol',
-          source: srcId,
-          filter: ['all', ['!=', ['get', 'categoria'], 'ducto'], ['!=', ['get', 'categoria'], 'cables']],
-          layout: {
-            // Ícono SVG del tipo (registrado por FTTHIconos.registrarEnMapa)
-            'icon-image': [
-              'concat',
-              'ftth-ico-',
-              ['match', ['downcase', ['get', 'categoria']],
-                'post', 'poste',
-                'postes', 'poste',
-                'caja', 'cajanap',
-                'nap', 'cajanap',
-                'caja-nap', 'cajanap',
-                'caja_nap', 'cajanap',
-                ['downcase', ['get', 'categoria']]
-              ]
+      // 1. Capa de Postes (SDF - Cuadrados coloreables por tipo)
+      if (!map.getLayer('ftth-postes-layer')) {
+        try {
+          map.addLayer({
+            id: 'ftth-postes-layer',
+            type: 'symbol',
+            source: srcId,
+            filter: [
+              'any',
+              ['==', ['downcase', ['get', 'categoria']], 'poste'],
+              ['==', ['downcase', ['get', 'categoria']], 'postes'],
+              ['==', ['downcase', ['get', 'categoria']], 'post']
             ],
-            'icon-size': [
-              'case',
-              // 'pulsado': el objeto acaba de recibir el trazado (pulso de confirmación)
-              ['boolean', ['feature-state', 'pulsado'], false], 0.58,
-              ['boolean', ['feature-state', 'hover'], false], 0.48,
-              0.34
-            ],
-            'icon-allow-overlap': true,
-            'icon-ignore-placement': true,
-            'icon-offset': [0, -10],
-            'icon-anchor': 'bottom',
-            // Etiqueta de texto con el nombre y el NÚMERO VISIBLE (correlativo por tipo;
-            // el id interno se usa solo si el objeto todavía es provisional).
-            'text-field': ['case',
-              ['has', 'pendiente'], ['get', 'tipo_nombre'],
-              ['concat', ['get', 'tipo_nombre'], ' #',
-                ['to-string', ['coalesce', ['get', 'numero'], ['get', 'id']]]]],
-            'text-size': 12,
-            'text-offset': [0, 1.1],
-            'text-anchor': 'top',
-            'text-allow-overlap': true,
-            'text-ignore-placement': true,
-          },
-          paint: {
-            'text-color': '#0f172a',
-            'text-halo-color': '#ffffff',
-            'text-halo-width': 2,
-            'icon-opacity': 1,
-            'text-opacity': 1,
-          },
-        });
-      } catch (e) {
-        // Un addLayer inválido (p. ej. un ícono/texto que MapLibre rechaza) NO debe
-        // tumbar el resto: los datos y las capas de líneas/puntos ya están puestos.
-        console.warn('[mapa] la capa de íconos/etiquetas no se pudo crear:', e && e.message);
-        return;
+            layout: {
+              'icon-image': 'ftth-shape-square',
+              'icon-size': 0.48,
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true,
+              'icon-offset': [0, -10],
+              'icon-anchor': 'bottom',
+              'text-field': ['case',
+                ['has', 'pendiente'], ['get', 'tipo_nombre'],
+                ['concat', ['get', 'tipo_nombre'], ' #',
+                  ['to-string', ['coalesce', ['get', 'numero'], ['get', 'id']]]]],
+              'text-size': 12,
+              'text-offset': [0, 1.1],
+              'text-anchor': 'top',
+              'text-allow-overlap': true,
+              'text-ignore-placement': true,
+            },
+            paint: {
+              'icon-color': ['coalesce', ['get', 'color'], '#64748b'],
+              'icon-halo-color': '#ffffff',
+              'icon-halo-width': 2,
+              'icon-halo-blur': 0,
+              'text-color': '#0f172a',
+              'text-halo-color': '#ffffff',
+              'text-halo-width': 2,
+              'icon-opacity': 1,
+              'text-opacity': 1,
+            },
+          });
+        } catch (e) {
+          console.warn('[mapa] la capa ftth-postes-layer no se pudo crear:', e && e.message);
+        }
       }
 
-      // El ícono del tipo es el que recibe el cursor y el clic derecho
-      _bindLayerInteractions(map, ['ftth-labels-layer']);
+      // 2. Capa de Nodos e Infraestructura (no-SDF - Cajas, Mangas, ODFs con sus SVGs oficiales)
+      if (!map.getLayer('ftth-labels-layer')) {
+        try {
+          map.addLayer({
+            id: 'ftth-labels-layer',
+            type: 'symbol',
+            source: srcId,
+            filter: [
+              'all',
+              ['!=', ['get', 'categoria'], 'ducto'],
+              ['!=', ['get', 'categoria'], 'cables'],
+              ['!=', ['downcase', ['get', 'categoria']], 'poste'],
+              ['!=', ['downcase', ['get', 'categoria']], 'postes'],
+              ['!=', ['downcase', ['get', 'categoria']], 'post']
+            ],
+            layout: {
+              'icon-image': [
+                'concat',
+                'ftth-ico-',
+                ['match', ['downcase', ['get', 'categoria']],
+                  'caja', 'cajanap',
+                  'nap', 'cajanap',
+                  'caja-nap', 'cajanap',
+                  'caja_nap', 'cajanap',
+                  ['downcase', ['get', 'categoria']]
+                ]
+              ],
+              'icon-size': 0.34,
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true,
+              'icon-offset': [0, -10],
+              'icon-anchor': 'bottom',
+              'text-field': ['case',
+                ['has', 'pendiente'], ['get', 'tipo_nombre'],
+                ['concat', ['get', 'tipo_nombre'], ' #',
+                  ['to-string', ['coalesce', ['get', 'numero'], ['get', 'id']]]]],
+              'text-size': 12,
+              'text-offset': [0, 1.1],
+              'text-anchor': 'top',
+              'text-allow-overlap': true,
+              'text-ignore-placement': true,
+            },
+            paint: {
+              'text-color': '#0f172a',
+              'text-halo-color': '#ffffff',
+              'text-halo-width': 2,
+              'icon-opacity': 1,
+              'text-opacity': 1,
+            },
+          });
+        } catch (e) {
+          console.warn('[mapa] la capa ftth-labels-layer no se pudo crear:', e && e.message);
+        }
+      }
+
+      // Los íconos y postes reciben el cursor y las interacciones de clic
+      _bindLayerInteractions(map, ['ftth-postes-layer', 'ftth-labels-layer']);
     };
 
     if (window.FTTHIconos) {
@@ -308,22 +485,23 @@ const FTTHMapa = (() => {
       });
     }
 
-    // 2. Capa Puntos Vectoriales (Garantiza visibilidad 100% inmediata de nodos)
+    // 2. Capa Puntos Vectoriales Circulares (Cajas, Mangas, etc. — los postes son cuadrados en postes-layer)
     if (!map.getLayer('ftth-puntos-layer')) {
       map.addLayer({
         id: 'ftth-puntos-layer',
         type: 'circle',
         source: srcId,
-        filter: ['all', ['!=', ['get', 'categoria'], 'ducto'], ['!=', ['get', 'categoria'], 'cables']],
+        filter: [
+          'all',
+          ['!=', ['get', 'categoria'], 'ducto'],
+          ['!=', ['get', 'categoria'], 'cables'],
+          ['!=', ['downcase', ['get', 'categoria']], 'poste'],
+          ['!=', ['downcase', ['get', 'categoria']], 'postes'],
+          ['!=', ['downcase', ['get', 'categoria']], 'post']
+        ],
         paint: {
-          'circle-color': ['coalesce', ['get', 'color'], '#3b82f6'],
-          'circle-radius': [
-            'case',
-            // 'pulsado': el objeto acaba de recibir el trazado (pulso de confirmación)
-            ['boolean', ['feature-state', 'pulsado'], false], 14,
-            ['boolean', ['feature-state', 'hover'], false], 10,
-            7
-          ],
+          'circle-color': ['coalesce', ['get', 'color'], '#64748b'],
+          'circle-radius': 7,
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff',
           'circle-opacity': 0.95,
@@ -331,14 +509,13 @@ const FTTHMapa = (() => {
       });
     }
 
-    // 3. Íconos SVG y etiquetas
+    // 3. Íconos SVG y etiquetas (separados por capa SDF y no-SDF)
     _addLabelsLayerWhenReady(map, srcId);
 
     // Cursor y menú contextual de todas las capas
     try {
-      _bindLayerInteractions(map, ['ftth-ductos-layer', 'ftth-cables-layer', 'ftth-puntos-layer', 'ftth-labels-layer']);
+      _bindLayerInteractions(map, ['ftth-ductos-layer', 'ftth-cables-layer', 'ftth-puntos-layer', 'ftth-postes-layer', 'ftth-labels-layer']);
     } catch (e) {
-      // Si alguna capa no existe (p. ej. la de etiquetas falló), el resto sigue vivo.
       console.warn('[mapa] interacciones parciales en las capas FTTH:', e && e.message);
     }
   }
@@ -394,15 +571,130 @@ const FTTHMapa = (() => {
     });
   }
 
+  function abrirModalExtremosCable(props, instProps) {
+    const cableId = props.id;
+    const cableNombre = instProps.name || instProps.nombre || props.tipo_nombre || `Cable #${cableId}`;
+    
+    const actualA = instProps.extremo_A_id || '';
+    const actualB = instProps.extremo_B_id || '';
+    const actualResA = instProps.reserva_A_m || 0;
+    const actualResB = instProps.reserva_B_m || 0;
+
+    let modal = document.getElementById('ftth-cable-extremos-modal');
+    if (modal) modal.remove();
+
+    modal = document.createElement('div');
+    modal.id = 'ftth-cable-extremos-modal';
+    modal.style.cssText = [
+      'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:90000;',
+      'background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.35);',
+      'padding:20px 24px;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;',
+      'display:flex;flex-direction:column;gap:14px;width:380px;max-width:92vw;',
+    ].join('');
+
+    modal.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f0f0f2;padding-bottom:10px;">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#1d1d1f;">🔗 Extremos y Reservas del Cable</div>
+          <div style="font-size:11px;color:#86868b;margin-top:2px;">${escapeHtml(cableNombre)}</div>
+        </div>
+        <button id="cable-extremos-close" style="border:none;background:#f5f5f7;border-radius:6px;width:26px;height:26px;cursor:pointer;">✕</button>
+      </div>
+      <div style="font-size:12px;color:#86868b;margin-bottom:4px;">
+        Define los nodos lógicos de los extremos A y B, y las reservas en metros por cada extremo.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:4px;">Extremo A (inicio)</label>
+          <input type="number" id="extremo-a-id" placeholder="ID del nodo (ODF, Caja NAP, Manga...)" value="${actualA}" min="1" step="1" style="width:100%;padding:8px 12px;border:1px solid #d1d1d6;border-radius:8px;font-size:13px;">
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:4px;">Reserva Extremo A (m)</label>
+          <input type="number" id="reserva-a-m" placeholder="Metros de reserva en extremo A" value="${actualResA}" min="0" step="0.1" style="width:100%;padding:8px 12px;border:1px solid #d1d1d6;border-radius:8px;font-size:13px;">
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:4px;">Extremo B (fin)</label>
+          <input type="number" id="extremo-b-id" placeholder="ID del nodo (ODF, Caja NAP, Manga...)" value="${actualB}" min="1" step="1" style="width:100%;padding:8px 12px;border:1px solid #d1d1d6;border-radius:8px;font-size:13px;">
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;font-weight:600;color:#1d1d1f;margin-bottom:4px;">Reserva Extremo B (m)</label>
+          <input type="number" id="reserva-b-m" placeholder="Metros de reserva en extremo B" value="${actualResB}" min="0" step="0.1" style="width:100%;padding:8px 12px;border:1px solid #d1d1d6;border-radius:8px;font-size:13px;">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+        <button id="cable-extremos-cancel" style="padding:8px 14px;background:#f5f5f7;color:#1d1d1f;border:1px solid #d1d1d6;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">Cancelar</button>
+        <button id="cable-extremos-save" style="padding:8px 14px;background:#0071e3;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">Guardar</button>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const close = () => { if (modal.parentNode) modal.remove(); };
+    modal.querySelector('#cable-extremos-close').addEventListener('click', close);
+    modal.querySelector('#cable-extremos-cancel').addEventListener('click', close);
+
+    modal.querySelector('#cable-extremos-save').addEventListener('click', async () => {
+      const extremoA = parseInt(modal.querySelector('#extremo-a-id').value, 10) || null;
+      const extremoB = parseInt(modal.querySelector('#extremo-b-id').value, 10) || null;
+      const reservaA = parseFloat(modal.querySelector('#reserva-a-m').value) || 0;
+      const reservaB = parseFloat(modal.querySelector('#reserva-b-m').value) || 0;
+      close();
+
+      if (window.FTTHTipos) FTTHTipos.showToast('Guardando extremos y reservas del cable...', 'info');
+      try {
+        const res = await fetch(apiUrl(`/api/elementos/${cableId}`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            propiedades_instancia: {
+              ...instProps,
+              extremo_A_id: extremoA,
+              extremo_B_id: extremoB,
+              reserva_A_m: reservaA,
+              reserva_B_m: reservaB,
+            }
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          if (window.FTTHTipos) FTTHTipos.showToast(err.detail || 'Error al guardar', 'error');
+          return;
+        }
+        if (window.FTTHTipos) FTTHTipos.showToast('Extremos y reservas guardados ✓', 'success');
+        // Recargar features para reflejar los cambios
+        if (window.FTTHMapa && window.FTTHMapa.cargarProyecto) {
+          await window.FTTHMapa.cargarProyecto(window.currentProjectId);
+        }
+      } catch (e) {
+        console.error('Error guardando extremos del cable:', e);
+        if (window.FTTHTipos) FTTHTipos.showToast('Error de red', 'error');
+      }
+    });
+  }
+
   let _contextMenuHandled = false;
 
-  function finishCableTraceAtPoint(coords, targetNodeId = null, pasoFinal = null) {
+  // Cajas del mapa (NAP, manga): el trazado NO las ancla solo. Al terminar en una
+  // caja su diagrama nace VACÍO y el cable se mete desde él con los botones
+  // «Agregar cable de entrada / salida» de la barra inferior. Un POSTE sí se ancla:
+  // es el punto de la ruta, no un nodo con diagrama.
+  const CATS_CAJA_TRAZO = ['cajanap', 'manga'];
+  function _esCaja(cat) {
+    return CATS_CAJA_TRAZO.includes(String(cat || '').toLowerCase());
+  }
+
+  function finishCableTraceAtPoint(coords, targetNodeId = null, pasoFinal = null,
+                                   targetNodeCategoria = null) {
     if (!_modoActivo || _modoActivo.categoria !== 'cables' || _pendingLine.length === 0) return;
     if (coords && Array.isArray(coords)) {
       _pendingLine.push(coords);
       _recordarPaso(pasoFinal || { punto: coords });
     }
-    const { tipoId, tipoNombre, color, nodoInicioId } = _modoActivo;
+    const { tipoId, tipoNombre, color, nodoInicioId, nodoInicioCategoria } = _modoActivo;
+    // Extremos del cable: NO se anclan solos a una CAJA (ver CATS_CAJA_TRAZO), así
+    // el cable no «se mete solo» al diagrama de la caja donde termina/empieza.
+    const extA = _esCaja(nodoInicioCategoria) ? null : nodoInicioId;
+    const extB = _esCaja(targetNodeCategoria) ? null : targetNodeId;
     const lineToSave = [..._pendingLine];
     // La ruta física va EN ORDEN de clic: es lo que necesita el motor de fallas
     const postesRuta = [..._postesIntermedios];
@@ -418,8 +710,10 @@ const FTTHMapa = (() => {
 
     showReservaPrompt((reservaVal) => {
       if (window.FTTHTipos) FTTHTipos.showToast('Finalizando y guardando cable de fibra...', 'info');
-      colocarDucto(tipoId, tipoNombre, lineToSave, color, 'cables', targetNodeId,
-                   nodoInicioId, reservaVal, postesRuta, rutaTrazo);
+      colocarDucto(tipoId, tipoNombre, lineToSave, color, 'cables', extB,
+                   extA, reservaVal, postesRuta, rutaTrazo,
+                   extA, extB,   // extremo_A_id, extremo_B_id (null si el nodo es caja)
+                   0, 0);        // reserva_A_m, reserva_B_m (defaults, se editan luego)
     });
   }
 
@@ -451,7 +745,7 @@ const FTTHMapa = (() => {
             const ptLng = _ctxFeature.geometry.coordinates[0];
             const ptLat = _ctxFeature.geometry.coordinates[1];
             const targetNodeId = _ctxFeature.properties.id;
-            finishCableTraceAtPoint([ptLng, ptLat], targetNodeId);
+            finishCableTraceAtPoint([ptLng, ptLat], targetNodeId, null, cat);
             return;
           }
 
@@ -507,7 +801,7 @@ const FTTHMapa = (() => {
               cerrarPosteMenu();
               _pulsarElemento(posteId);          // confirmación visual del clic
               // El poste donde se ancla es el último vértice del trazado
-              finishCableTraceAtPoint([ptLng, ptLat], posteId, { poste: posteId });
+              finishCableTraceAtPoint([ptLng, ptLat], posteId, { poste: posteId }, 'poste');
             });
 
             posteMenu.querySelector('#pm-paso').addEventListener('click', () => {
@@ -540,21 +834,39 @@ const FTTHMapa = (() => {
         showContextMenu(e.point, e.lngLat);
       });
 
-      map.on('mouseenter', layerId, () => {
-        if (!_modoActivo) map.getCanvas().style.cursor = 'pointer';
+      map.on('mouseenter', layerId, e => {
+        if (!_modoActivo) {
+          map.getCanvas().style.cursor = 'pointer';
+          const feat = e.features && e.features[0];
+          if (feat && feat.properties) {
+            const props = feat.properties;
+            const cat = String(props.categoria || '').toLowerCase();
+            if (CATS_TOOLTIP.has(cat)) {
+              const label = CAT_LABELS[cat] || props.tipo_nombre || cat;
+              const nombre = props.tipo_nombre || label;
+              const numero = props.numero != null ? props.numero : props.id;
+              _mostrarTooltip(e.originalEvent.clientX, e.originalEvent.clientY, nombre, numero);
+            }
+          }
+        }
+      });
+      map.on('mousemove', layerId, e => {
+        if (_tooltipEl && _tooltipEl.classList.contains('visible')) {
+          _tooltipEl.style.left = `${e.originalEvent.clientX + 14}px`;
+          _tooltipEl.style.top  = `${e.originalEvent.clientY - 36}px`;
+        }
       });
       map.on('mouseleave', layerId, () => {
         if (!_modoActivo) map.getCanvas().style.cursor = '';
+        _ocultarTooltip();
       });
       // Clic izquierdo: muestra un pequeño popup (recuadro) con las propiedades del objeto.
-      // EXCEPCIÓN: si hay modo cables activo, el clic en el layer PROPAGA a handleMapClick
+      // EXCEPCIÓN: si hay modo colocación activo, el clic en el layer PROPAGA a handleMapClick
       map.on('click', layerId, e => {
         if (_modoMover) return;
         if (_modoActivo) {
-          if (_modoActivo.categoria === 'cables') {
-            e._layerFeature = e.features && e.features[0];
-            handleMapClick(e);
-          }
+          e._layerFeature = e.features && e.features[0];
+          handleMapClick(e);
           return;
         }
         const feature = e.features && e.features[0];
@@ -563,6 +875,105 @@ const FTTHMapa = (() => {
         showPropertiesPopup(feature, e.lngLat);
       });
     });
+  }
+
+  // ── Formateo central de propiedades ────────────────────────────────────────
+  //
+  // CLAVES_OCULTAS: campos que NUNCA aparecen en ninguna vista genérica de
+  // propiedades (popup, menú contextual, o cualquier panel futuro).
+  // Para añadir un campo a la lista negra en el futuro: EDITAR SOLO ESTA LÍNEA.
+  //
+  // Regla de arquitectura (ver .clinerules):
+  //   Las propiedades de un elemento se muestran SIEMPRE a través de
+  //   _renderPropsHtml — ninguna superficie nueva debe iterar props.entries()
+  //   ni renderizar campos genéricos por su cuenta.
+  //
+  const CLAVES_OCULTAS = new Set([
+    // Campos que tienen fila propia dedicada en el popup/modal (no duplicar)
+    'name', 'nombre', 'estado', 'color', 'etiquetas', 'tipo_poste',
+    'codigo', 'desc', 'descripcion',
+    // Geometría / rutas — se muestran solo a través del inspector de fibra
+    // o de la fila «Postes intermedios» controlada explícitamente.
+    // «trazado_ruta» es la RECETA interna del backend (array de objetos):
+    // volcarlo crudo produce «[object Object]» — nunca se muestra aquí.
+    'trazado_ruta', 'postes_intermedios',
+    // Coordenadas crudas — tienen su propia sección de coordenadas
+    'lat', 'lon', 'lng', 'coordinates',
+  ]);
+
+  /**
+   * Genera filas HTML de propiedades de un elemento, filtrando siempre los
+   * campos de CLAVES_OCULTAS. Es la ÚNICA función autorizada para iterar y
+   * formatear props genéricas — popup y menú contextual la invocan en vez de
+   * duplicar la lógica.
+   *
+   * @param {Object} instProps   Propiedades de instancia (parseInstProps ya aplicado)
+   * @param {Object} tipoProps   Propiedades del tipo (parseInstProps ya aplicado)
+   * @param {Object} [opts]
+   * @param {'popup'|'ctx'} [opts.modo='popup']  Controla el HTML de cada fila:
+   *   - 'popup': div flex estilizado (clic izquierdo)
+   *   - 'ctx':   div compacto (menú contextual)
+   * @param {string[]} [opts.extraIgnore=[]]  Claves adicionales a omitir en este contexto
+   * @returns {string} HTML listo para inyectar
+   */
+  function _renderPropsHtml(instProps, tipoProps, opts) {
+    const { modo = 'popup', extraIgnore = [] } = opts || {};
+    const allProps = { ...tipoProps, ...instProps };
+    const extraIgnoreSet = new Set(extraIgnore.map(k => k.toLowerCase()));
+
+    let html = '';
+
+    // reserva_m tiene formato especial ("Xm") — se trata antes del loop general
+    if (instProps.reserva_m) {
+      if (modo === 'popup') {
+        html += `<div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#86868b;">Reserva:</span><span style="font-weight:500;">${instProps.reserva_m}m</span></div>`;
+      } else {
+        html += `<div><strong>Reserva:</strong> ${instProps.reserva_m}m</div>`;
+      }
+    }
+
+    Object.entries(allProps).forEach(([k, v]) => {
+      const keyLower = k.toLowerCase();
+      // Filtro 1: lista negra central (CLAVES_OCULTAS)
+      if (CLAVES_OCULTAS.has(keyLower)) return;
+      // Filtro 2: reserva_m ya fue tratada arriba
+      if (keyLower === 'reserva_m') return;
+      // Filtro 3: ignorados específicos del contexto (e.g. 'codigo' en popup ya tiene fila propia)
+      if (extraIgnoreSet.has(keyLower)) return;
+      // Filtro 4: valores vacíos / no serializables
+      if (v === null || v === undefined || v === '') return;
+      if (typeof v === 'object') return;   // objetos crudos → nunca como texto
+
+      const valor = String(v);
+      const label = k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ');
+
+      if (modo === 'popup') {
+        html += `<div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#86868b;">${label}:</span><span style="font-weight:500; text-align:right; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${valor}">${valor}</span></div>`;
+      } else {
+        html += `<div><strong>${label}:</strong> ${valor}</div>`;
+      }
+    });
+
+    return html;
+  }
+
+  /**
+   * Puntos de la ruta de un cable (los postes por los que pasa, EN ORDEN de
+   * trazado) tal como quedaron guardados en `propiedades_instancia.
+   * postes_intermedios`. Es la ÚNICA fuente para la interfaz: «Postes
+   * intermedios» y «Trazado ruta» se pintan con ESTE mismo texto, así que no
+   * pueden mostrar información distinta del mismo cable.
+   *
+   * OJO: `trazado_ruta` está en CLAVES_OCULTAS y NUNCA se vuelca crudo en la
+   * interfaz — es la RECETA interna del backend para rehacer la geometría.
+   * Se sigue guardando igual; solo deja de mostrarse en vistas genéricas.
+   */
+  function _textoPuntosRuta(postesIntermedios) {
+    if (!Array.isArray(postesIntermedios) || !postesIntermedios.length) return '';
+    return postesIntermedios
+      .map((n) => Number(n))
+      .filter((n) => Number.isFinite(n))
+      .join(', ');
   }
 
   // ── Popup de Propiedades (Clic Izquierdo) ──────────────────────────────────
@@ -587,20 +998,11 @@ const FTTHMapa = (() => {
     const lat = lngLat.lat.toFixed(5);
     const lng = lngLat.lng.toFixed(5);
 
-    const allProps = { ...tipoProps, ...instProps };
-    const ignoreKeys = ['name', 'nombre', 'estado', 'color', 'etiquetas', 'tipo_poste', 'codigo', 'desc', 'descripcion'];
-    
-    let extraHtml = '';
-    if (instProps.reserva_m) {
-      extraHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#86868b;">Reserva:</span><span style="font-weight:500;">${instProps.reserva_m}m</span></div>`;
-    }
-    
-    Object.entries(allProps).forEach(([k, v]) => {
-      const keyLower = k.toLowerCase();
-      if (!ignoreKeys.includes(keyLower) && v !== null && v !== '') {
-        const formattedKey = k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ');
-        extraHtml += `<div style="display:flex; justify-content:space-between; margin-bottom:2px;"><span style="color:#86868b;">${formattedKey}:</span><span style="font-weight:500; text-align:right; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${v}">${v}</span></div>`;
-      }
+    // Delega en la función central — CLAVES_OCULTAS ya filtra trazado_ruta y
+    // postes_intermedios; 'codigo' y otros campos con fila propia van en extraIgnore.
+    const extraHtml = _renderPropsHtml(instProps, tipoProps, {
+      modo: 'popup',
+      extraIgnore: ['codigo', 'desc', 'descripcion'],
     });
 
     const div = document.createElement('div');
@@ -645,6 +1047,11 @@ const FTTHMapa = (() => {
   // Permite abrir el diagrama desde el botón del popup HTML inyectado
   function abrirDiagramaGlobal(id, categoria, tipoNombre) {
     if (_activePopup) _activePopup.remove();
+    if (['cajanap', 'manga', 'armario'].includes(String(categoria || '').toLowerCase())
+        && window.FTTHPopPapel && window.FTTHPopPapel.abrir) {
+      window.FTTHPopPapel.abrir(id, { categoria, tipoNombre });
+      return;
+    }
     if (window.FTTHDiagrama && window.FTTHDiagrama.abrir) {
       window.FTTHDiagrama.abrir(id, { categoria, tipoNombre });
     }
@@ -657,10 +1064,37 @@ const FTTHMapa = (() => {
     return CATEGORIAS_CON_DIAGRAMA.includes(String(categoria || '').toLowerCase());
   }
 
-  function abrirDiagramaDelElemento(props, geometry) {
+  async function abrirDiagramaDelElemento(props, geometry) {
     if (!props || !tieneDiagrama(props.categoria)) return false;
+
+    // Si el elemento es provisional (id tmp-...) o hay objetos pendientes en cola,
+    // guardamos automáticamente para que el nodo tenga su ID real en base de datos.
+    const esProvisional = (typeof props.id === 'string' && props.id.startsWith('tmp-')) || props.pendiente;
+    let targetId = props.id;
+    if (esProvisional || (_pendientesGuardar && _pendientesGuardar.length > 0)) {
+      if (window.FTTHTipos) FTTHTipos.showToast('Guardando elementos para abrir el diagrama...', 'info');
+      await guardarObjetos();
+      // Buscar la feature actualizada con su ID definitivo
+      const featActual = (_currentFeatures || []).find(f => f && f.properties && (
+        f.properties.id === targetId ||
+        (f.properties.categoria === props.categoria && f.properties.poste_ref_id === props.poste_ref_id)
+      ));
+      if (featActual && featActual.properties && typeof featActual.properties.id === 'number') {
+        targetId = featActual.properties.id;
+        props = featActual.properties;
+      }
+    }
+
     if (window.FTTHDiagrama && window.FTTHDiagrama.abrir) {
-      window.FTTHDiagrama.abrir(props.id, {
+      if (['cajanap', 'manga', 'armario'].includes(String(props.categoria || '').toLowerCase())
+          && window.FTTHPopPapel && window.FTTHPopPapel.abrir) {
+        window.FTTHPopPapel.abrir(targetId, {
+          categoria: props.categoria,
+          tipoNombre: props.tipo_nombre,
+        });
+        return true;
+      }
+      window.FTTHDiagrama.abrir(targetId, {
         categoria: props.categoria,
         tipoNombre: props.tipo_nombre,
       });
@@ -671,17 +1105,63 @@ const FTTHMapa = (() => {
     return false;
   }
 
+  // ── Configuración del apilado de objetos por zoom ────────────────────────
+  // Los objetos anclados a un poste se apilan verticalmente usando un offset
+  // en PÍXELES DE PANTALLA convertido a coordenadas por el API de MapLibre.
+  //
+  // La transición es SUAVE: entre STACK_ZOOM_START y STACK_ZOOM_FULL el
+  // offset escala linealmente de 0 a STACK_PX_MAX, por lo que los objetos
+  // "emergen" gradualmente del poste en lugar de saltar de golpe.
+  //
+  //   zoom < START  → colapsan sobre el poste (no se ven separados)
+  //   zoom START→FULL → expansión progresiva
+  //   zoom > FULL   → separación fija de STACK_PX_MAX px entre cada objeto
+  //
+  // Por qué START = 17: a zoom 15 un píxel ≈ 4.7 m, lo que daría ≈169 m
+  // de separación con 36 px — imposible de ver como "cerca del poste".
+  // A zoom 17 un px ≈ 1.2 m → 22 px ≈ 26 m → aún visible pero tolerable.
+  // A zoom 19 un px ≈ 0.3 m → 22 px ≈  6 m → bien cerca del poste.
+  const STACK_ZOOM_START = 17;   // zoom al que empiezan a abrirse
+  const STACK_ZOOM_FULL  = 19;   // zoom al que alcanzan la separación máxima
+  const STACK_PX_MAX     = 22;   // píxeles máximos entre cada objeto al stack
+
+  /**
+   * Factor de progresión del apilado [0, 1]:
+   *   0 = objetos colapsados sobre el poste
+   *   1 = separación completa (STACK_PX_MAX px por slot)
+   */
+  function _stackProgress(zoom) {
+    if (zoom <= STACK_ZOOM_START) return 0;
+    if (zoom >= STACK_ZOOM_FULL)  return 1;
+    return (zoom - STACK_ZOOM_START) / (STACK_ZOOM_FULL - STACK_ZOOM_START);
+  }
+
+  /**
+   * Convierte `pixeles` hacia el NORTE en un delta de latitud (grados).
+   * Usa project/unproject de MapLibre para que sea exacto a cualquier zoom.
+   */
+  function _pixelesALatDelta(map, lon, lat, pixeles) {
+    try {
+      const screenPt = map.project([lon, lat]);
+      const offsetPt = map.unproject([screenPt.x, screenPt.y - pixeles]);
+      return offsetPt.lat - lat;
+    } catch (e) {
+      return pixeles * 0.0000001;
+    }
+  }
+
   function _aplicarDesplazamientoVerticalPostes(rawFeatures) {
     if (!Array.isArray(rawFeatures) || !rawFeatures.length) return rawFeatures || [];
+
+    const map  = getMap();
+    const zoom = map ? map.getZoom() : 0;
+    const progress = _stackProgress(zoom);
 
     const polesById = new Map();
     rawFeatures.forEach(f => {
       if (f && f.properties && f.properties.categoria === 'poste' && f.geometry && f.geometry.type === 'Point') {
         const id = Number(f.id || f.properties.id);
-        polesById.set(id, {
-          id,
-          coords: [...f.geometry.coordinates],
-        });
+        polesById.set(id, { id, coords: [...f.geometry.coordinates] });
       }
     });
 
@@ -693,8 +1173,7 @@ const FTTHMapa = (() => {
 
       let poleId = Number(f.properties.poste_ref_id);
       if (!poleId || !polesById.has(poleId)) {
-        const coords = f.geometry.coordinates || [];
-        const [lon, lat] = coords;
+        const [lon, lat] = f.geometry.coordinates || [];
         for (const [pid, pdata] of polesById.entries()) {
           const [plon, plat] = pdata.coords;
           if (Math.abs(lon - plon) < 0.00002 && Math.abs(lat - plat) < 0.00002) {
@@ -704,25 +1183,17 @@ const FTTHMapa = (() => {
           }
         }
       }
-
       if (poleId && polesById.has(poleId)) {
         if (!anchoredGroups.has(poleId)) anchoredGroups.set(poleId, []);
         anchoredGroups.get(poleId).push(f);
       }
     });
 
-    // Orden jerárquico visual: 1. Reserva -> 2. Manga -> 3. Caja
+    // Orden jerárquico: reserva/luminaria arriba, caja/splitter abajo
     const prioridades = {
-      reserva: 1,
-      luminaria: 1,
-      manga: 2,
-      fusion: 2,
-      cajanap: 3,
-      caja: 3,
-      splitter: 3,
-      olt: 3,
-      odf: 3,
-      armario: 3
+      reserva: 1, luminaria: 1,
+      manga: 2, fusion: 2,
+      cajanap: 3, caja: 3, splitter: 3, olt: 3, odf: 3, armario: 3
     };
 
     return rawFeatures.map(f => {
@@ -731,18 +1202,15 @@ const FTTHMapa = (() => {
       if (!poleId || !polesById.has(poleId)) return f;
 
       const poleData = polesById.get(poleId);
-      const group = anchoredGroups.get(poleId) || [];
+      const group    = anchoredGroups.get(poleId) || [];
 
       group.sort((a, b) => {
-        const catA = String(a.properties.categoria || '').toLowerCase();
-        const catB = String(b.properties.categoria || '').toLowerCase();
         const instA = parseInstProps(a.properties.propiedades_instancia);
         const instB = parseInstProps(b.properties.propiedades_instancia);
-        const isResA = instA.tipo === 'Reserva' || instA.reserva_m;
-        const isResB = instB.tipo === 'Reserva' || instB.reserva_m;
-
-        const prioA = isResA ? 1 : (prioridades[catA] || 3);
-        const prioB = isResB ? 1 : (prioridades[catB] || 3);
+        const catA  = String(a.properties.categoria || '').toLowerCase();
+        const catB  = String(b.properties.categoria || '').toLowerCase();
+        const prioA = (instA.tipo === 'Reserva' || instA.reserva_m) ? 1 : (prioridades[catA] || 3);
+        const prioB = (instB.tipo === 'Reserva' || instB.reserva_m) ? 1 : (prioridades[catB] || 3);
         if (prioA !== prioB) return prioA - prioB;
         return (Number(a.id || a.properties.id) || 0) - (Number(b.id || b.properties.id) || 0);
       });
@@ -750,14 +1218,17 @@ const FTTHMapa = (() => {
       const idxInGroup = group.indexOf(f);
       if (idxInGroup < 0) return f;
 
-      // Desplazamiento vertical limpio hacia el norte (3.8m por nivel)
-      const latStep = 0.000035 * (idxInGroup + 1);
+      // Sin progresión → objeto sobre el poste (zoom demasiado lejano)
+      if (progress === 0 || !map) return f;
+
+      // Offset suave: escala con el progreso del zoom (0 → STACK_PX_MAX)
+      const [plon, plat] = poleData.coords;
+      const pixelesNorte = STACK_PX_MAX * progress * (idxInGroup + 1);
+      const latDelta     = _pixelesALatDelta(map, plon, plat, pixelesNorte);
+
       return {
         ...f,
-        geometry: {
-          ...f.geometry,
-          coordinates: [poleData.coords[0], poleData.coords[1] + latStep]
-        }
+        geometry: { ...f.geometry, coordinates: [plon, plat + latDelta] }
       };
     });
   }
@@ -814,6 +1285,23 @@ const FTTHMapa = (() => {
         propiedades_instancia: {},
       },
     };
+  }
+
+  /**
+   * Geometría CANÓNICA (la del inventario del proyecto) de un elemento.
+   *
+   * La geometría que trae un evento de capa de MapLibre es la de LA TESELA que
+   * hay bajo el cursor: viene RECORTADA (y puede llegar como MultiLineString si
+   * el recorte parte la línea). Esa geometría NO sirve para deducir por dónde
+   * pasa un cable: solo incluye el trozo clicado. Cualquier código que necesite
+   * la geometría completa de un elemento debe usar este helper.
+   */
+  function _geometriaCompleta(id) {
+    const objetivo = Number(id);
+    if (!Number.isFinite(objetivo)) return null;
+    const feat = (_currentFeatures || []).find(f => f && f.properties
+      && Number(f.properties.id) === objetivo);
+    return (feat && feat.geometry) || null;
   }
 
   // Sustituye la provisional por la feature confirmada del servidor
@@ -1087,9 +1575,7 @@ const FTTHMapa = (() => {
     const { lng, lat } = e.lngLat;
 
     // ANTI-DOBLE-DISPARO: MapLibre dispara el click en el layer Y luego el global.
-    // Para el modo cables: si este es el click global (sin _layerFeature) y ya fue
-    // procesado por el layer handler (flag _maplibreClickHandled), ignorarlo.
-    if (_modoActivo && _modoActivo.categoria === 'cables' && !e._layerFeature && _maplibreClickHandled) {
+    if (_modoActivo && !e._layerFeature && _maplibreClickHandled) {
       return;
     }
 
@@ -1213,10 +1699,10 @@ const FTTHMapa = (() => {
               [e.point.x - 16, e.point.y - 16],
               [e.point.x + 16, e.point.y + 16]
             ];
-            // El círculo (ftth-puntos-layer) está EXACTAMENTE en el punto del poste;
-            // el ícono se dibuja por encima, así que se consultan las dos capas.
+            // El círculo o poste cuadrado está EXACTAMENTE en el punto del poste;
+            // el ícono se dibuja por encima, así que se consultan las tres capas.
             const nearby = map.queryRenderedFeatures(bbox, {
-              layers: ['ftth-puntos-layer', 'ftth-labels-layer']
+              layers: ['ftth-puntos-layer', 'ftth-postes-layer', 'ftth-labels-layer']
             });
             // Si hay varias, se prefiere un poste (es lo que ata el trazado)
             feat = nearby.find((f) => String((f.properties || {}).categoria).toLowerCase() === 'poste')
@@ -1233,6 +1719,9 @@ const FTTHMapa = (() => {
               if (_pendingLine.length === 0) {
                 // Primer clic: este objeto es el ORIGEN del cable
                 _modoActivo.nodoInicioId = feat.properties.id;
+                // Su categoría decide si el cable se ancla solo (poste/ODF) o queda
+                // pendiente (caja): ver CATS_CAJA_TRAZO.
+                _modoActivo.nodoInicioCategoria = catClic;
               } else if (catClic === 'poste') {
                 // El trazado YA venía andando: este poste es un punto de paso
                 _recordarPoste(feat.properties.id);
@@ -1301,7 +1790,7 @@ const FTTHMapa = (() => {
         [e.point.x - 14, e.point.y - 14],
         [e.point.x + 14, e.point.y + 14]
       ];
-      const nearby = map.queryRenderedFeatures(bbox, { layers: ['ftth-labels-layer'] });
+      const nearby = map.queryRenderedFeatures(bbox, { layers: ['ftth-labels-layer', 'ftth-postes-layer'] });
       const feat = nearby.length ? nearby[0] : null;
 
       if (feat && feat.properties) {
@@ -1480,7 +1969,9 @@ const FTTHMapa = (() => {
 
   async function colocarDucto(tipoId, tipoNombre, coords, color, cat_override = 'ducto',
                               nodoFinId = null, nodoInicioId = null, reserva_m = null,
-                              postesIntermedios = [], rutaTrazo = []) {
+                              postesIntermedios = [], rutaTrazo = [],
+                              extremo_A_id = null, extremo_B_id = null,
+                              reserva_A_m = 0, reserva_B_m = 0) {
     if (!window.currentProjectId) return;
     if (!tipoId) {
       if (window.FTTHTipos) FTTHTipos.showToast(`Elige una plantilla de tipo antes de dibujar el ${cat_override}`, 'error');
@@ -1489,6 +1980,13 @@ const FTTHMapa = (() => {
     const propsInst = {};
     if (reserva_m !== null && reserva_m !== undefined && reserva_m !== '') {
       propsInst.reserva_m = reserva_m;
+    }
+    // Cable OZmap: extremos lógicos y reservas por extremo
+    if (cat_override === 'cables') {
+      if (extremo_A_id != null) propsInst.extremo_A_id = Number(extremo_A_id);
+      if (extremo_B_id != null) propsInst.extremo_B_id = Number(extremo_B_id);
+      if (reserva_A_m !== null && reserva_A_m !== undefined && reserva_A_m !== '') propsInst.reserva_A_m = Number(reserva_A_m);
+      if (reserva_B_m !== null && reserva_B_m !== undefined && reserva_B_m !== '') propsInst.reserva_B_m = Number(reserva_B_m);
     }
     // Ruta física del cable, poste por poste y EN ORDEN de trazado (no se reordena
     // ni por id ni por posición): la usa el motor de fallas para saber por dónde va.
@@ -1639,22 +2137,11 @@ const FTTHMapa = (() => {
     const isPoste = cat === 'poste' || cat === 'postes';
 
     const instProps = parseInstProps(props.propiedades_instancia);
-    let propsHtml = '';
-    const ignoreKeys = ['name', 'nombre', 'estado', 'color', 'etiquetas', 'tipo_poste', 'reserva_m'];
-    
-    // Default general info
-    propsHtml += `<div><strong>Tipo:</strong> ${props.tipo_nombre || cat}</div>`;
-    
-    if (instProps.reserva_m) {
-      propsHtml += `<div><strong>Reserva:</strong> ${instProps.reserva_m}m</div>`;
-    }
-    
-    Object.entries(instProps).forEach(([k, v]) => {
-      if (!ignoreKeys.includes(k) && v !== null && v !== '') {
-        const formattedKey = k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ');
-        propsHtml += `<div><strong>${formattedKey}:</strong> ${v}</div>`;
-      }
-    });
+    // Fila fija de encabezado (tipo) + resto delegado a la función central.
+    // CLAVES_OCULTAS garantiza que trazado_ruta nunca aparezca aquí.
+    const propsHtml =
+      `<div><strong>Tipo:</strong> ${props.tipo_nombre || cat}</div>` +
+      _renderPropsHtml(instProps, {}, { modo: 'ctx' });
 
     const posteOptionsHtml = isPoste ? `
       <hr class="ctx-divider">
@@ -1663,12 +2150,18 @@ const FTTHMapa = (() => {
       <button class="ctx-item" data-action="add-reserva" style="color: #0284c7; font-weight: 600;">${iconoHTML('reserva')}Agregar Reserva a este poste</button>
     ` : '';
 
+    const cableOptionsHtml = cat === 'cables' ? `
+      <hr class="ctx-divider">
+      <button class="ctx-item" data-action="cable-extremos" style="color: #0284c7; font-weight: 600;">${iconoHTML('cables')}Extremos y Reservas (A / B)</button>
+    ` : '';
+
     _ctxMenu.innerHTML = `
       <div class="ctx-header">${iconoHTML(cat)}${instProps.name || instProps.nombre || (props.tipo_nombre || cat)} #${numero}</div>
       <div class="ctx-props-list">
         ${propsHtml}
       </div>
       ${posteOptionsHtml}
+      ${cableOptionsHtml}
       <hr class="ctx-divider">
       ${tieneDiagrama(cat) ? `<button class="ctx-item" style="color: #0071e3; font-weight: 600;" data-action="diagrama">${iconoHTML(cat)}Abrir Diagrama</button>` : ''}
       <button class="ctx-item" data-action="move"><i class="fa-solid fa-arrows-up-down-left-right"></i> Mover Objeto</button>
@@ -1690,7 +2183,10 @@ const FTTHMapa = (() => {
         } else if (action === 'diagrama') {
           abrirDiagramaDelElemento(props, _ctxFeature.geometry);
         } else if (action === 'properties') {
-          showPropertiesModal(props, _ctxFeature.geometry);
+          // Se manda la geometría COMPLETA del inventario, no la del evento de
+          // mapa (esa es el fragmento recortado de la tesela bajo el cursor y
+          // hacía que «Ver ruta» saliera incompleta según dónde se pulsara).
+          showPropertiesModal(props, _geometriaCompleta(id) || _ctxFeature.geometry);
         } else if (action === 'move') {
           iniciarModoMoverElemento(_ctxFeature);
         } else if (action === 'add-caja') {
@@ -1699,6 +2195,8 @@ const FTTHMapa = (() => {
           agregarObjetoAlPoste('manga', id, _ctxFeature.geometry);
         } else if (action === 'add-reserva') {
           agregarObjetoAlPoste('reserva', id, _ctxFeature.geometry);
+        } else if (action === 'cable-extremos') {
+          abrirModalExtremosCable(props, instProps);
         }
       });
     });
@@ -1829,17 +2327,31 @@ const FTTHMapa = (() => {
     });
   }
 
+  /** Aviso visible al usuario por el canal habitual del mapa (toast) */
+  function _avisarAlUsuario(mensaje) {
+    if (window.FTTHTipos && window.FTTHTipos.showToast) {
+      FTTHTipos.showToast(mensaje, 'warning');
+      return;
+    }
+    console.warn('[mapa] ' + mensaje);
+  }
+
   async function showPropertiesModalById(id) {
     if (!id) return;
     if (_activePopup) _activePopup.remove();
     try {
       const res = await fetch(apiUrl(`/api/elementos/${id}`));
-      if (res.ok) {
-        const fetched = await res.json();
-        showPropertiesModal(fetched.properties || fetched, fetched.geometry);
+      if (!res.ok) {
+        // Antes esto no avisaba de nada: el botón «Propiedades» del diagrama
+        // parecía no responder (el endpoint GET /api/elementos/{id} no existía).
+        _avisarAlUsuario(`No se pudieron abrir las propiedades del elemento #${id} (la API respondió ${res.status}).`);
+        return;
       }
+      const fetched = await res.json();
+      showPropertiesModal(fetched.properties || fetched, fetched.geometry);
     } catch (e) {
       console.warn("Error loading element properties:", e);
+      _avisarAlUsuario(`No se pudieron abrir las propiedades del elemento #${id}: ${e.message}`);
     }
   }
 
@@ -2181,6 +2693,21 @@ const FTTHMapa = (() => {
     map.off('contextmenu', handleMapContextMenu);
     map.on('contextmenu', handleMapContextMenu);
 
+    // Reposicionar el apilado en cada frame del zoom para que la expansión
+    // sea completamente fluida (sin saltos al final del gesto de scroll).
+    // requestAnimationFrame garantiza exactamente 1 actualización por frame
+    // sin acumular llamadas redundantes.
+    let _stackRaf = null;
+    map.off('zoom', _handleZoomForStack);
+    map.on('zoom', _handleZoomForStack);
+    function _handleZoomForStack() {
+      if (_stackRaf) return;   // ya hay una actualización programada para este frame
+      _stackRaf = requestAnimationFrame(() => {
+        _stackRaf = null;
+        _setFeatureData();
+      });
+    }
+
     // Clic derecho GLOBAL en el mapa
     map.getCanvas().addEventListener('contextmenu', e => {
       e.preventDefault();
@@ -2384,6 +2911,8 @@ const FTTHMapa = (() => {
     showPropertiesModal,
     showPropertiesModalById,
     irAElemento,
+    // Resaltado de un elemento desde paneles externos (inspector de fibra, etc.)
+    resaltarElemento,
     // Capa lógica (F3): diagrama del nodo
     tieneDiagrama,
     abrirDiagramaDelElemento,

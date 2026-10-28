@@ -41,49 +41,22 @@ def crear_elemento(payload: ElementoCreate, db: Session = Depends(get_db)):
             detail=f"El tipo_id {payload.tipo_id} no existe (plantilla eliminada). Elige o crea otra plantilla.",
         )
 
-    # El correlativo VISIBLE se reparte por tipo de objeto (categoría) con un
-    # contador atómico: 40 cajas → la próxima es la #41, y las mangas llevan su
-    # propia cuenta. El id interno sigue siendo único y global (no cambia).
-    instancia = dict(payload.propiedades_instancia or {})
-    if not _entero(instancia.get("numero")):
-        instancia["numero"] = logica.siguiente_numero(db, payload.proyecto_id, payload.categoria)
-
-    # Si el trazado pasó por postes, la geometría se arma con la posición ACTUAL de
-    # esos postes (no con las coordenadas sueltas del clic): así la línea sigue al
-    # poste cuando después se mueve. Un trazado libre se guarda tal cual.
-    coords = payload.coords_json
-    calculadas = logica.geometria_desde_trazado(db, instancia, coords)
-    if len(calculadas) >= 2:
-        coords = calculadas
-
-    # Si el trazado no anotó los postes (o el clic cayó al lado del ícono), se DEDUCEN
-    # de la geometría: los vértices que caen sobre un poste (a ≤2 m) son ese poste.
-    # Así `postes_intermedios` queda bien con un trazado real, sin retrazar nada.
-    if not instancia.get("postes_intermedios"):
-        deducidos = logica.postes_de_la_geometria(db, payload.proyecto_id, coords)
-        if deducidos:
-            instancia["postes_intermedios"] = deducidos
-
-    nuevo = models.FtthElemento(
+    # La creación en sí (número visible, geometría armada desde la ruta, postes
+    # deducidos y materialización de los hilos si es cable) vive en
+    # `logica.crear_elemento_en_db`: la comparte con la DIVISIÓN de un cable, que
+    # crea sus dos cables por este MISMO camino.
+    nuevo = logica.crear_elemento_en_db(
+        db,
         proyecto_id=payload.proyecto_id,
         tipo_id=payload.tipo_id,
         categoria=payload.categoria,
         lat=payload.lat,
         lon=payload.lon,
-        coords_json=coords,
+        coords_json=payload.coords_json,
         poste_ref_id=payload.poste_ref_id,
-        propiedades_instancia=instancia
+        propiedades_instancia=payload.propiedades_instancia,
+        commit=True,
     )
-    db.add(nuevo)
-    db.commit()
-    db.refresh(nuevo)
-
-    # Log de servidor: sirve para comprobar en vivo el paso «el clic guarda el poste»
-    print(f"[linea] {nuevo.categoria} #{instancia.get('numero')} (id {nuevo.id}) guardado: "
-          f"vertices={len(coords or [])} "
-          f"postes_intermedios={instancia.get('postes_intermedios')} "
-          f"trazado_ruta={'si' if instancia.get('trazado_ruta') else 'no'}", flush=True)
-
     return feature_from_elemento(nuevo, db_tipo)
 
 @router.get("/todos", summary="Obtener todos los elementos en GeoJSON")
@@ -100,6 +73,27 @@ def obtener_todos(proyecto_id: int, db: Session = Depends(get_db)):
         features.append(feature_from_elemento(el, tipos_dict.get(el.tipo_id)))
 
     return {"type": "FeatureCollection", "features": features}
+
+
+@router.get("/{elem_id}", summary="Obtener UN elemento como Feature GeoJSON")
+def obtener_elemento(elem_id: int, db: Session = Depends(get_db)):
+    """Feature completa de un elemento, con la MISMA forma que las de /todos.
+
+    Lo usan el botón «Propiedades» del diagrama y el respaldo del inspector de
+    fibra. Es la fuente CANÓNICA: la geometría que trae un evento de capa del
+    mapa viene recortada por teselas, así que el cliente no puede deducir nada
+    de ella (por dónde pasa un cable, por ejemplo).
+
+    El prefijo del router es /api/elementos, así que la ruta servida es
+    GET /api/elementos/{elem_id}. Se declara DESPUÉS de /todos a propósito:
+    FastAPI compara en orden de declaración y esa ruta debe seguir ganando.
+    """
+    el = db.query(models.FtthElemento).filter(models.FtthElemento.id == elem_id).first()
+    if not el:
+        raise HTTPException(404, "Elemento no encontrado")
+    tipo = db.query(models.FtthTipo).filter(models.FtthTipo.id == el.tipo_id).first()
+    return feature_from_elemento(el, tipo)
+
 
 @router.put("/{elem_id}")
 def actualizar_elemento(elem_id: int, payload: Dict[str, Any], db: Session = Depends(get_db)):
@@ -124,14 +118,26 @@ def actualizar_elemento(elem_id: int, payload: Dict[str, Any], db: Session = Dep
     if "propiedades_instancia" in payload:
         nuevo_propiedades.update(payload["propiedades_instancia"] or {})
 
-    for key, value in payload.items():
-        if key in {"lat", "lon", "coords_json", "propiedades_instancia"}:
-            continue
-        if key in {"id", "categoria", "tipo_id", "tipo_nombre"}:
-            continue
-        nuevo_propiedades[key] = value
+    if "extremo_A_id" in payload:
+        el.extremo_A_id = payload["extremo_A_id"]
+    elif "extremo_A_id" in nuevo_propiedades:
+        el.extremo_A_id = nuevo_propiedades["extremo_A_id"]
+
+    if "extremo_B_id" in payload:
+        el.extremo_B_id = payload["extremo_B_id"]
+    elif "extremo_B_id" in nuevo_propiedades:
+        el.extremo_B_id = nuevo_propiedades["extremo_B_id"]
+
+    if "reserva_A_m" in payload:
+        el.reserva_A_m = payload["reserva_A_m"]
+    if "reserva_B_m" in payload:
+        el.reserva_B_m = payload["reserva_B_m"]
 
     el.propiedades_instancia = nuevo_propiedades
+
+    if (el.categoria or "").lower() == "cables":
+        from app.routers import ftth_logica as logica_router
+        logica_router.sincronizar_extremos_cable_a_hilos(db, el)
 
     # ¿Se movió un POSTE? Entonces los cables que pasan por él se rehacen para que
     # su línea siga al poste. Cubre los trazados nuevos (con ruta) y los cables que
@@ -197,6 +203,7 @@ def feature_from_elemento(el: models.FtthElemento, tipo: models.FtthTipo = None)
     
     return {
         "type": "Feature",
+        "id": el.id,
         "geometry": geom,
         "properties": props
     }

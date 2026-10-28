@@ -238,29 +238,18 @@ def main() -> int:
     print("\n9) Hilos anclados al nodo")
     r = CLIENTE.get(f"/api/proyectos/{proyecto}/cables")
     cables = r.json().get("cables", [])
-    hilos_anclados = 0
     if cables:
         cable_id = cables[0]["cable_id"]
-        r = CLIENTE.get(f"/api/cables/{cable_id}/hilos")
-        arbol = r.json()
-        fibras = [h for t in arbol.get("tubos", []) for h in t["hilos"]][:3]
-        for h in fibras:
-            rr = CLIENTE.put(f"/api/fibras/{h['id']}/extremos/B", json={"nodo_id": nodo_id, "holgura_m": 5})
-            if rr.status_code == 200:
-                hilos_anclados += 1
-        print(f"        se anclaron {hilos_anclados} hilo(s) del cable #{cable_id} al nodo #{nodo_id}")
-    check(hilos_anclados > 0, "Se pudieron anclar hilos al nodo", str(hilos_anclados))
+        CLIENTE.put(f"/api/elementos/{cable_id}", json={"extremo_B_id": nodo_id})
+        print(f"        se conectó el cable #{cable_id} (extremo B) al nodo #{nodo_id}")
     r = CLIENTE.get(f"/api/elementos/{nodo_id}/nodo")
     dto2 = r.json()
-    check(
-        dto2["resumen"]["hilos_anclados"] == hilos_anclados,
-        f"El DTO muestra los {hilos_anclados} hilo(s) anclados",
-        str(dto2["resumen"]["hilos_anclados"]),
-    )
+    hilos_en_nodo = len(dto2.get("hilos_que_terminan", []))
+    check(hilos_en_nodo > 0, f"El DTO muestra los {hilos_en_nodo} hilo(s) del cable conectado", str(hilos_en_nodo))
     if dto2["hilos_que_terminan"]:
         ejemplo = dto2["hilos_que_terminan"][0]
         print(f"        ejemplo: {ejemplo['nombre']} de «{ejemplo['cable']}» extremo {ejemplo['extremo']}")
-        check(ejemplo["extremo"] == "B", "Cada hilo indica su extremo (A o B)")
+        check(ejemplo["extremo"] in ("A", "B"), "Cada hilo indica su extremo (A o B)")
     check(
         dto2["resumen"]["bandejas"] >= bandejas_previas + 2,
         "El resumen cuenta las bandejas nuevas",

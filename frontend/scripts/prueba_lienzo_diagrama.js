@@ -11,7 +11,10 @@
  *   6. tras arrastrar, el clic siguiente se traga (no selecciona por accidente);
  *   7. encuadrar ajusta y centra el contenido, y no rompe si aún no es medible;
  *   8. el CSS no deja barras de desplazamiento y las columnas van en fila;
- *   9. nada de lo anterior se rompe: el contenido sigue pintándose en #diag-body.
+ *   9. nada de lo anterior se rompe: el contenido sigue pintándose en #diag-body;
+ *  10. el diagrama nace VACÍO: los cables detectados en el poste de la caja NO se
+ *      listan en el lienzo, se ofrecen por lado (entrada = izquierda, salida =
+ *      derecha) desde los botones «Agregar cable de entrada / salida» de la barra.
  *
  * Uso (desde frontend/):
  *     node scripts/prueba_lienzo_diagrama.js
@@ -89,6 +92,10 @@ function crearDom() {
   IDS.forEach((id) => { elementos[id] = crearElemento(id); });
   elementos['diag-viewport'].clientWidth = 800;
   elementos['diag-viewport'].clientHeight = 600;
+  // <body> cuyo appendChild REGISTRA por id: así el selector de cables (creado e
+  // insertado por el módulo) se puede inspeccionar desde la prueba.
+  const body = crearElemento('body');
+  body.appendChild = (hijo) => { if (hijo && hijo.id) elementos[hijo.id] = hijo; return hijo; };
   return {
     elementos,
     delDocumento,
@@ -97,6 +104,7 @@ function crearDom() {
       querySelector: () => null,
       querySelectorAll: () => [],
       createElement: (tag) => crearElemento(tag),
+      body,
       addEventListener(tipo, fn, opciones) {
         (delDocumento[tipo] = delDocumento[tipo] || []).push({ fn, opciones });
       },
@@ -119,13 +127,15 @@ function payloadNodo() {
   };
 }
 
-function cargarModulo(dom) {
+function cargarModulo(dom, payload = payloadNodo()) {
   const codigo = leer(path.join('js', 'ftth-diagrama.js'));
   const windowObj = {
     location: { origin: 'http://prueba.local' },
     FTTHIconos: { imgHtml: (cat) => `<img src="assets/icons/${cat}.svg" alt="${cat}">` },
+    // El diagrama resuelve la plantilla del cable con window.FTTHPlantillas; sin
+    // este stub, cualquier nodo CON hilos anclados reventaría al pintar la columna.
+    FTTHPlantillas: { resolverTipo: () => '', render: () => '', datosFibra: () => ({}) },
   };
-  const payload = payloadNodo();
   const llamadas = [];
   const fetchStub = async (url, opciones) => {
     llamadas.push({ metodo: (opciones && opciones.method) || 'GET', url: String(url) });
@@ -299,6 +309,85 @@ async function main() {
   await cargaBaja3.api.borrarObjeto('puerto:5');
   check(cargaBaja3.llamadas.filter((l) => l.metodo === 'DELETE').length === 0,
     'Un objeto sin baja soportada avisa y no manda peticiones');
+
+  // ── 12) El diagrama nace VACÍO y los cables se ofrecen por lado ────────────
+  // Antes el cable «se metía solo»: al terminar el trazado en la caja, sus hilos
+  // quedaban anclados y el lienzo los pintaba. Ahora el lienzo nace vacío y los
+  // cables detectados se ofrecen en los botones «Agregar cable de entrada/salida».
+  console.log('\n12) El diagrama nace VACÍO y el cable se ofrece por lado (entrada/salida)');
+  const pendiente = payloadNodo();
+  pendiente.hilos_que_terminan = [];
+  pendiente.cables_divisibles = [
+    { cable_id: 77, nombre: 'Cable Troncal', poste_id: 32, posicion: 0, total_postes: 5,
+      accion: 'asignar_extremo', extremo: 'B', lado: 'entrada' },
+    { cable_id: 88, nombre: 'Cable Saliente', poste_id: 32, posicion: 0, total_postes: 5,
+      accion: 'asignar_extremo', extremo: 'A', lado: 'salida' },
+    { cable_id: 99, nombre: 'Cable de paso', poste_id: 32, posicion: 1, total_postes: 3,
+      accion: 'dividir', extremo: null, lado: 'ambos',
+      fibras: [{ id: 991, global: 1, nombre: 'T01-H01', color: 'Azul', color_hex: '#1E90FF', estado: 'libre' },
+               { id: 992, global: 2, nombre: 'T01-H02', color: 'Naranja', color_hex: '#FF8C00', estado: 'libre' }] },
+  ];
+  const domPend = crearDom();
+  const cargaPend = cargarModulo(domPend, pendiente);
+  cargaPend.api.abrir(41, { categoria: 'manga', tipoNombre: 'Manga 48H' });
+  await new Promise((r) => setTimeout(r, 10));
+  const htmlPend = domPend.elementos['diag-body'].innerHTML;
+  check(!htmlPend.includes('btn-division'),
+    'El lienzo nace VACÍO: no se pinta ningún cable que aún no esté dentro', htmlPend.slice(0, 200));
+  check(!htmlPend.includes('Cable Troncal') && !htmlPend.includes('Cable de paso'),
+    'Los cables detectados NO se listan en el lienzo (van a los botones de la barra)');
+
+  const candIn = cargaPend.api.candidatosDeLado('entrada').map((x) => x.cable_id);
+  const candOut = cargaPend.api.candidatosDeLado('salida').map((x) => x.cable_id);
+  check(candIn.includes(77) && candIn.includes(88) && candIn.includes(99),
+    'El LADO lo elige el usuario: «Agregar cable de ENTRADA» ofrece TODOS los detectados',
+    JSON.stringify(candIn));
+  check(candOut.length === candIn.length && candOut.includes(88) && candOut.includes(77),
+    '«Agregar cable de SALIDA» ofrece la misma lista (el lado se aplica al confirmar)',
+    JSON.stringify(candOut));
+
+  cargaPend.api.mostrarModalAgregarCable('entrada');
+  const picker = domPend.elementos['diag-cable-picker'];
+  check(!!picker && picker.innerHTML.includes('Cable Troncal') && picker.innerHTML.includes('Cable de paso'),
+    'El selector lista los cables detectados (el que termina y el que pasa)');
+  check(!!picker && picker.innerHTML.includes('Corte') && picker.innerHTML.includes('Sangrado'),
+    'Un cable que PASA ofrece CORTE y SANGRADO');
+  check(!!picker && picker.innerHTML.includes('Fibras que se PICAN') && picker.innerHTML.includes('chk-'),
+    'El SANGRADO trae el selector de fibras a picar');
+  check(!!picker && picker.innerHTML.includes('data-accion="asignar"') && picker.innerHTML.includes('data-extremo="B"'),
+    'El cable que termina trae su botón de anclar con su extremo');
+  check(!!picker && picker.innerHTML.includes('Agregar cable de ENTRADA'),
+    'El título dice el lado elegido');
+
+  // Columnas por lado: el hilo que LLEGA (extremo B) va a la IZQUIERDA y el que
+  // SALE (extremo A) a la DERECHA.
+  const conHilos = payloadNodo();
+  conHilos.hilos_que_terminan = [
+    { fibra_id: 1, cable_id: 70, cable: 'Cable que llega', extremo: 'B', lado: 'entrada',
+      estado: 'libre', nombre: 'T01-H01', color_hex: '#0a0' },
+    { fibra_id: 2, cable_id: 71, cable: 'Cable que sale', extremo: 'A', lado: 'salida',
+      estado: 'libre', nombre: 'T01-H02', color_hex: '#a00' },
+  ];
+  const domLados = crearDom();
+  const cargaLados = cargarModulo(domLados, conHilos);
+  cargaLados.api.abrir(41, { categoria: 'manga', tipoNombre: 'Manga 48H' });
+  await new Promise((r) => setTimeout(r, 10));
+  const htmlLados = domLados.elementos['diag-body'].innerHTML;
+  check(htmlLados.includes('Entrada') && htmlLados.includes('Salida'),
+    'El diagrama parte los hilos en las columnas ENTRADA y SALIDA');
+  check(htmlLados.indexOf('Cable que llega') > -1
+        && htmlLados.indexOf('Cable que llega') < htmlLados.indexOf('Cable que sale'),
+    'El cable que LLEGA se pinta a la izquierda y el que SALE a la derecha',
+    htmlLados.slice(0, 200));
+
+  const domVacio = crearDom();
+  const cargaVacio = cargarModulo(domVacio);
+  cargaVacio.api.abrir(41, { categoria: 'manga', tipoNombre: 'Manga 48H' });
+  await new Promise((r) => setTimeout(r, 10));
+  check(!domVacio.elementos['diag-body'].innerHTML.includes('btn-division'),
+    'Sin cables pendientes NO se inventa ningún botón');
+  check(cargaVacio.api.candidatosDeLado('entrada').length === 0,
+    'Sin cables detectados, los botones de la barra no ofrecen nada');
 
   console.log('\n' + '='.repeat(74));
   console.log(`RESULTADO: ${OK.n} comprobaciones OK, ${OK.fallos.length} fallos`);

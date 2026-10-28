@@ -9,7 +9,11 @@
  *   3. la primera y la última punta salen del propio trazado (no de datos sueltos);
  *   4. si la fibra NO pasa por postes no se dibuja ruta: sólo la longitud total;
  *   5. los íconos de la lista son los del panel general izquierdo (FTTHIconos);
- *   6. nada de lo anterior rompe el panel (no aparece «undefined»).
+ *   6. nada de lo anterior rompe el panel (no aparece «undefined»);
+ *   7. REGRESIÓN: la geometría que entrega el mapa puede ser un FRAGMENTO de
+ *      tesela (recortado y, si el recorte parte la línea, MultiLineString). El
+ *      panel usa la geometría CANÓNICA del inventario del proyecto y la ruta
+ *      sale COMPLETA igualmente; si no la encuentra, lo AVISA en el panel.
  *
  * Los datos usados son los REALES de la base de datos: el cable #133 pasando
  * por los postes #126…#131, con la caja NAP #132 colgada del poste #131.
@@ -30,6 +34,12 @@ function check(cond, msg, detalle) {
     console.log(`  [FALLO] ${msg}`);
     if (detalle !== undefined) console.log(`          ${String(detalle).slice(0, 300)}`);
   }
+}
+
+/** Cuenta los renglones de poste realmente pintados en «Ruta de fibra» */
+function renglonesRuta(dom) {
+  const html = (dom.elementos['ffi-route-list'] || {}).innerHTML || '';
+  return (html.match(/class="route-item/g) || []).length;
 }
 
 // ── Datos reales ────────────────────────────────────────────────────────────
@@ -271,6 +281,9 @@ async function main() {
 
   console.log('\n3) Ruta de postes del cable #133 (postes #126…#131)');
   const features = featuresPostes126a131();
+  // El inventario REAL que devuelve /api/elementos/todos: los postes Y el cable.
+  // El inspector resuelve la geometría del cable por id desde aquí.
+  const inventario133 = features.concat([featureCable(133, COORDS_CABLE_133)]);
   const r = api.resolverRecorridoFibra(COORDS_CABLE_133, features);
   console.log(`        postes=${r.postes.length}  total=${r.total_m.toFixed(2)} m  ` +
     `primerPoste→últimoPoste=${r.distancia_postes_m.toFixed(2)} m`);
@@ -320,7 +333,7 @@ async function main() {
   check(anclados === 'cajanap#132', 'Detecta la caja NAP #132 colgada del último poste', anclados);
 
   console.log('\n5) Panel de propiedades (pestaña Información)');
-  windowObj.FTTHMapa._currentFeatures = features; // camino rápido: memoria del mapa
+  windowObj.FTTHMapa._currentFeatures = inventario133; // memoria del mapa (con el cable)
   await api.abrir(133, featureCable(133, COORDS_CABLE_133));
   const el = dom.elementos;
   check(el['ffi-postes-ruta'].value === '6 postes', 'Informa los 6 postes de la ruta', el['ffi-postes-ruta'].value);
@@ -357,7 +370,7 @@ async function main() {
   const sinPostes = fibraSinPostes();
   const m2 = cargarModulo(dom2, {
     '/api/cables/200/hilos': { cable_id: 200, tubos: [], resumen: {} },
-    '/api/elementos/todos': { type: 'FeatureCollection', features: sinPostes.features }
+    '/api/elementos/todos': { type: 'FeatureCollection', features: sinPostes.features.concat([featureCable(200, sinPostes.coords)]) }
   });
   await m2.api.abrir(200, featureCable(200, sinPostes.coords));
   const el2 = dom2.elementos;
@@ -385,7 +398,7 @@ async function main() {
   const dom3 = crearDom();
   const m3 = cargarModulo(dom3, {
     '/api/cables/160/hilos': { cable_id: 160, tubos: [], resumen: {} },
-    '/api/elementos/todos': { type: 'FeatureCollection', features: featuresPostes126a131() }
+    '/api/elementos/todos': { type: 'FeatureCollection', features: featuresPostes126a131().concat([featureCable(160, COORDS_CABLE_133)]) }
   });
   // Ruta guardada DELIBERADAMENTE en otro orden (129 → 127 → 126) y con un poste
   // que ya no existe (999): el panel debe respetar ese orden tal cual.
@@ -405,6 +418,107 @@ async function main() {
     'El poste que ya no existe se muestra sin medida y no rompe el panel');
   check(!lista3.includes('undefined') && !lista3.includes('NaN'),
     'Ningún renglón queda con undefined/NaN');
+
+  console.log('\n9) REGRESIÓN: un recorte de tesela NO acorta la ruta');
+  // Los eventos de capa de MapLibre devuelven la geometría de LA TESELA bajo el
+  // cursor: un trozo recortado del cable (y, si el recorte parte la línea, un
+  // MultiLineString). El panel debe resolver la geometría CANÓNICA del inventario
+  // por id y mostrar la ruta COMPLETA aunque el fragmento clicado sea corto.
+  const FRAGMENTO = COORDS_CABLE_133.slice(0, 8); // llega solo hasta el poste #127
+
+  async function abrirConGeometria(geom, featuresInventario) {
+    const d = crearDom();
+    const mm = cargarModulo(d, {
+      '/api/cables/133/hilos': { cable_id: 133, tubos: [], resumen: {} },
+      '/api/elementos/todos': { type: 'FeatureCollection', features: featuresInventario }
+    });
+    await mm.api.abrir(133, {
+      type: 'Feature',
+      geometry: geom,
+      properties: {
+        id: 133, categoria: 'cables', tipo_id: 3, tipo_nombre: 'ADSS 144H',
+        propiedades_tipo: {}, propiedades_instancia: {}
+      }
+    });
+    return { dom: d, llamadas: mm.llamadas };
+  }
+
+  // 9a) Fragmento LineString (lo normal) con el cable en el inventario → COMPLETA
+  const a9 = await abrirConGeometria({ type: 'LineString', coordinates: FRAGMENTO }, inventario133);
+  const lista9 = a9.dom.elementos['ffi-route-list'].innerHTML;
+  const ids9 = Array.from(lista9.matchAll(/data-poste-id="(\d+)"/g)).map((x) => x[1]);
+  console.log(`        fragmento clicado: ${FRAGMENTO.length} vértices (≈2 postes)  ` +
+    `→ ruta pintada: ${ids9.join(' → ')}`);
+  check(ids9.length === 6, 'Con un fragmento clicado la ruta sale COMPLETA (6 postes)', ids9.join(','));
+  check(ids9.join(',') === '126,127,128,129,130,131',
+    'Los 6 postes salen en orden de recorrido (no solo los del fragmento)', ids9.join(','));
+  const largo9 = parseFloat(a9.dom.elementos['ffi-longitud'].value);
+  check(largo9 > 155,
+    'La longitud es la del cable COMPLETO, no la del fragmento (≈28 m)', a9.dom.elementos['ffi-longitud'].value);
+  check(!lista9.includes('puede estar recortada'),
+    'Con la geometría canónica NO se muestra ningún aviso', lista9.slice(0, 120));
+
+  // 9b) Fragmento MultiLineString (el recorte partió la línea) → también COMPLETA
+  const a9b = await abrirConGeometria({ type: 'MultiLineString', coordinates: [FRAGMENTO] }, inventario133);
+  check(renglonesRuta(a9b.dom) === 6,
+    'Un MultiLineString de la tesela tampoco rompe la ruta (ya no sale vacía)',
+    renglonesRuta(a9b.dom));
+  check(parseFloat(a9b.dom.elementos['ffi-longitud'].value) > 155,
+    'Y su longitud vuelve a ser la del cable completo', a9b.dom.elementos['ffi-longitud'].value);
+
+  // 9c) Sin el cable en el inventario → se degrada al fragmento PERO AVISA
+  const a9c = await abrirConGeometria({ type: 'LineString', coordinates: FRAGMENTO }, featuresPostes126a131());
+  const lista9c = a9c.dom.elementos['ffi-route-list'].innerHTML;
+  const ids9c = Array.from(lista9c.matchAll(/data-poste-id="(\d+)"/g)).map((x) => x[1]);
+  check(ids9c.length === 2, 'Sin inventario se usa el fragmento (2 postes) como último respaldo',
+    ids9c.join(','));
+  check(a9c.dom.elementos['ffi-route-summary'].innerHTML.includes('puede estar recortada'),
+    'Y AVISA en el resumen de que la geometría puede estar recortada (no falla en silencio)',
+    a9c.dom.elementos['ffi-route-summary'].innerHTML.slice(0, 220));
+
+  // 9d) Sin feature y con la API del elemento caída, pero con el inventario → COMPLETA
+  const dom9d = crearDom();
+  const m9d = cargarModulo(dom9d, {
+    '/api/cables/133/hilos': { cable_id: 133, tubos: [], resumen: {} },
+    '/api/elementos/todos': { type: 'FeatureCollection', features: inventario133 }
+  });
+  await m9d.api.abrir(133);  // sin featureObj: intenta GET /api/elementos/133 (el stub no lo sirve)
+  check(renglonesRuta(dom9d) === 6,
+    'Con el inventario cargado la ruta sale completa aunque falle GET /api/elementos/{id}',
+    renglonesRuta(dom9d));
+  check(m9d.llamadas.some((c) => c.url.includes('/api/elementos/133')),
+    'Se intentó el respaldo por API del elemento');
+
+  // 9e) Sin feature y SIN el cable en el inventario → lo DICE (antes: ruta muda)
+  const dom9e = crearDom();
+  const m9e = cargarModulo(dom9e, {
+    '/api/cables/133/hilos': { cable_id: 133, tubos: [], resumen: {} },
+    '/api/elementos/todos': { type: 'FeatureCollection', features: featuresPostes126a131() }
+  });
+  await m9e.api.abrir(133);
+  const lista9e = dom9e.elementos['ffi-route-list'].innerHTML;
+  check(m9e.llamadas.some((c) => c.url.includes('/api/elementos/133')),
+    'Sin feature se pidió la fibra por id (respaldo por API)');
+  check(lista9e.includes('No se encontró la geometría de la fibra #133'),
+    'Si no hay geometría por ningún lado lo DICE en el panel (no falla en silencio)',
+    lista9e.slice(0, 200));
+  check(!lista9e.includes('undefined') && !lista9e.includes('NaN'),
+    'El aviso no arrastra undefined/NaN', lista9e.slice(0, 200));
+
+  // 9f) Utilidades de geometría (MultiLineString: la parte MÁS LARGA, sin inventar tramos)
+  const corta = [[-72.2268, 7.7649], [-72.2268, 7.76491]];
+  const elegida = api.coordsDeTrazado({ type: 'MultiLineString', coordinates: [corta, FRAGMENTO] });
+  check(elegida.length === FRAGMENTO.length,
+    'coordsDeTrazado() toma la parte más larga del MultiLineString', elegida.length);
+  check(api.coordsDeTrazado({ type: 'LineString', coordinates: FRAGMENTO }).length === FRAGMENTO.length,
+    'coordsDeTrazado() devuelve un LineString tal cual');
+  check(api.coordsDeTrazado({ type: 'Point', coordinates: [0, 0] }).length === 0,
+    'coordsDeTrazado() rechaza un Point (devuelve vacío, no rompe)');
+  check(api.coordsDeTrazado(null).length === 0, 'coordsDeTrazado() sin geometría devuelve vacío');
+  check(api.esTrazadoLineal({ type: 'MultiLineString', coordinates: [] }) === true,
+    'esTrazadoLineal() acepta MultiLineString');
+  check(api.esTrazadoLineal({ type: 'Point', coordinates: [0, 0] }) === false,
+    'esTrazadoLineal() rechaza Point');
 
   console.log('\n' + '='.repeat(74));
   console.log(`RESULTADO: ${RESULTADO.ok} comprobaciones OK, ${RESULTADO.fallos.length} fallos`);

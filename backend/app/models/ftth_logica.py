@@ -25,6 +25,7 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
     Index,
+    JSON,
     cast,
 )
 from sqlalchemy import update
@@ -459,6 +460,40 @@ def _metros_entre(lon1, lat1, lon2, lat2):
     return radio * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def poste_mas_cercano(db, proyecto_id, lon, lat, tol=TOLERANCIA_POSTE_M):
+    """
+    Id del POSTE más cercano a (lon, lat) dentro de `tol` metros (o None).
+
+    Permite anclar una caja/manga/… al poste sobre el que se colocó aunque el clic
+    NO viniera del menú «Agregar … a este poste»: la detección de cables que pasan
+    por ahí (`cables_divisibles`) depende de `poste_ref_id`, así que sin esto una
+    caja colocada a mano junto a un poste no ofrecía «meter el cable al diagrama».
+    """
+    import app.models.ftth_models as fisicos
+
+    if lon is None or lat is None:
+        return None
+    margen = 0.001  # ~110 m: filtro previo por caja (igual que postes_de_la_geometria)
+    postes = (
+        db.query(fisicos.FtthElemento)
+        .filter(
+            fisicos.FtthElemento.proyecto_id == proyecto_id,
+            fisicos.FtthElemento.categoria.in_(["poste", "postes"]),
+            fisicos.FtthElemento.lat.between(lat - margen, lat + margen),
+            fisicos.FtthElemento.lon.between(lon - margen, lon + margen),
+        )
+        .all()
+    )
+    mejor, mejor_d = None, None
+    for p in postes:
+        if p.lat is None or p.lon is None:
+            continue
+        d = _metros_entre(lon, lat, p.lon, p.lat)
+        if d <= tol and (mejor_d is None or d < mejor_d):
+            mejor, mejor_d = p.id, d
+    return mejor
+
+
 def _coords_normalizadas(coords):
     """Lista de [lon, lat] válidos (ignora basura) para poder recorrer la geometría."""
     salida = []
@@ -635,6 +670,94 @@ def recalcular_cables_del_poste(db, poste, lon_antes=None, lat_antes=None):
     return tocados
 
 
+# ── Alta de un elemento (misma lógica que el POST /api/elementos/) ────────────
+
+
+def crear_elemento_en_db(
+    db,
+    *,
+    proyecto_id,
+    tipo_id,
+    categoria,
+    lat=None,
+    lon=None,
+    coords_json=None,
+    poste_ref_id=None,
+    propiedades_instancia=None,
+    commit=True,
+):
+    """
+    Crea un elemento con LA MISMA lógica que el endpoint `POST /api/elementos/`:
+    número visible correlativo, geometría armada desde la ruta (postes EN VIVO),
+    `postes_intermedios` deducidos de la geometría si faltan y —si es un cable—
+    materialización de sus hilos con los extremos A y B ya anclados.
+
+    Existe para que la DIVISIÓN de un cable cree sus dos cables por este mismo
+    camino y no por una copia que se desincronice con el endpoint.
+
+    Devuelve el `FtthElemento` creado. Con `commit=False` NO confirma la
+    transacción (lo hace quien llama), para poder crear varias filas de golpe.
+    """
+    import app.models.ftth_models as fisicos
+
+    instancia = dict(propiedades_instancia or {})
+    if not _to_int(instancia.get("numero")):
+        instancia["numero"] = siguiente_numero(db, proyecto_id, categoria)
+
+    # Si el trazado pasó por postes, la geometría se arma con su posición ACTUAL
+    # (así la línea sigue al poste cuando se mueve). Un trazado libre se deja igual.
+    coords = coords_json
+    calculadas = geometria_desde_trazado(db, instancia, coords)
+    if calculadas and len(calculadas) >= 2:
+        coords = calculadas
+
+    # Si el trazado no anotó los postes, se DEDUCEN de la geometría (≤2 m).
+    if not instancia.get("postes_intermedios"):
+        deducidos = postes_de_la_geometria(db, proyecto_id, coords)
+        if deducidos:
+            instancia["postes_intermedios"] = deducidos
+
+    # Una CAJA (o cualquier punto que cuelga de un poste) colocada CERCA de un poste
+    # se ANCLA a él automáticamente, aunque el clic no viniera del menú «Agregar … a
+    # este poste». Sin esto, «meter el cable al diagrama» no ofrecía nada: la
+    # detección (`cables_divisibles`) depende de `poste_ref_id`.
+    poste_ref_id = _to_int(poste_ref_id)
+    if not poste_ref_id and lat is not None and lon is not None \
+            and (categoria or "").lower() not in ("poste", "postes", "ducto", "ductos", "cables"):
+        poste_ref_id = poste_mas_cercano(db, proyecto_id, lon, lat)
+
+    nuevo = fisicos.FtthElemento(
+        proyecto_id=proyecto_id,
+        tipo_id=tipo_id,
+        categoria=categoria,
+        lat=lat,
+        lon=lon,
+        coords_json=coords,
+        poste_ref_id=poste_ref_id,
+        extremo_A_id=instancia.get("extremo_A_id"),
+        extremo_B_id=instancia.get("extremo_B_id"),
+        reserva_A_m=instancia.get("reserva_A_m", 0),
+        reserva_B_m=instancia.get("reserva_B_m", 0),
+        propiedades_instancia=instancia,
+    )
+    db.add(nuevo)
+    db.flush()          # deja el id disponible para materializar sus hilos
+
+    if (categoria or "").lower() == "cables":
+        from app.routers import ftth_logica as logica_router
+        logica_router.auto_materializar_cable(nuevo, db, commit=False)
+
+    print(f"[linea] {categoria} #{instancia.get('numero')} (id {nuevo.id}) guardado: "
+          f"vertices={len(coords or [])} "
+          f"postes_intermedios={instancia.get('postes_intermedios')} "
+          f"trazado_ruta={'si' if instancia.get('trazado_ruta') else 'no'}", flush=True)
+
+    if commit:
+        db.commit()
+        db.refresh(nuevo)
+    return nuevo
+
+
 # ── Limpieza de hijos al borrar un elemento o un proyecto ─────────────────────
 # SQLite NO aplica los `ON DELETE CASCADE` que declaran los modelos si no se
 # activa `PRAGMA foreign_keys=ON` (este proyecto no lo activa). Al borrar un
@@ -645,6 +768,13 @@ def recalcular_cables_del_poste(db, poste, lon_antes=None, lat_antes=None):
 
 # Filas que cuelgan de un ELEMENTO (se borran antes que él).
 _HIJOS_POR_ELEMENTO = (
+    # Los empalmes van PRIMERO: referencian hilos (de este u otro cable) y bandejas,
+    # así que deben desaparecer antes de borrar esos hilos/bandejas.
+    ("ftth_empalmes", "nodo_id = :k"),
+    ("ftth_empalmes",
+     "fibra_a_id IN (SELECT id FROM ftth_cable_fibras WHERE elemento_id = :k)"),
+    ("ftth_empalmes",
+     "fibra_b_id IN (SELECT id FROM ftth_cable_fibras WHERE elemento_id = :k)"),
     ("ftth_fibra_extremos",
      "fibra_id IN (SELECT id FROM ftth_cable_fibras WHERE elemento_id = :k)"),
     ("ftth_cable_fibras", "elemento_id = :k"),
@@ -659,6 +789,7 @@ _HIJOS_POR_ELEMENTO = (
 
 # Tablas con `proyecto_id` que se borran al borrar un proyecto.
 _HIJOS_POR_PROYECTO = (
+    "ftth_empalmes",
     "ftth_fibra_extremos",
     "ftth_cable_fibras",
     "ftth_cable_tubos",
@@ -703,6 +834,18 @@ def borrar_hijos_del_elemento(db, elemento_id):
         )
         db.execute(
             text("UPDATE ftth_fibra_extremos SET nodo_id = NULL WHERE nodo_id = :k"),
+            {"k": int(elemento_id)},
+        )
+        # Un CABLE apunta a sus dos nodos por estas columnas. Si el nodo desaparece y
+        # no se limpian, el cable queda apuntando a un id inexistente y DESAPARECE de
+        # todos los diagramas (la consulta es `extremo_A_id == nodo`), además de dejar
+        # sus hilos sin nodo. Se limpia igual que el poste de referencia.
+        db.execute(
+            text("UPDATE ftth_elementos SET extremo_A_id = NULL WHERE extremo_A_id = :k"),
+            {"k": int(elemento_id)},
+        )
+        db.execute(
+            text("UPDATE ftth_elementos SET extremo_B_id = NULL WHERE extremo_B_id = :k"),
             {"k": int(elemento_id)},
         )
     except Exception as e:  # pragma: no cover - defensivo
@@ -894,6 +1037,56 @@ class FtthPuerto(Base):
     __table_args__ = (
         UniqueConstraint("dispositivo_id", "direccion", "puerto_no", name="uq_ftth_puerto"),
         Index("ix_ftth_puerto_elemento_estado", "elemento_id", "estado"),
+    )
+
+
+class FtthEmpalme(Base):
+    """
+    Fusión (empalme) entre dos hilos dentro de un nodo — fase F4.
+
+    El diagrama dibuja la continuidad de la fibra: los hilos que se empalman en
+    una caja se unen aquí (hilo A ↔ hilo B) y ocupan una posición de una bandeja
+    (`slot`). `tipo` distingue el modo de la operación que lo creó:
+
+      · 'paso'     → el cable CONTINÚA: el hilo que llega se fusiona con el que
+                     sigue (corte de paso, todas las fibras).
+      · 'sangrado' → la fibra se PICÓ para derivarla: queda ABIERTA (sin hilo B)
+                     y marcada, disponible para derivar aguas abajo.
+
+    `fibra_a_id` es la mitad que LLEGA (entrada) y `fibra_b_id` la que SALE
+    (salida); cuál es cuál lo decide el usuario al marcar el lado.
+    """
+
+    __tablename__ = "ftth_empalmes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proyecto_id = Column(
+        Integer, ForeignKey("map_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    nodo_id = Column(
+        Integer, ForeignKey("ftth_elementos.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    bandeja_id = Column(
+        Integer, ForeignKey("ftth_bandejas.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    slot = Column(Integer, nullable=True)
+    fibra_a_id = Column(
+        Integer, ForeignKey("ftth_cable_fibras.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    fibra_b_id = Column(
+        Integer, ForeignKey("ftth_cable_fibras.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    puerto_id = Column(
+        Integer, ForeignKey("ftth_puertos.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    tipo = Column(String(20), nullable=False, default="paso")   # paso | sangrado | conector
+    extremo_a = Column(String(10), nullable=False, default="entrada")  # entrada | salida
+    extremo_b = Column(String(10), nullable=False, default="salida")   # entrada | salida
+    etiqueta = Column(String(100), nullable=True)
+    propiedades = Column(JSON, nullable=True, default={})
+
+    __table_args__ = (
+        UniqueConstraint("nodo_id", "fibra_a_id", name="uq_ftth_empalme_hilo_a"),
     )
 
 

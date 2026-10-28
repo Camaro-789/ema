@@ -110,6 +110,36 @@ const FTTHFibraInspector = (() => {
     return total;
   }
 
+  /**
+   * ¿La geometría es un trazado lineal? (LineString o MultiLineString)
+   * El MultiLineString aparece cuando el recorte por teselas parte la línea: los
+   * eventos de capa de MapLibre devuelven la geometría de LA TESELA (recortada),
+   * no la del source, así que un cable puede llegar dividido en varias partes.
+   */
+  function esTrazadoLineal(geom) {
+    return !!geom
+      && (geom.type === 'LineString' || geom.type === 'MultiLineString')
+      && Array.isArray(geom.coordinates);
+  }
+
+  /**
+   * Coordenadas de un trazado, aceptando LineString y MultiLineString.
+   * De un MultiLineString se toma LA PARTE MÁS LARGA: concatenar las partes
+   * inventaría un tramo recto entre trozos separados y falsearía las distancias.
+   */
+  function coordsDeTrazado(geom) {
+    if (!esTrazadoLineal(geom)) return [];
+    if (geom.type === 'LineString') return geom.coordinates;
+    let mejor = [];
+    let mejorLargo = -1;
+    geom.coordinates.forEach((parte) => {
+      if (!Array.isArray(parte)) return;
+      const largo = longitudTrazado(parte);
+      if (largo > mejorLargo) { mejorLargo = largo; mejor = parte; }
+    });
+    return mejor;
+  }
+
   /** Objetos puntuales que pueden estar sobre el trazado (postes, cajas, mangas…) */
   function _objetosSobreTrazado(features) {
     return (features || []).filter(f => {
@@ -256,6 +286,36 @@ const FTTHFibraInspector = (() => {
         ? (postes[postes.length - 1].acumulada_m - postes[0].acumulada_m)
         : 0
     };
+  }
+
+  /**
+   * Feature CANÓNICA de un elemento dentro del inventario del proyecto.
+   * Se busca por el id de las propiedades (el id interno del elemento), que es
+   * el único que comparten el mapa, el panel y la API.
+   */
+  function _featureEnInventario(features, id) {
+    const objetivo = Number(id);
+    if (!Number.isFinite(objetivo)) return null;
+    return (features || []).find((f) => {
+      if (!f || !f.properties) return false;
+      return Number(f.properties.id) === objetivo;
+    }) || null;
+  }
+
+  /** Aviso al usuario (toast si el módulo está cargado). Devuelve true si avisó. */
+  function _avisar(mensaje, tipo) {
+    if (window.FTTHTipos && window.FTTHTipos.showToast) {
+      window.FTTHTipos.showToast(mensaje, tipo || 'warning');
+      return true;
+    }
+    return false;
+  }
+
+  /** Deja el aviso DENTRO del panel (el usuario siempre lo ve, haya toast o no) */
+  function _avisoEnPanel(mensaje) {
+    const el = document.getElementById('ffi-route-list');
+    if (el) el.innerHTML = `<div class="route-empty">⚠ ${escapeHtml(mensaje)}</div>`;
+    _avisar(mensaje);
   }
 
   /** Features del proyecto activo (memoria del mapa o, si no, la API) */
@@ -445,10 +505,10 @@ const FTTHFibraInspector = (() => {
   function _bindEvents() {
     if (!_rootEl) return;
 
-    // Cerrar
+    // Cerrar: solo con X, botón Cancelar, o Escape
+    // (el backdrop ya no captura clics — el mapa debe seguir manejable)
     const cerrar = () => cerrarInspector();
     _rootEl.querySelector('#ffi-close')?.addEventListener('click', cerrar);
-    _rootEl.querySelector('#ffi-backdrop')?.addEventListener('click', cerrar);
     _rootEl.querySelector('#ffi-btn-cancel')?.addEventListener('click', cerrar);
 
     // ESC para cerrar
@@ -508,11 +568,22 @@ const FTTHFibraInspector = (() => {
         }
       }
 
-      // Cargar datos completos del elemento
+      // Cargar datos completos del elemento. Si la API no responde se AVISA: antes
+      // esto fallaba en silencio y el panel se quedaba con la ruta vacía sin decir
+      // por qué (el endpoint GET /api/elementos/{id} ni siquiera existía).
       let feat = featureObj;
       if (!feat || !feat.properties || !feat.geometry) {
-        const res = await fetch((window.apiUrl ? window.apiUrl(`/api/elementos/${_cableId}`) : `/api/elementos/${_cableId}`));
-        if (res.ok) feat = await res.json();
+        const rutaElem = window.apiUrl ? window.apiUrl(`/api/elementos/${_cableId}`) : `/api/elementos/${_cableId}`;
+        try {
+          const res = await fetch(rutaElem);
+          if (res.ok) {
+            feat = await res.json();
+          } else {
+            _avisar(`No se pudieron leer las propiedades de la fibra #${_cableId} (la API respondió ${res.status}).`);
+          }
+        } catch (err) {
+          _avisar(`No se pudieron leer las propiedades de la fibra #${_cableId}: ${err.message}`);
+        }
       }
 
       _cableData = feat || {};
@@ -562,11 +633,34 @@ const FTTHFibraInspector = (() => {
 
       // ── Trazado: todo se deduce del recorrido real de la fibra ───────────
       // (desde su punto de origen hasta su punto final, no de datos sueltos)
-      const geom = _cableData.geometry || (featureObj && featureObj.geometry);
-      const coords = (geom && geom.type === 'LineString' && Array.isArray(geom.coordinates))
-        ? geom.coordinates
-        : [];
+      //
+      // La geometría CANÓNICA es la del INVENTARIO del proyecto. La que llega en
+      // `featureObj` puede ser un FRAGMENTO: los eventos de capa de MapLibre
+      // devuelven la geometría de la TESELA bajo el cursor (recortada y, si el
+      // recorte la parte, un MultiLineString), no la del source. Deducir la ruta
+      // de ese fragmento hacía que «Ver ruta» mostrara solo los postes del trozo
+      // clicado: ruta completa o incompleta según DÓNDE se hiciera clic.
       const features = await _featuresDelProyecto();
+      const enInventario = _featureEnInventario(features, _cableId);
+      const geomInventario = enInventario ? enInventario.geometry : null;
+      const geomRecibida = featureObj ? featureObj.geometry : null;
+      const lineal = (g) => (esTrazadoLineal(g) ? g : null);
+      const geom = lineal(geomInventario) || lineal(_cableData.geometry) || lineal(geomRecibida) || null;
+      const coords = coordsDeTrazado(geom);
+
+      // Nunca se calla una ruta calculada con datos de menos.
+      let avisoTrazado = '';
+      if (!lineal(geomInventario)) {
+        if (lineal(geomRecibida)) {
+          avisoTrazado = 'Ruta calculada con la geometría recibida del mapa: puede estar recortada '
+            + '(no se encontró esta fibra en el inventario del proyecto).';
+          console.warn('[FTTHFibraInspector] Sin geometría en el inventario: se usa la del evento '
+            + 'de clic (puede estar recortada por teselas).');
+        } else {
+          avisoTrazado = `No se encontró la geometría de la fibra #${_cableId}: no hay recorrido que mostrar.`;
+        }
+      }
+
       const recorrido = resolverRecorridoFibra(coords, features, instProps.postes_intermedios);
       const distTotal = recorrido.total_m;
       document.getElementById('ffi-longitud').value = distTotal.toFixed(2);
@@ -593,7 +687,7 @@ const FTTHFibraInspector = (() => {
         : '—';
 
       // ── Poblar Panel Ruta de Fibra (postes y distancia entre ellos) ──────
-      _poblarRuta(recorrido, puntaA, puntaB);
+      _poblarRuta(recorrido, puntaA, puntaB, avisoTrazado);
 
       // Si la fibra pasa por postes, el clic derecho abre la ruta directamente
       _activarPestana(nPostes ? 'ruta' : 'info');
@@ -601,6 +695,8 @@ const FTTHFibraInspector = (() => {
     } catch (e) {
       console.error('[FTTHFibraInspector] Error cargando cable:', e);
       document.getElementById('ffi-title').textContent = `Cable #${_cableId}`;
+      // Antes este camino terminaba sin decir nada al usuario (solo en consola).
+      _avisoEnPanel(`No se pudieron cargar las propiedades de la fibra #${_cableId}: ${e.message || e}`);
     }
   }
 
@@ -636,8 +732,11 @@ const FTTHFibraInspector = (() => {
    * Genera el timeline del recorrido: los postes por los que pasa la fibra y la
    * distancia entre ellos. Si la fibra no pasa por ningún poste no se dibuja
    * ruta: sólo se informa la longitud total.
+   *
+   * @param {string} [aviso] Si la ruta se calculó con datos de menos (geometría
+   *   recibida del mapa en vez del inventario), se deja VISIBLE en el panel.
    */
-  function _poblarRuta(recorrido, puntaA, puntaB) {
+  function _poblarRuta(recorrido, puntaA, puntaB, aviso) {
     const summaryEl = document.getElementById('ffi-route-summary');
     const routeListEl = document.getElementById('ffi-route-list');
     if (!summaryEl || !routeListEl || !recorrido) return;
@@ -660,6 +759,7 @@ const FTTHFibraInspector = (() => {
         <div class="route-empty">
           Esta fibra no pasa por postes.<br>
           Longitud total de la fibra: <b>${total.toFixed(1)} m</b>.
+          ${aviso ? `<br><b>⚠ ${escapeHtml(aviso)}</b>` : ''}
         </div>
       `;
       return;
@@ -673,6 +773,7 @@ const FTTHFibraInspector = (() => {
       <span class="rs-item">${recorrido.ruta_trazado
         ? `<i class="fa-solid fa-route"></i> orden de trazado`
         : `${_icono('cables', 14)} ${escapeHtml(puntaA)} → ${escapeHtml(puntaB)}`}</span>
+      ${aviso ? `<span class="rs-sep">·</span><span class="rs-item">⚠ ${escapeHtml(aviso)}</span>` : ''}
     `;
 
     let routeHtml = '';
@@ -711,6 +812,21 @@ const FTTHFibraInspector = (() => {
     });
 
     routeListEl.innerHTML = routeHtml;
+
+    // Clic en un poste de la lista → centrar en el mapa y resaltar con pulso
+    routeListEl.querySelectorAll('.route-item[data-poste-id]').forEach(item => {
+      item.style.cursor = 'pointer';
+      item.addEventListener('click', () => {
+        const posteId = Number(item.dataset.posteId);
+        if (!Number.isFinite(posteId)) return;
+        if (window.FTTHMapa && window.FTTHMapa.resaltarElemento) {
+          window.FTTHMapa.resaltarElemento(posteId);
+        }
+        // Retroalimentación visual inmediata en el propio item de la lista
+        item.style.background = 'rgba(0,113,227,0.07)';
+        setTimeout(() => { item.style.background = ''; }, 1200);
+      });
+    });
   }
 
   function cerrarInspector() {
@@ -778,7 +894,11 @@ const FTTHFibraInspector = (() => {
     resolverRecorridoFibra,
     normalizarTrazado,
     longitudTrazado,
-    calcularDistanciaGeo
+    calcularDistanciaGeo,
+    // Utilidades de geometría: la geometría del evento de clic puede venir como
+    // MultiLineString (recorte por teselas) y hay que saber tratarla.
+    esTrazadoLineal,
+    coordsDeTrazado
   };
 
 })();

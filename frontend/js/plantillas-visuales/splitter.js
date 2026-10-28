@@ -77,7 +77,7 @@ const FTTHPlantillaSplitter = (() => {
     const id = numero(s.id);
     // data-puerto: el diagrama ya escucha [data-puerto] dentro de #diag-body,
     // asi que la fila se selecciona igual que en la tarjeta clasica.
-    const clic = id === null ? '' : ` data-puerto="${id}"`;
+    const clic = id === null ? '' : ` data-puerto="${id}" data-puerto-no="${numeroPuerto}" data-color="${escapeHtml(color.nombre)}" data-hex="${escapeHtml(color.hex)}" data-dbm="${escapeHtml(fDbm(s.teorica_dbm))}"`;
 
     const pintura = color.hex ? ` style="--pv-color:${escapeHtml(color.hex)}"` : '';
     const atajo = color.nombre ? ` title="${escapeHtml(color.nombre)}"` : '';
@@ -162,7 +162,7 @@ const FTTHPlantillaSplitter = (() => {
     const etiquetaIn = texto(entrada.etiqueta) || 'IN';
 
     const idIn = numero(entrada.id);
-    const clicIn = idIn === null ? '' : ` data-puerto="${idIn}"`;
+    const clicIn = idIn === null ? '' : ` data-puerto="${idIn}" data-color="Entrada" data-hex="#1d1d1f" data-dbm="${escapeHtml(fDbm(entrada.potencia_dbm))}"`;
     const claseIn = 'pv-splitter__entrada' + (entrada.seleccionado ? ' pv-splitter__entrada--sel' : '');
 
     html += '<div class="pv-splitter__cuerpo">'

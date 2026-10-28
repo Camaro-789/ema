@@ -165,6 +165,9 @@ const FTTHTipos = (() => {
         { id: 'perfil', label: 'Perfil de fibra', type: 'select', options: OP.perfilFibra, w: 'half', soloSi: 'conBuffer' },
         { id: 'total_hilos', label: 'Número total de hilos', type: 'select', options: OP.hilosDrop, w: 'half', soloSi: 'drop' },
         { id: 'atenuacion', label: 'Atenuación por Km (dB)', type: 'number', ph: '0.4', step: '0.1', w: 'half' },
+        // ── Cable OZmap: reservas por extremo (valores por defecto del tipo) ──
+        { id: 'reserva_A_m', label: 'Reserva extremo A (m)', type: 'number', ph: '0', step: '0.1', min: 0, w: 'half' },
+        { id: 'reserva_B_m', label: 'Reserva extremo B (m)', type: 'number', ph: '0', step: '0.1', min: 0, w: 'half' },
         { id: 'desc', label: 'Descripción', type: 'textarea', ph: 'Descripción...', w: 'full' },
         {
           fieldset: 'Representación del cable implantado',

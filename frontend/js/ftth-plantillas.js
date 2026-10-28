@@ -95,14 +95,18 @@ const FTTHPlantillas = (() => {
 
   /**
    * Clave de plantilla declarada por un tipo del catálogo.
-   * `tipo` es una fila de ftth_tipos: { categoria, propiedades: { plantilla_visual } }
+   * `tipo` es una fila de ftth_tipos o un objeto de propiedades:
+   *   { categoria, propiedades: { plantilla_visual } }
+   *   { categoria, propiedades_tipo: { plantilla_visual } }
+   *   { categoria: 'cables', plantilla_visual: '...' }
    */
   function resolverTipo(tipo) {
     if (!tipo) return '';
-    const props = tipo.propiedades || tipo.propiedades_tipo || {};
-    const declarada = props.plantilla_visual;
+    const props = (tipo && (tipo.propiedades || tipo.propiedades_tipo)) || tipo;
+    const declarada = props.plantilla_visual || (tipo && tipo.plantilla_visual);
     if (declarada && existe(declarada)) return declarada;
-    return POR_CATEGORIA[String(tipo.categoria || '').toLowerCase()] || '';
+    const cat = String(tipo.categoria || props.categoria || (props.fibras != null ? 'cables' : '')).toLowerCase();
+    return POR_CATEGORIA[cat] || '';
   }
 
   // ── Adaptador dominio → datos de plantilla ────────────────────────────────
@@ -208,8 +212,8 @@ const FTTHPlantillas = (() => {
    */
   function datosFibra(dev, tubos, tipoNombre) {
     const d = dev || {};
-    const props = d.propiedades || d.propiedades_tipo || {};
-    const instProps = d.propiedades_instancia || {};
+    const props = d.propiedades || d.propiedades_tipo || d;
+    const instProps = d.propiedades_instancia || d;
 
     const totalFibras = _num(props.fibras) || _num(instProps.fibras) || 0;
     const fibrasLoose = _num(props.fibrasLoose) || _num(props.fibras_loose) || null;

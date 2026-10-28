@@ -44,3 +44,16 @@
   archivos tocados a menos que te lo pida.
 - Si algo no se pudo verificar de verdad, dilo con esas palabras — no lo des por
   cerrado.
+
+## Renderizado de propiedades de elementos (arquitectura ya definida)
+- Las propiedades de un elemento se muestran SIEMPRE a través de `_renderPropsHtml`
+  (en `ftth-mapa.js`) — ninguna superficie nueva (popup, menú contextual, panel lateral,
+  modal, tooltip, etc.) debe iterar `props.entries()` ni renderizar campos genéricos
+  por su cuenta.
+- Los campos que nunca se muestran como texto crudo se declaran UNA SOLA VEZ en la
+  constante `CLAVES_OCULTAS` (misma función, misma línea). Para añadir un campo a la
+  lista negra: editar solo esa constante, no buscar ni parcheando cada superficie.
+- `trazado_ruta` está en `CLAVES_OCULTAS` de forma permanente: es la receta interna
+  del backend (array de objetos) y se muestra solo a través del inspector de fibra
+  («Ver ruta»), nunca en vistas genéricas de propiedades.
+

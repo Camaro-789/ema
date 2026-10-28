@@ -1,0 +1,4 @@
+# Bytes exactos: la plantilla visual (frontend/pop_gestor_v25.html) tiene un
+# SHA256 fijo verificado por backend/scripts/prueba_plantilla_v25.py.
+# Sin conversiones de fin de linea ni filtros: lo que se commitea es lo que hay.
+* -text

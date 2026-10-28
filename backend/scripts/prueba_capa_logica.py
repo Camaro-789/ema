@@ -256,6 +256,9 @@ def main() -> int:
     # ── 8. Anclaje de extremo ───────────────────────────────────────────────
     print("\n8) PUT /api/fibras/{id}/extremos/B (anclaje a un nodo)")
     if fibra_id and postes:
+        # El hilo puede venir YA anclado por el uso real (p. ej. su punta B en una
+        # caja): se suelta primero para que la prueba del anclaje sea determinista.
+        CLIENTE.put(f"/api/fibras/{fibra_id}/extremos/B", json={"nodo_id": None})
         r = CLIENTE.put(f"/api/fibras/{fibra_id}/extremos/B", json={"nodo_id": postes[0]})
         check(r.status_code == 200, "El extremo B se ancló al poste", f"status={r.status_code}")
         avisos = r.json().get("advertencias", []) if r.status_code == 200 else []

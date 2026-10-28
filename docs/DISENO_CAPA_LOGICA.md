@@ -14,7 +14,7 @@
 | F3 Nodo (frontend) | ✅ implementada | `frontend/js/ftth-diagrama.js`, `frontend/css/diagrama.css`, modal `#ftth-diagrama-modal`, clic izquierdo en la caja y acción «Abrir Diagrama Lógico» en el menú contextual |
 | F1 PostGIS | ⏳ pendiente | — |
 | F2.5 Ductos y postes | ⏳ pendiente | — |
-| F4 Empalmes | ⏳ pendiente | Las bandejas ya tienen posiciones (slots) y los hilos ya tienen extremos anclados |
+| F4 Empalmes | 🟡 parcial | Tabla `ftth_empalmes` (nodo / bandeja / slot / hilo A ↔ hilo B / tipo) + **CORTE y SANGRADO** en `POST /elementos/{caja}/cables/{cable}/dividir` (`{modo, fibras, lado}`) + el DTO del nodo devuelve `empalmes` y el `empalme` de cada hilo. Falta la edición manual de empalmes sobre el lienzo |
 | F5 Potencia / trazado | ⏳ pendiente | — |
 | F6 Clientes | ⏳ pendiente | — |
 
@@ -735,10 +735,12 @@ clic izquierdo sobre la caja
 | Zona del modal | Contenido |
 |---|---|
 | Cabecera | Ícono del tipo + nombre + `box_id` + estado del nodo (`prop-header-badge`) |
-| Columna izquierda | **Hilos que terminan aquí**: agrupados por cable → tubo, con color TIA-598 y estado |
+| Columna izquierda (**ENTRADA**) | **Hilos que ENTRAN**: el cable llega por su extremo **B** (lo dice el backend con `lado`); agrupados por cable → tubo, con color TIA-598 y estado |
 | Centro | **Bandejas**: cada bandeja como panel con sus `slots`; cada slot ocupado dibuja el empalme (hilo A ↔ hilo B) |
-| Columna derecha | **Dispositivos y puertos**: splitter 1xN con puertos IN/OUT, adaptadores, y ocupación por cliente. Cada aparato vive en un **área libre** con su agarre: se arrastra para acomodarlo y el disquete guarda el orden (`ftth_diagrama_posiciones`) |
+| Columna derecha (**SALIDA**) | **Hilos que SALEN**: el cable sale por su extremo **A**; un cable que **pasa** por el nodo se **divide** al agregarlo (el tramo que llega queda en ENTRADA y el que sigue en SALIDA) |
+| Aparatos | **Dispositivos y puertos**: splitter 1xN con puertos IN/OUT, adaptadores, y ocupación por cliente. Cada aparato vive en un **área libre** con su agarre: se arrastra para acomodarlo y el disquete guarda el orden (`ftth_diagrama_posiciones`) |
 | Pie | `advertencias[]` del DTO y botón "Ver trazado hacia la OLT" (F5) |
+| Entrada de cables | El diagrama **nace VACÍO**: los cables detectados no se listan en el lienzo; se agregan con **«Agregar cable de entrada / salida»** de la barra inferior, y ambos botones ofrecen **la misma lista** porque el **LADO lo elige el usuario**. Cada cable anclado trae **«⇄ Marcar como Entrada/Salida»** (se guarda por punta en el cable: `lado_A` / `lado_B`, sin tocar la nomenclatura A/B). Un cable que PASA se **corta** (todas las fibras fusionadas de paso) o se **sangra** (se eligen las fibras que se pican). La columna **SALIDA** se dibuja **reflejada** (direccional). El trazado del mapa **no ancla solo** a las cajas |
 | Ventana | Botón de **pantalla completa** (maximizar/restaurar) en la barra de identidad y **agarre en la esquina** para redimensionar el panel como una ventana; el tamaño elegido se recuerda entre aperturas. Las barras flotan sobre el lienzo (la superior arranca debajo de la barra de identidad, sin taparse) y el único mando para agregar aparatos es la barra inferior |
 | Modo | F3: **solo lectura** de la topología; el lienzo sí deja **mover los aparatos** y guardar su sitio con el disquete. El lienzo es **libre**: no hay recuadro, un aparato se puede llevar a cualquier lado (incluso con x/y negativas, a la izquierda o arriba del origen) y arrastrarlo **no navega el diagrama** (para ver más espacio se aleja con la rueda del ratón). Cualquier cambio real —mover un aparato, agregarlo o eliminarlo— **enciende el disquete** de guardar. Al abrir el nodo la vista se **centra en los splitters con zoom 100%** (solo baja de 100% si no cupieran). F4: edición (arrastrar hilo a slot, asignar puerto) |
 

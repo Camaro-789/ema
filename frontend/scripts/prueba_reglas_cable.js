@@ -293,6 +293,26 @@ function main() {
   check(fibra.esDrop(6, 'drop') === true && fibra.esDrop(6, 'con_buffer') === false,
     'La estructura manda sobre el criterio antiguo de ≤ 4 hilos');
 
+  console.log('\n7b) La SALIDA se dibuja REFLEJADA y con los hilos invertidos');
+  const entrada = fibra.render({ fibras: 2, estructura: 'drop' });
+  const salida = fibra.render({ fibras: 2, estructura: 'drop', orientacion: 'out' });
+  check(entrada.includes('data-orientacion="in"') && salida.includes('data-orientacion="out"'),
+    'La tarjeta declara su orientación (in por defecto, out en la salida)');
+  check(entrada.includes('cx="356"') && salida.includes('cx="24"'),
+    'La punta del hilo mira a la DERECHA en la entrada y a la IZQUIERDA en la salida',
+    { entrada: (entrada.match(/strand-dot" cx="(\d+)"/) || [])[1],
+      salida: (salida.match(/strand-dot" cx="(\d+)"/) || [])[1] });
+  const cyHilo1 = (html) => {
+    const i = html.indexOf('data-hilo-global="1"');
+    const m = i < 0 ? null : html.slice(i).match(/class="strand-dot" cx="[\d.]+" cy="([\d.]+)"/);
+    return m ? Number(m[1]) : null;
+  };
+  check(cyHilo1(salida) > cyHilo1(entrada),
+    'En la SALIDA el hilo 1 se dibuja ABAJO (orden invertido para cuadrar la fusión)',
+    `${cyHilo1(entrada)} vs ${cyHilo1(salida)}`);
+  check((entrada.match(/strand-dot/g) || []).length === (salida.match(/strand-dot/g) || []).length,
+    'El número de hilos dibujados no cambia al invertir la orientación');
+
   console.log('\n8) La potencia de cada punta: MEDIDO manda, si no TEÓRICO');
   const conMedida = fibra.render({
     fibras: 2, estructura: 'drop',

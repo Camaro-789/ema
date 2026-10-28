@@ -24,7 +24,7 @@ app.add_middleware(
 )
 
 # Import routers
-from app.database import Base, engine
+from app.database import Base, engine, asegurar_migraciones
 import app.models.ftth_models as _ftth_models  # noqa: F401 — registra tablas FTTH en Base.metadata
 import app.models.ftth_logica as _ftth_logica  # noqa: F401 — registra la capa lógica (tubos/hilos/extremos)
 from app.routers import maps, layers, formats, ai, types
@@ -32,6 +32,8 @@ from app.routers import ftth_tipos, ftth_elementos, ftth_carpetas
 from app.routers import ftth_logica
 
 Base.metadata.create_all(bind=engine)
+asegurar_migraciones(engine)
+
 
 app.include_router(maps.router, prefix="/api/v1/maps", tags=["maps"])
 app.include_router(layers.router, prefix="/api/v1/layers", tags=["layers"])

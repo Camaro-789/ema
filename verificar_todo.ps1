@@ -66,7 +66,8 @@ $pruebasPy = @(
     'prueba_splitter_plantilla.py',
     'prueba_diagrama_posiciones.py',
     'prueba_frontend_capas.py',
-    'prueba_cable_estructura.py'
+    'prueba_cable_estructura.py',
+    'prueba_cable_extremos_bidireccional.py'
 )
 foreach ($t in $pruebasPy) {
     $ruta = Join-Path $backend (Join-Path 'scripts' $t)
@@ -104,7 +105,8 @@ if (-not $node) {
         'prueba_lienzo_diagrama.js',
         'prueba_mover_splitter.js',
         'prueba_recorrido_fibra.js',
-        'prueba_reglas_cable.js'
+        'prueba_reglas_cable.js',
+        'prueba_resolver_plantilla_cable.js'
     )
     foreach ($t in $pruebasJs) {
         $ruta = Join-Path $frontend (Join-Path 'scripts' $t)

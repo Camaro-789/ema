@@ -41,6 +41,14 @@ class FtthElemento(Base):
     # Poste de referencia (para cajas, mangas, etc. que cuelgan de un poste)
     poste_ref_id = Column(Integer, ForeignKey("ftth_elementos.id", ondelete="SET NULL"), nullable=True)
 
+    # Cable: extremos lógicos (A y B) - referencias a otros elementos (ODF, Caja NAP, Splitter, etc.)
+    extremo_A_id = Column(Integer, ForeignKey("ftth_elementos.id", ondelete="SET NULL"), nullable=True)
+    extremo_B_id = Column(Integer, ForeignKey("ftth_elementos.id", ondelete="SET NULL"), nullable=True)
+
+    # Cable: reservas en metros por extremo
+    reserva_A_m = Column(Float, nullable=True, default=0)
+    reserva_B_m = Column(Float, nullable=True, default=0)
+
     # El estado particular de esta instancia (ej. puertos ocupados, estado actual)
     propiedades_instancia = Column(JSON, nullable=False, default={})
 
