@@ -1,15 +1,29 @@
+# Versiones REALES del entorno de desarrollo (Windows, Python 3.14.3).
+# Fuente: `python scripts/versiones_entorno.py` (2026-10-27).
+# No cambiar a ciegas: son las que el backend importa hoy y con las que arranca.
+#
+# El requirements historico fijaba pydantic 2.5.3 / sqlalchemy 2.0.27 / httpx
+# 0.26.0, que NO son las instaladas. Aqui quedan las reales para que recrear el
+# entorno reproduzca lo que funciona.
+
 fastapi==0.109.0
 uvicorn==0.27.0
+sqlalchemy==2.0.52
+pydantic==2.13.5
+starlette==0.35.1
+httpx==0.28.1
 python-multipart==0.0.6
-shapely==2.0.3
-sqlalchemy==2.0.27
-psycopg2-binary==2.9.9
-redis==5.0.1
-httpx==0.26.0
-python-jose==3.3.0
-passlib==1.7.4
-python-dotenv==1.0.0
-pydantic==2.5.3
-numpy==1.26.4
-pandas==2.1.4
-xmltodict==0.13.0
+shapely==2.1.2
+psycopg2-binary==2.9.13
+
+# --- Instalados en el equipo pero NO importados por app/ ---
+numpy==2.4.3
+pandas==3.0.1
+
+# --- NO instalados hoy (el arranque no los necesita) ---
+# python-dotenv, xmltodict, redis, python-jose, passlib
+#
+# --- Se instalaran cuando la fase correspondiente los necesite ---
+# alembic   (Fase 2.1)
+# pytest    (Fases 2-3)
+# playwright (Fase 3.2 / 4.3)

@@ -1,0 +1,29 @@
+VERSIONES REALES DEL ENTORNO
+======================================================================
+python      3.14.3
+ejecutable  C:\Users\Emanuelito\AppData\Local\Programs\Python\Python314\python.exe
+plataforma  win32
+----------------------------------------------------------------------
+distribucion           version        instalada  importa
+----------------------------------------------------------------------
+fastapi                0.109.0        si         OK
+uvicorn                0.27.0         si         OK
+sqlalchemy             2.0.52         si         OK
+pydantic               2.13.5         si         OK
+starlette              0.35.1         si         OK
+httpx                  0.28.1         si         OK
+python-multipart       0.0.6          si         OK
+python-dotenv          -              no         FALLA (ModuleNotFoundError)
+xmltodict              -              no         FALLA (ModuleNotFoundError)
+shapely                2.1.2          si         OK
+psycopg2-binary        2.9.13         si         OK
+alembic                -              no         FALLA (ModuleNotFoundError)
+pytest                 -              no         FALLA (ModuleNotFoundError)
+playwright             -              no         FALLA (ModuleNotFoundError)
+redis                  -              no         FALLA (ModuleNotFoundError)
+python-jose            -              no         FALLA (ModuleNotFoundError)
+passlib                -              no         FALLA (ModuleNotFoundError)
+numpy                  2.4.3          si         OK
+pandas                 3.0.1          si         OK
+----------------------------------------------------------------------
+app.main: importa correctamente con este entorno
