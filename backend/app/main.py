@@ -30,7 +30,9 @@ import app.models.ftth_logica as _ftth_logica  # noqa: F401 — registra la capa
 from app.routers import maps, layers, formats, ai, types
 from app.routers import ftth_tipos, ftth_elementos, ftth_carpetas
 from app.routers import ftth_logica
+from app.routers import contenedores
 from app.config import POP_V25_ENABLED, VERSION_CONTRATO_DIAGRAMA
+from app.domain.errores import ErrorDominio
 
 Base.metadata.create_all(bind=engine)
 
@@ -61,6 +63,14 @@ app.include_router(ftth_elementos.router)
 app.include_router(ftth_carpetas.router)
 # Capa lógica FTTH — contención de hilos (tablas nuevas, no afecta al mapa)
 app.include_router(ftth_logica.router)
+# Módulo nativo de contenedores (Fase 2.6/2.7) — armario/POP en esta entrega
+app.include_router(contenedores.router)
+
+
+@app.exception_handler(ErrorDominio)
+async def _error_dominio(request, exc: ErrorDominio):
+    """Errores de negocio → `{codigo, mensaje_es, detalle}` con su status (2.7)."""
+    return JSONResponse(status_code=exc.status, content=exc.a_dict())
 
 
 @app.get("/api/config/flags", tags=["config"],

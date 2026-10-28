@@ -64,9 +64,48 @@ falta para cerrar cada fase. **Nada se declara cerrado aquí sin evidencia.**
 
 ---
 
-## Fase 2 · Fundación del backend
+## Fase 2 · Fundación del backend — **completa**
 
-_(pendiente de empezar)_
+| # | Estado | Evidencia |
+|---|---|---|
+| 2.1 Alembic | hecho | `0001`–`0004`; sobre una **copia** del `.db`: `upgrade head` → `downgrade -2` → `upgrade head`, con las mismas filas (33/24/0/5/66). PostgreSQL: **no probado** (Docker no disponible, ver P-005) |
+| 2.2 Dominio | hecho | `app/domain/{reglas,servicios,errores}.py`; reglas puras (sin FastAPI/SQLAlchemy) |
+| 2.3 Idempotencia | hecho | `ftth_operaciones` + orden correcto (idempotencia **antes** de revisión) probado |
+| 2.4 Revisión | hecho | `ftth_elementos.revision`; 409 con `revision_vigente` probado |
+| 2.5 Origen/TX | hecho | `ftth_conexion_meta`; PON → ACCESO, TX 3.0 dBm probado |
+| 2.6 Contrato | hecho | `GET /api/contenedores/{id}/diagrama` con **9 consultas fijas** y paginación de hilos |
+| 2.7 Comandos | hecho | 7 endpoints con `operation_id` + `base_revision`; 21 comprobaciones en verde |
+
+### P-005 · PostgreSQL / Docker no probado
+
+- `docker-compose.yml` ya trae `postgis/postgis:15-3.3` y `DATABASE_URL` por
+  variable de entorno; el DDL es dialect-aware (`SERIAL` en PostgreSQL,
+  `AUTOINCREMENT` en SQLite) y las migraciones no usan nada específico de SQLite.
+- **No se ejecutó**: en este equipo no hay Docker disponible en la sesión. Queda
+  pendiente de probar en un entorno con Docker.
+
+### P-006 · Bugs encontrados y corregidos durante la Fase 2
+
+1. La idempotencia se comprobaba **después** de la revisión → un reintento con
+   el mismo `operation_id` devolvía 409 en vez del resultado guardado.
+2. `mover_dispositivo` hacía `float(None)` cuando no se enviaba posición.
+3. `marcar_origen` pasaba el **tipo de puerto** (PON) al validador, que clasifica
+   por **tipo de equipo** (OLT) → rechazaba orígenes válidos.
+4. `meta.origen_tipo` guardaba el tipo de equipo en vez del tipo de puerto, así
+   que la TX por defecto salía 0 en lugar de 3.0 dBm.
+
+Los cuatro los detectó `prueba_contenedores.py`; los tres últimos se corrigieron
+antes de dar la fase por cerrada.
+
+### P-007 · Lo que falta para cerrar del todo el backend
+
+- **Puerto ↔ puerto** (OLT SFP → ODF cara A) no es representable hoy: se
+  rechaza con `puerto_a_puerto_pendiente` hasta la Fase 6.
+- **Detección de lazos completa** (`contexto["cadena"]`) → Fase 3.
+- **Capacidad en U** de los gabinetes sin modelar → `excede` siempre `false`.
+- Los endpoints antiguos siguen vivos (los usa el puente congelado): se migran
+  en la Fase 5 (R8).
+
 
 ## Fase 3 · Reglas de conexión
 
