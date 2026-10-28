@@ -11,7 +11,7 @@
  */
 import { api, ErrorApi } from './api.js';
 import * as store from './store.js';
-import { cargarReglas } from './reglas.js';
+import { cargarReglas, estadoPotencia } from './reglas.js';
 import { crearVistaPapel } from './vista-papel.js';
 import { renderRack } from './vista-rack.js';
 import { renderMatriz } from './vista-matriz.js';
@@ -19,6 +19,7 @@ import { renderPanelIzquierdo } from './panel-izquierdo.js';
 import { renderPanelDerecho } from './panel-derecho.js';
 import { abrirDialogoEquipo } from './dialogo-equipo.js';
 import { cadenas } from './trazabilidad.js';
+import { recorrerEnergia, dbmDeRuta } from './energia.js';
 import { iniciarLinterna, detenerLinterna, linternaActiva, direccionEtiqueta } from './linterna.js';
 
 let modal = null;
@@ -26,6 +27,10 @@ let vistaPapel = null;
 let contenedorId = null;
 let pestana = 'papel';
 let rutaActiva = null;
+// Paso 5: origen/TX elegidos por el técnico y sentido del pulso (L/R).
+let origenClave = null;
+let txDbm = null;
+let sentido = 'R';
 
 function cargarCss() {
   if (document.querySelector('link[data-pop-diagrama]')) return;
@@ -89,10 +94,24 @@ function pintar(diagrama) {
     alNuevoEquipo: nuevoEquipo,
   });
 
-  renderPanelDerecho(derecha, rutasDe(diagrama), {
+  // Paso 5: potencia teórica desde el origen elegido (constantes del servidor).
+  // Es una pista visual: si el recorrido falla, el diagrama se pinta igual.
+  let energia = { candidatos: [], origen: null, potencia: new Map(), tramos: [], tx: null };
+  try {
+    energia = recorrerEnergia(diagrama, { origenClave, txDbm });
+    if (energia.origen) origenClave = energia.origen.clave;
+  } catch (error) {
+    console.warn('[pop] no se pudo calcular la energía:', error);
+  }
+  renderPanelDerecho(derecha, rutasDe(diagrama, energia), {
     alEncender: encenderRuta,
     alDetener: detenerRuta,
     activa: rutaActiva,
+    energia,
+    sentido,
+    alOrigen: cambiarClave,
+    alTx: cambiarTx,
+    alSentido: cambiarSentido,
   });
 
   centro.innerHTML = '<div class="pop-vista"></div>';
@@ -122,7 +141,7 @@ function pintar(diagrama) {
   // Si la linterna estaba encendida, se vuelve a encender sobre el lienzo nuevo.
   if (rutaActiva) {
     const svg = host.querySelector('.pop-papel-svg');
-    if (svg) iniciarLinterna(svg, rutaActiva.cadena);
+    if (svg) iniciarLinterna(svg, rutaActiva.cadena, { sentido });
   }
 }
 
@@ -197,17 +216,52 @@ function editar(dispositivoId) {
   );
 }
 
-function rutasDe(diagrama) {
-  return cadenas(diagrama || {}).map((cadena) => ({
-    id: cadena.id,
-    etiqueta: cadena.etiqueta,
-    origen: cadena.puntos.length ? cadena.puntos[0].etiqueta : '—',
-    direccion: direccionEtiqueta(cadena, 'SEÑAL'),
-    pon: String(cadena.etiqueta).toUpperCase().includes('PON'),
-    tramos: Math.max(0, cadena.puntos.length - 1),
-    equipos: cadena.puntos.length,
-    cadena,
-  }));
+function rutasDe(diagrama, energia) {
+  return cadenas(diagrama || {}).map((cadena) => {
+    const ruta = {
+      id: cadena.id,
+      etiqueta: cadena.etiqueta,
+      origen: cadena.puntos.length ? cadena.puntos[0].etiqueta : '—',
+      direccion: direccionEtiqueta(cadena, 'SEÑAL', sentido),
+      pon: String(cadena.etiqueta).toUpperCase().includes('PON'),
+      tramos: Math.max(0, cadena.puntos.length - 1),
+      equipos: cadena.puntos.length,
+      dbm: null,
+      estado: 'ok',
+      cadena,
+    };
+    // Paso 5: dBm teóricos al final de la traza, con el umbral del dominio.
+    const dbm = dbmDeRuta(energia, ruta);
+    if (dbm !== null) {
+      ruta.dbm = dbm;
+      ruta.estado = estadoPotencia(
+        energia && energia.origen ? energia.origen.dominio : null,
+        dbm,
+        !!(energia && energia.origen && energia.origen.cobre),
+      );
+    }
+    return ruta;
+  });
+}
+
+/** Paso 5: cambiar el ORIGEN de la potencia (puerto o hilo; el TX vuelve a su valor por defecto). */
+function cambiarClave(clave) {
+  origenClave = String(clave);
+  txDbm = null;
+  pintar(store.diagramaActual());
+}
+
+/** Paso 5: TX manual en dBm (se conserva mientras no cambie el origen). */
+function cambiarTx(valor) {
+  if (!Number.isFinite(valor)) return;
+  txDbm = valor;
+  pintar(store.diagramaActual());
+}
+
+/** Paso 5: sentido del pulso (L = final → origen · R = origen → final). */
+function cambiarSentido(direccion) {
+  sentido = direccion === 'L' ? 'L' : 'R';
+  pintar(store.diagramaActual());
 }
 
 function encenderRuta(ruta) {

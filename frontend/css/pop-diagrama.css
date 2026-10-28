@@ -284,5 +284,31 @@
 .pop-matriz-chips.is-fusion { border-top: 1px solid #000; background: #fff7ed; padding: 8px 10px; }
 .pop-matriz-chips.is-fusion b { font-size: 9px; letter-spacing: .06em; color: #9a3412; }
 
+/* ── Paso 5: origen/TX, dBm por ruta y sentido L/R ──────────────────────── */
+.pop-origen { padding: 6px 10px; border-bottom: 1px solid #000; background: #f1f5f9; }
+.pop-origen-h { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+.pop-origen-h b { font-size: 9px; letter-spacing: .06em; }
+.pop-origen-h small { font-size: 9px; color: #64748b; }
+.pop-origen select { width: 100%; font: 11px Arial, sans-serif; padding: 2px 3px; border: 1px solid #000; }
+.pop-tx { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 10px; font-weight: 700; }
+.pop-tx input { width: 62px; font: 11px Arial, sans-serif; padding: 2px 3px; border: 1px solid #000; }
+.pop-ruta-dbm {
+  font: 700 9px Arial, sans-serif; padding: 1px 4px; border: 1px solid #000; background: #dcfce7;
+}
+.pop-ruta-dbm.is-low { background: #fee2e2; }
+.pop-ruta-dbm.is-high { background: #fef9c3; }
+.tw-dir {
+  display: flex; align-items: center; gap: 3px; flex: 0 0 auto;
+  margin-bottom: 3px; font-size: 9px;
+}
+.tw-dir button {
+  border: 1px solid #000; background: #fff; cursor: pointer; width: 20px; height: 18px;
+  font: 700 9px Arial, sans-serif; line-height: 1; flex: 0 0 auto;
+}
+.tw-dir button.is-on { background: #f59e0b; }
+.tw-ic.is-izq svg { transform: scale(-1, 1); }
+/* La cabecera de la ventana de luz admite varias líneas: los botones L/R nunca se recortan */
+.pop-torch .tw-h, .pop-torch .tw-b { flex-wrap: wrap; }
+
 
 

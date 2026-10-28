@@ -49,24 +49,26 @@ function pintar(svg, puntos, avance) {
     <circle cx="${fin.x}" cy="${fin.y}" r="4" class="pop-linterna-cabeza"></circle>`;
 }
 
-/** Arranca el pulso sobre la cadena indicada. */
-export function iniciarLinterna(svg, cadena) {
+/** Arranca el pulso sobre la cadena indicada. `sentido: 'R'` (origen→final) o `'L'`. */
+export function iniciarLinterna(svg, cadena, opciones = {}) {
   detenerLinterna();
   if (!svg || !cadena || cadena.puntos.length < 2) return false;
+  const sentido = opciones.sentido === 'L' ? 'L' : 'R';
+  const puntos = sentido === 'L' ? [...cadena.puntos].reverse() : cadena.puntos;
   let capa = svg.querySelector('.pop-linterna');
   if (!capa) {
     capa = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     capa.setAttribute('class', 'pop-linterna');
     svg.appendChild(capa);
   }
-  const total = largoTotal(cadena.puntos);
-  estado = { svg, cadena, total, inicio: performance.now(), frame: null, ultimoPulso: -1 };
+  const total = largoTotal(puntos);
+  estado = { svg, cadena, puntos, sentido, total, inicio: performance.now(), frame: null };
 
   const animar = (ahora) => {
     if (!estado) return;
     const transcurrido = (ahora - estado.inicio) % INTERVALO;
     const avance = (transcurrido / 1000) * VELOCIDAD;
-    pintar(estado.svg, estado.cadena.puntos, avance);
+    pintar(estado.svg, estado.puntos, avance);
     estado.frame = requestAnimationFrame(animar);
   };
   estado.frame = requestAnimationFrame(animar);
@@ -85,7 +87,13 @@ export function linternaActiva() {
   return !!estado;
 }
 
-export function direccionEtiqueta(cadena, senal) {
-  const hacia = cadena && cadena.puntos.length > 1 ? 'derecha' : 'izquierda';
-  return `${senal || 'SEÑAL'} ▶ ${hacia}`;
+/** 'L' o 'R' mientras hay pulso; `null` si está apagada. */
+export function sentidoLinterna() {
+  return estado ? estado.sentido : null;
+}
+
+export function direccionEtiqueta(cadena, senal, sentido) {
+  const flecha = sentido === 'L' ? '◀' : '▶';
+  const hacia = sentido === 'L' ? 'FINAL → ORIGEN' : 'ORIGEN → FINAL';
+  return `${senal || 'SEÑAL'} ${flecha} ${hacia}`;
 }

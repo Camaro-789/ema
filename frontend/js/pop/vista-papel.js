@@ -92,7 +92,11 @@ export function crearVistaPapel(host, opciones) {
 
   function tarjetaHtml(dispositivo, indice) {
     const { x, y } = posicion(dispositivo, indice);
-    if (!visible(x, y)) return '';
+    // Solo se descartan (culling) los equipos que el usuario ya colocó y quedaron
+    // fuera del encuadre. Los de posición automática SIEMPRE se dibujan: si no,
+    // un equipo recién creado podía caer fuera de la vista y desaparecer.
+    const colocada = !!(diagrama.posiciones || {})[dispositivo.id];
+    if (colocada && !visible(x, y)) return '';
     return `
       <g class="pop-tarjeta" data-dispositivo="${dispositivo.id}" transform="translate(${x},${y})">
         <rect class="pop-tarjeta-caja" width="${ANCHO}" height="${ALTO}" rx="2"></rect>

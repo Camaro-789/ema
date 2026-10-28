@@ -277,6 +277,29 @@ def _validar_tipo_equipo(db: Session, elemento, tipo_id, tipo: str) -> None:
         )
 
 
+def _division_de_tipo(db: Session, tipo_id) -> Optional[str]:
+    """División implícita de una plantilla del catálogo («Splitter … 1x16» → «1x16»).
+
+    Permite que «+ EQUIPO» funcione con tipos que no traen `relacion_division` en
+    sus propiedades: se busca en las propiedades y, si no está, en el nombre.
+    """
+    if tipo_id is None:
+        return None
+    plantilla = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == int(tipo_id)).first()
+    if not plantilla:
+        return None
+    propiedades = plantilla.propiedades or {}
+    for clave in ("relacion_division", "division", "ratio"):
+        normal = _division(propiedades.get(clave))
+        if normal:
+            return normal
+    import re
+    encontrado = re.search(r"(\d+)\s*[xX]\s*(\d+)", str(plantilla.nombre_id or ""))
+    if encontrado and encontrado.group(1) == "1":
+        return f"1x{int(encontrado.group(2))}"
+    return None
+
+
 def crear_dispositivo(db: Session, contenedor_id: int, datos: Dict[str, Any]) -> Dict[str, Any]:
     """Crea un equipo dentro del contenedor y genera sus puertos según el tipo.
 
@@ -294,6 +317,10 @@ def crear_dispositivo(db: Session, contenedor_id: int, datos: Dict[str, Any]) ->
     # y de la categoría correcta (así «+ EQUIPO» solo ofrece lo que hay en Tipos).
     _validar_tipo_equipo(db, elemento, datos.get("tipo_id"), tipo)
     division = _division(datos.get("division")) if tipo == "splitter" else None
+    if tipo == "splitter" and not division:
+        # El catálogo manda: si el tipo declara la división (propiedades o nombre),
+        # no hace falta que el usuario la escriba otra vez.
+        division = _division_de_tipo(db, datos.get("tipo_id"))
     if tipo == "splitter" and not division:
         raise ErrorRegla("El splitter necesita su división (1x8, 1x16…).",
                          codigo="division_requerida")

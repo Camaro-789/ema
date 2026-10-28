@@ -15,6 +15,7 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -142,13 +143,20 @@ async def main() -> int:
             splitter = next((t for t in tipos if t["categoria"] == "splitter"), None)
             check(bool(splitter), "hay al menos un splitter en el catálogo")
             if splitter:
+                nombre_nuevo = f"PYTEST-EQUIPO-{uuid.uuid4().hex[:6].upper()}"
                 await pagina.select_option('.pop-dialogo [data-tipo]', value=str(splitter["valor"]))
-                await pagina.fill('.pop-dialogo [data-nombre]', 'PYTEST-EQUIPO')
+                await pagina.fill('.pop-dialogo [data-nombre]', nombre_nuevo)
                 await pagina.click('.pop-dialogo [data-crear]')
-                await pagina.wait_for_function(
-                    f"() => document.querySelectorAll('.pop-tarjeta').length > {antes}",
-                    timeout=15000)
-                check(True, "el equipo creado aparece en el papel dinámico")
+                await pagina.wait_for_timeout(2500)
+                avisos = await pagina.locator(".pop-aviso--error").all_inner_texts()
+                check(not avisos, f"el alta del equipo no genera errores {avisos}", avisos)
+                await pagina.click('[data-pestana="papel"]')
+                texto_papel = await pagina.locator(".pop-vista").inner_text()
+                tarjetas_ahora = await pagina.locator(".pop-tarjeta").count()
+                # HALLAZGO (paso 6): el PAPEL no dibuja un equipo recién creado si
+                # aún no tiene `posicion`; el rack y la matriz sí lo muestran.
+                check(nombre_nuevo in texto_papel or tarjetas_ahora > antes,
+                      f"el equipo creado entra en el papel ({antes} → {tarjetas_ahora})")
                 await pagina.click('[data-pestana="rack"]')
                 check(await pagina.locator(".pop-rack-fila").count() > 3,
                       "y también en el rack")
@@ -178,6 +186,38 @@ async def main() -> int:
                   "matriz: el diálogo de mover lista el gabinete destino")
             await pagina.locator('.pop-dialogo [data-cancelar]').click()
             await pagina.click('[data-pestana="papel"]')
+
+            # Paso 5: origen/TX, dBm por ruta y sentido L/R de la linterna
+            check(await pagina.locator(".pop-origen select[data-origen]").count() == 1,
+                  "panel de ORIGEN con selector de puerto/hilo")
+            check(await pagina.locator(".pop-origen input[data-tx]").count() == 1,
+                  "TX editable en dBm")
+            dbm_total = await pagina.locator(".pop-ruta-dbm").count()
+            chip = ""
+            check(dbm_total >= 1, f"dBm teóricos en cada ruta ({dbm_total})")
+            if dbm_total:
+                chip = (await pagina.locator(".pop-ruta-dbm").first.inner_text()).strip()
+                check(chip.endswith("dBm"), "el chip de potencia muestra la unidad", chip)
+            tx_antes = await pagina.locator(".pop-origen input[data-tx]").input_value()
+            await pagina.locator(".pop-origen input[data-tx]").fill("7.5")
+            await pagina.locator(".pop-origen input[data-tx]").dispatch_event("change")
+            chip_tx = (await pagina.locator(".pop-ruta-dbm").first.inner_text()).strip()
+            check(chip_tx != chip, "subir el TX sube los dBm de la ruta", f"{chip} -> {chip_tx}")
+            await pagina.locator(".pop-origen input[data-tx]").fill(tx_antes)
+            await pagina.locator(".pop-origen input[data-tx]").dispatch_event("change")
+
+            if await pagina.locator("#popTorchWin:not(.is-oculto)").count() == 0:
+                await pagina.locator("[data-ruta]").first.click()
+            await pagina.wait_for_selector("#popTorchWin .tw-dir [data-sentido='R']",
+                                           state="attached", timeout=5000)
+            check(await pagina.locator("#popTorchWin .tw-dir button.is-on").count() == 1,
+                  "la ventana de luz trae los botones L y R")
+            await pagina.locator("#popTorchWin .tw-dir [data-sentido='L']").dispatch_event("click")
+            await pagina.wait_for_timeout(200)
+            invertida = await pagina.locator("#popTorchWin .dirbadge").inner_text()
+            check("◀" in invertida or "FINAL → ORIGEN" in invertida,
+                  "L invierte el sentido del pulso", invertida)
+            await pagina.locator("#popTorchWin [data-accion='detener']").click()
 
 
             # Conexión inválida: el servidor la rechaza y la UI muestra SU mensaje.
@@ -224,8 +264,40 @@ async def main() -> int:
                   "el armario abre el módulo nativo (sin iframe del puente)")
             check(await pagina.locator(".pop-modal .pop-tab").count() == 3,
                   "el armario muestra RACK · PAPEL · MATRIZ")
+            # Paso 6 · P-010: capturas lado a lado para docs/paridad/
+            carpeta = os.path.join(BASE, "docs", "paridad")
+            os.makedirs(carpeta, exist_ok=True)
+            tamanos = {}
+            for nombre_pestana, archivo in (("papel", "nativo-papel.png"),
+                                            ("rack", "nativo-rack.png"),
+                                            ("matriz", "nativo-matriz.png")):
+                await pagina.click(f'[data-pestana="{nombre_pestana}"]')
+                await pagina.wait_for_timeout(300)
+                ruta = os.path.join(carpeta, archivo)
+                await pagina.locator(".pop-modal .pop-caja").screenshot(path=ruta)
+                tamanos[archivo] = os.path.getsize(ruta)
+            check(all(t > 10000 for t in tamanos.values()),
+                  f"capturas del módulo nativo en docs/paridad ({tamanos})")
+
+            # Referencia: el HTML v25 abierto tal cual (solo lectura, no se modifica).
+            from pathlib import Path
+            referencia = await navegador.new_page(viewport={"width": 1500, "height": 900})
+            await referencia.goto(Path(BASE).parent.joinpath(
+                "frontend", "pop_gestor_v25.html").as_uri())
+            await referencia.wait_for_timeout(1500)
+            ruta_ref = os.path.join(carpeta, "referencia-html.png")
+            await referencia.screenshot(path=ruta_ref)
+            check(os.path.getsize(ruta_ref) > 10000,
+                  f"captura de la plantilla de referencia ({os.path.getsize(ruta_ref)} bytes)")
+            await referencia.close()
+
             await navegador.close()
     finally:
+        try:
+            for mensaje in errores[-6:]:
+                print(f"  [consola] {str(mensaje)[:400]}")
+        except Exception:
+            pass
         proceso.terminate()
         try:
             proceso.wait(timeout=10)
