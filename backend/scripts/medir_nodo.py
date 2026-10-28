@@ -16,7 +16,8 @@ Uso (desde backend/):
                                                       estan anclados los cables)
     python scripts/medir_nodo.py --proyecto 1 --repeticiones 3
 
-Deja el informe en ../../MEDICION_NODO.txt (raíz de VS, junto a los otros .txt).
+Deja el informe en ../../docs/mediciones/MEDICION_NODO.txt (dentro del repo,
+junto al resto de mediciones).
 """
 import argparse
 import asyncio
@@ -213,7 +214,10 @@ async def medir(proyecto, repeticiones, salida, incluir_anclajes=False):
         error = [fila for fila in resumen if fila.get("error")]
         escribir(f"Errores: {len(error)}" + (f" -> {[f['id'] for f in error]}" if error else ""))
 
-    destino = salida or os.path.join(os.path.dirname(os.path.dirname(BASE)), "MEDICION_NODO.txt")
+    destino = salida or os.path.join(
+        os.path.dirname(BASE), "docs", "mediciones", "MEDICION_NODO.txt"
+    )
+    os.makedirs(os.path.dirname(destino), exist_ok=True)
     with open(destino, "w", encoding="utf-8") as archivo:
         archivo.write("\n".join(lineas) + "\n")
     print(f"\nInforme guardado en: {destino}")

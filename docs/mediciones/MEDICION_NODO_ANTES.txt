@@ -1,0 +1,36 @@
+MEDICION DE GET /api/elementos/{id}/nodo
+==============================================================================
+Datos reales en la base (solo lectura):
+  cables       1
+  fibras       96
+  tubos        8
+  extremos     192
+  puertos      58
+  dispositivos 4
+  empalmes     3
+Cables y el nodo donde estan anclados sus extremos:
+  cable #7: A=3 (armario)  B=4 (armario)
+==============================================================================
+   # categoria   band  disp  puert  hilos   emp    SQL  tiempo ms
+------------------------------------------------------------------------------
+   3 armario        2     3     41     96     2    209      145.8
+     x96   SELECT ftth_cable_tubos.id AS ftth_cable_tubos_id, ftth_cable_tubos.proyecto_id AS ftth_cable_tubos_
+     x96   SELECT ftth_fibra_extremos.id AS ftth_fibra_extremos_id, ftth_fibra_extremos.proyecto_id AS ftth_fib
+     x5    SELECT ftth_elementos.id AS ftth_elementos_id, ftth_elementos.proyecto_id AS ftth_elementos_proyecto
+   4 armario        1     1     17     96     1    205      136.6
+     x96   SELECT ftth_cable_tubos.id AS ftth_cable_tubos_id, ftth_cable_tubos.proyecto_id AS ftth_cable_tubos_
+     x96   SELECT ftth_fibra_extremos.id AS ftth_fibra_extremos_id, ftth_fibra_extremos.proyecto_id AS ftth_fib
+     x3    SELECT ftth_elementos.id AS ftth_elementos_id, ftth_elementos.proyecto_id AS ftth_elementos_proyecto
+   5 cajanap        0     0      0      0     0     11       10.4
+     x3    SELECT ftth_elementos.id AS ftth_elementos_id, ftth_elementos.proyecto_id AS ftth_elementos_proyecto
+     x2    SELECT ftth_tipos.id AS ftth_tipos_id, ftth_tipos.proyecto_id AS ftth_tipos_proyecto_id, ftth_tipos.
+     x2    SELECT ftth_empalmes.id AS ftth_empalmes_id, ftth_empalmes.proyecto_id AS ftth_empalmes_proyecto_id,
+   6 manga          0     0      0      0     0     11        8.9
+     x3    SELECT ftth_elementos.id AS ftth_elementos_id, ftth_elementos.proyecto_id AS ftth_elementos_proyecto
+     x2    SELECT ftth_tipos.id AS ftth_tipos_id, ftth_tipos.proyecto_id AS ftth_tipos_proyecto_id, ftth_tipos.
+     x2    SELECT ftth_empalmes.id AS ftth_empalmes_id, ftth_empalmes.proyecto_id AS ftth_empalmes_proyecto_id,
+------------------------------------------------------------------------------
+Elementos medidos: 4 - repeticiones: 2
+Peor caso: elemento #3 (armario) con 209 sentencias SQL y 145.8 ms
+Sentencias repetidas en ese caso: 199 de 209 (10 formas distintas)
+Errores: 0

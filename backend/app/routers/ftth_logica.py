@@ -1344,6 +1344,63 @@ def _cables_divisibles(db: Session, elemento) -> List[Dict[str, Any]]:
     return salida
 
 
+def _precargar_cables(db: Session, cables) -> Dict[str, Any]:
+    """Carga EN BLOQUE lo que el DTO necesita de los cables (sin N+1).
+
+    Devuelve:
+      tipos    -> {tipo_id: FtthTipo}
+      fibras   -> {cable_id: [FtthCableFibra] ordenadas por hilo global}
+      tubos    -> {tubo_id: FtthCableTubo}
+      extremos -> {(fibra_id, 'A'|'B'): FtthFibraExtremo}
+
+    Antes: 1 consulta de tipo por cable + 2 consultas POR HILO (tubo y extremo);
+    con un cable de 96 hilos eran ~209 consultas. Ahora son 4 en total,
+    independientemente del número de cables e hilos (ver MEDICION_NODO_ANTES /
+    _DESPUES y prueba_nodo_snapshot.py).
+    """
+    ids = [cable.id for cable in cables]
+    if not ids:
+        return {"tipos": {}, "fibras": {}, "tubos": {}, "extremos": {}}
+
+    tipos_ids = {cable.tipo_id for cable in cables if cable.tipo_id}
+    tipos = {}
+    if tipos_ids:
+        tipos = {
+            tipo.id: tipo
+            for tipo in db.query(fisicos.FtthTipo)
+            .filter(fisicos.FtthTipo.id.in_(tipos_ids))
+            .all()
+        }
+
+    fibras_por_cable: Dict[int, List[Any]] = {}
+    for fibra in (
+        db.query(logica.FtthCableFibra)
+        .filter(logica.FtthCableFibra.elemento_id.in_(ids))
+        .order_by(logica.FtthCableFibra.elemento_id, logica.FtthCableFibra.hilo_global_no)
+        .all()
+    ):
+        fibras_por_cable.setdefault(fibra.elemento_id, []).append(fibra)
+
+    tubos = {
+        tubo.id: tubo
+        for tubo in db.query(logica.FtthCableTubo)
+        .filter(logica.FtthCableTubo.elemento_id.in_(ids))
+        .all()
+    }
+
+    extremos: Dict[Any, Any] = {}
+    fibra_ids = [fibra.id for fibras in fibras_por_cable.values() for fibra in fibras]
+    if fibra_ids:
+        for extremo in (
+            db.query(logica.FtthFibraExtremo)
+            .filter(logica.FtthFibraExtremo.fibra_id.in_(fibra_ids))
+            .all()
+        ):
+            extremos[(extremo.fibra_id, str(extremo.extremo or "").upper())] = extremo
+
+    return {"tipos": tipos, "fibras": fibras_por_cable, "tubos": tubos, "extremos": extremos}
+
+
 @router.get("/elementos/{elem_id}/nodo", summary="DTO del diagrama de un nodo (bandejas, dispositivos, puertos, hilos)")
 def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
     elemento = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == elem_id).first()
@@ -1404,27 +1461,22 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
 
     hilos: List[Dict[str, Any]] = []
 
+    # Una sola precarga para todos los cables anclados (4 consultas fijas).
+    precarga = _precargar_cables(db, cables_relacionados)
+
     for cable in cables_relacionados:
-        tipo_cable = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == cable.tipo_id).first()
+        tipo_cable = precarga["tipos"].get(cable.tipo_id)
         props_cable = dict(getattr(tipo_cable, "propiedades", None) or {})
         props_inst = dict(cable.propiedades_instancia or {})
         letra_extremo = "A" if cable.extremo_A_id == elem_id else "B"
 
-        fibras_cable = (
-            db.query(logica.FtthCableFibra)
-            .filter(logica.FtthCableFibra.elemento_id == cable.id)
-            .order_by(logica.FtthCableFibra.hilo_global_no)
-            .all()
-        )
+        fibras_cable = precarga["fibras"].get(cable.id, [])
 
         for fibra in fibras_cable:
-            tubo = db.query(logica.FtthCableTubo).filter(logica.FtthCableTubo.id == fibra.tubo_id).first()
+            tubo = precarga["tubos"].get(fibra.tubo_id)
             numero_tubo = tubo.tubo_no if tubo else 0
 
-            ext_fila = db.query(logica.FtthFibraExtremo).filter(
-                logica.FtthFibraExtremo.fibra_id == fibra.id,
-                logica.FtthFibraExtremo.extremo == letra_extremo
-            ).first()
+            ext_fila = precarga["extremos"].get((fibra.id, letra_extremo))
 
             hilos.append({
                 "fibra_id": fibra.id,
@@ -1478,23 +1530,24 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
                     if c_obj and c_obj.extremo_A_id != elem_id and c_obj.extremo_B_id != elem_id:
                         cables_sangrados_ids.add(c_obj.id)
 
-    for c_id in sorted(cables_sangrados_ids):
-        cable = db.query(fisicos.FtthElemento).filter(fisicos.FtthElemento.id == c_id).first()
-        if not cable:
-            continue
-        tipo_cable = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == cable.tipo_id).first()
+    cables_sangrados = []
+    if cables_sangrados_ids:
+        cables_sangrados = (
+            db.query(fisicos.FtthElemento)
+            .filter(fisicos.FtthElemento.id.in_(sorted(cables_sangrados_ids)))
+            .all()
+        )
+    precarga_sangrados = _precargar_cables(db, cables_sangrados)
+
+    for cable in sorted(cables_sangrados, key=lambda fila: fila.id):
+        tipo_cable = precarga_sangrados["tipos"].get(cable.tipo_id)
         props_cable = dict(getattr(tipo_cable, "propiedades", None) or {})
         props_inst = dict(cable.propiedades_instancia or {})
 
-        fibras_cable = (
-            db.query(logica.FtthCableFibra)
-            .filter(logica.FtthCableFibra.elemento_id == cable.id)
-            .order_by(logica.FtthCableFibra.hilo_global_no)
-            .all()
-        )
+        fibras_cable = precarga_sangrados["fibras"].get(cable.id, [])
 
         for fibra in fibras_cable:
-            tubo = db.query(logica.FtthCableTubo).filter(logica.FtthCableTubo.id == fibra.tubo_id).first()
+            tubo = precarga_sangrados["tubos"].get(fibra.tubo_id)
             numero_tubo = tubo.tubo_no if tubo else 0
 
             dto_comun = {
