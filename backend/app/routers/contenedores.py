@@ -94,6 +94,16 @@ class OrigenNuevo(_Comando):
     cara: Optional[str] = None
 
 
+class Posicion(BaseModel):
+    dispositivo_id: int
+    x: float
+    y: float
+
+
+class PosicionesNuevas(_Comando):
+    posiciones: List[Posicion] = []
+
+
 def _ejecutar(db: Session, comando: _Comando, contenedor_id: int, tipo: str, accion):
     """Una transacción, idempotente por `operation_id` y con control de revisión.
 
@@ -326,6 +336,16 @@ def marcar_origen(contenedor_id: int, datos: OrigenNuevo,
     resultado, repetida = _ejecutar(
         db, datos, contenedor_id, "marcar_origen",
         lambda: servicios.marcar_origen(db, contenedor_id, carga))
+    return {**resultado, "idempotente": repetida}
+
+
+@router.post("/{contenedor_id}/posiciones", summary="Guardar el orden del lienzo (x/y)")
+def guardar_posiciones(contenedor_id: int, datos: PosicionesNuevas,
+                       db: Session = Depends(get_db)) -> Dict[str, Any]:
+    posiciones = [p.model_dump() for p in datos.posiciones]
+    resultado, repetida = _ejecutar(
+        db, datos, contenedor_id, "guardar_posiciones",
+        lambda: servicios.guardar_posiciones(db, contenedor_id, posiciones))
     return {**resultado, "idempotente": repetida}
 
 

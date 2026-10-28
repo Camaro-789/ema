@@ -379,6 +379,41 @@ def _fibra_de(extremo: Dict[str, Any]) -> Optional[int]:
     return extremo.get("fibra_id") or extremo.get("id")
 
 
+def guardar_posiciones(db: Session, contenedor_id: int,
+                       posiciones: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Guarda el orden del lienzo (x/y de cada equipo). Es presentación, no topología."""
+    elemento = contenedor(db, contenedor_id)
+    ids = {
+        fila.id for fila in db.query(logica.FtthDispositivo.id)
+        .filter(logica.FtthDispositivo.elemento_id == elemento.id).all()
+    }
+    existentes = {
+        fila.dispositivo_id: fila
+        for fila in db.query(logica.FtthDiagramaPosicion)
+        .filter(logica.FtthDiagramaPosicion.elemento_id == elemento.id).all()
+    }
+    guardadas = []
+    for item in posiciones:
+        dispositivo_id = int(item["dispositivo_id"])
+        if dispositivo_id not in ids:
+            raise ErrorNoEncontrado(
+                f"El dispositivo #{dispositivo_id} no está en el contenedor #{contenedor_id}.")
+        x, y = float(item["x"]), float(item["y"])
+        fila = existentes.get(dispositivo_id)
+        if fila is None:
+            fila = logica.FtthDiagramaPosicion(
+                proyecto_id=elemento.proyecto_id, elemento_id=elemento.id,
+                dispositivo_id=dispositivo_id, x=x, y=y,
+            )
+            db.add(fila)
+            existentes[dispositivo_id] = fila
+        else:
+            fila.x, fila.y = x, y
+        guardadas.append({"dispositivo_id": dispositivo_id, "x": x, "y": y})
+    db.flush()
+    return {"guardadas": guardadas, "revision": revision(elemento)}
+
+
 def conectar(db: Session, contenedor_id: int, datos: Dict[str, Any]) -> Dict[str, Any]:
     """Crea una conexión (empalme) validada por el dominio."""
     elemento = contenedor(db, contenedor_id)

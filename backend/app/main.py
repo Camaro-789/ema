@@ -87,6 +87,18 @@ async def config_flags():
     }
 
 
+@app.get("/api/config/reglas", tags=["config"],
+         summary="Reglas de conexión (mismo JSON que usa el validador del servidor)")
+async def config_reglas():
+    """El frontend SOLO lee estas reglas para dar pistas visuales (Fase 4).
+
+    La autoridad es el servidor: aquí no se valida nada, se informa.
+    """
+    from app.domain import reglas as reglas_dominio
+
+    return reglas_dominio.reglas()
+
+
 # Buscar frontend
 def find_frontend_path():
     current_dir = os.path.dirname(os.path.abspath(__file__))

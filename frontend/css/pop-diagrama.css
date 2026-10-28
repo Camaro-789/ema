@@ -1,0 +1,140 @@
+/* pop-diagrama.css — módulo nativo del POP (Fase 4).
+   Identidad visual tomada del HTML v25: blanco/negro, bordes duros, tipografía
+   compacta y bordes ámbar entre contenedores. */
+.pop-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120000;
+  display: flex;
+  align-items: stretch;
+  background: #eef1f5;
+  color: #000;
+  font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+.pop-modal.is-oculto { display: none; }
+.pop-modal * { box-sizing: border-box; }
+
+.pop-caja { display: flex; flex-direction: column; width: 100%; min-width: 0; }
+
+.pop-cabecera {
+  display: flex; align-items: center; gap: 8px; height: 46px; flex: 0 0 46px;
+  padding: 0 10px; background: #fff; border-bottom: 1px solid #000;
+}
+.pop-cabecera b { font-size: 12px; letter-spacing: .04em; }
+.pop-badge {
+  border: 1px solid #000; padding: 2px 6px; font-size: 10px; background: #f5f5f7;
+}
+.pop-tab {
+  border: 1px solid #000; background: #fff; color: #000; padding: 5px 10px;
+  font: 700 10px Arial, sans-serif; letter-spacing: .06em; cursor: pointer;
+}
+.pop-tab.is-on { background: #000; color: #fff; }
+.pop-espacio { flex: 1; }
+.pop-direccion { font-size: 10px; color: #555; }
+.pop-btn {
+  border: 1px solid #000; background: #fff; color: #000; padding: 5px 10px;
+  font: 700 10px Arial, sans-serif; cursor: pointer;
+}
+.pop-btn:hover { background: #000; color: #fff; }
+.pop-btn--oscuro { background: #000; color: #fff; }
+
+.pop-cuerpo { flex: 1; min-height: 0; overflow: hidden; }
+.pop-vista { width: 100%; height: 100%; }
+
+/* ── Papel dinámico ─────────────────────────────────────────────────────── */
+.pop-papel { display: flex; flex-direction: column; height: 100%; }
+.pop-papel-lienzo {
+  position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: grab;
+  background: #f7f8fa;
+  background-image: linear-gradient(#e3e6ea 1px, transparent 1px),
+                    linear-gradient(90deg, #e3e6ea 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.pop-papel-lienzo:active { cursor: grabbing; }
+.pop-papel-svg { width: 100%; height: 100%; display: block; }
+.pop-papel-pie {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  background: #fff; border-top: 1px solid #000;
+}
+.pop-papel-zoom { font-weight: 700; }
+.pop-papel-pista { color: #555; font-size: 10px; }
+
+.pop-tarjeta-caja { fill: #fff; stroke: #000; stroke-width: 1; }
+.pop-tarjeta-titulo { font: 700 11px Arial, sans-serif; fill: #000; }
+.pop-tarjeta-sub { font: 10px Arial, sans-serif; fill: #555; }
+.pop-tarjeta-mas { font: 9px Arial, sans-serif; fill: #777; }
+.pop-tarjeta-editar { font-size: 12px; fill: #000; cursor: pointer; }
+.pop-tarjeta:hover .pop-tarjeta-caja { stroke-width: 2; }
+
+.pop-puerto-nombre { font: 9px Arial, sans-serif; fill: #333; }
+.pop-puerto { fill: #fff; stroke: #475569; stroke-width: 1; cursor: pointer; }
+.pop-puerto:hover { stroke: #000; stroke-width: 2; }
+.pop-puerto.is-usado { fill: #22c55e; }
+.pop-puerto.is-sel { fill: #fbbf24; stroke: #000; stroke-width: 2; }
+
+.pop-cable-caja { fill: #fff; stroke: #000; stroke-dasharray: 3 2; }
+.pop-cable-mas { font: 9px Arial, sans-serif; fill: #000; cursor: pointer; }
+.pop-hilo text { font: 9px Arial, sans-serif; fill: #333; }
+.pop-hilo-punto { fill: #fff; stroke: #475569; cursor: pointer; }
+.pop-hilo-punto:hover { stroke: #000; stroke-width: 2; }
+
+.pop-linterna-pulso { stroke: #fbbf24; stroke-width: 3; stroke-linecap: round; }
+.pop-linterna-cabeza { fill: #f59e0b; }
+
+/* ── Rack ───────────────────────────────────────────────────────────────── */
+.pop-rack { padding: 14px; height: 100%; overflow: auto; }
+.pop-rack-cabecera {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;
+}
+.pop-rack-cabecera small { color: #555; }
+.pop-rack-cuerpo { display: flex; flex-direction: column; gap: 4px; max-width: 720px; }
+.pop-rack-fila {
+  display: grid; grid-template-columns: 44px 1fr 180px 120px; gap: 8px;
+  padding: 6px 8px; background: #fff; border: 1px solid #000;
+}
+.pop-rack-u { font-weight: 700; color: #555; }
+.pop-rack-nombre { font-weight: 700; }
+.pop-rack-tipo, .pop-rack-estado { color: #444; }
+.pop-rack-fila:first-child { border-top: 2px solid #f59e0b; }
+
+/* ── Matriz ─────────────────────────────────────────────────────────────── */
+.pop-matriz { padding: 14px; height: 100%; overflow: auto; }
+.pop-matriz-tarjeta { border: 1px solid #000; background: #fff; max-width: 820px; }
+.pop-matriz-banner {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  background: #dbeafe; border-bottom: 1px solid #000;
+}
+.pop-matriz-banner small { color: #334155; }
+.pop-matriz-cuerpo { display: flex; flex-direction: column; }
+.pop-matriz-fila {
+  display: grid; grid-template-columns: 1fr 160px 130px 90px; gap: 8px;
+  padding: 6px 10px; border-bottom: 1px solid #e5e7eb;
+}
+.pop-matriz-acciones { display: flex; gap: 4px; }
+.pop-matriz-acciones button {
+  border: 1px solid #000; background: #fff; cursor: pointer; width: 22px; height: 20px;
+  font: 700 10px Arial, sans-serif;
+}
+.pop-matriz-acciones button:hover { background: #000; color: #fff; }
+.pop-matriz-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+.pop-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px;
+  border: 1px solid #000; background: #fffbeb; font-size: 10px;
+}
+.pop-chip-x { border: 0; background: transparent; cursor: pointer; font-weight: 700; }
+.pop-matriz-nota { color: #555; font-size: 10px; margin-top: 8px; }
+
+.pop-vacio { color: #666; padding: 10px; }
+
+/* ── Avisos ─────────────────────────────────────────────────────────────── */
+.pop-avisos {
+  position: absolute; right: 14px; bottom: 14px; display: flex;
+  flex-direction: column; gap: 6px; max-width: 420px;
+}
+.pop-aviso {
+  border: 1px solid #000; padding: 8px 10px; background: #fff; font-size: 11px;
+  box-shadow: 4px 4px 0 #000;
+}
+.pop-aviso--ok { background: #dcfce7; }
+.pop-aviso--error { background: #fee2e2; }
+.pop-aviso--aviso { background: #fef3c7; }

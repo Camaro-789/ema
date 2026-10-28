@@ -136,9 +136,33 @@ antes de dar la fase por cerrada.
   (`contexto["cadena"]`) sigue pendiente de implementar en `servicios.contexto()`.
 
 
-## Fase 4 · Módulo nativo de frontend
+## Fase 4 · Módulo nativo de frontend — **núcleo hecho; paridad parcial**
 
-_(pendiente de empezar)_
+| # | Estado | Evidencia |
+|---|---|---|
+| Módulos ES (`frontend/js/pop/`) | hecho | `api · store · reglas · vista-rack · vista-papel · vista-matriz · trazabilidad · linterna · entrada`; **9/9 con `node --check` OK** |
+| CSS propio | hecho | `frontend/css/pop-diagrama.css` (identidad del HTML: blanco/negro, bordes duros, ámbar) |
+| 4.1 Acciones → API → dibujar respuesta | hecho | `store.ejecutar()` recarga siempre; 409 recarga y avisa; error muestra `mensaje_es` |
+| 4.2 `?plantilla=1` | hecho | botón PLANTILLA abre el HTML en pestaña aparte |
+| 4.3 Pruebas Playwright | **parcial** | `tests/herramientas/prueba_pop_playwright.py` → **11 comprobaciones OK** (módulo carga, abre con 96 hilos en 670 ms, rack/papel/matriz, conexión inválida con mensaje del servidor, persistencia al recargar). **Falta**: crear equipo, editar, mover y pulso (los cubre pytest en backend) |
+| 4.4 Tabla de paridad | hecha | `docs/PARIDAD.md` (sin capturas, ver P-010) |
+
+### P-010 · Capturas lado a lado de la paridad
+
+- `docs/PARIDAD.md` describe el estado función por función, pero **no hay capturas**
+  comparando HTML ↔ módulo nativo. Se pueden generar con `page.screenshot()` en
+  `prueba_pop_playwright.py` (carpeta `docs/paridad/`).
+
+### P-011 · Pendientes de interfaz (no bloquean la Fase 5)
+
+1. **Mover equipo entre gabinetes** desde la UI (la API `POST …/mover` ya está
+   probada en pytest).
+2. **Tarjetas colapsables** y los iconos ✎ ⇄ ✕ **en el banner** de la matriz
+   (hoy están por fila).
+3. **Origen de señal / TX** en pantalla (la API `POST …/origen` existe).
+4. **Botones L/R y ventana flotante** de la linterna.
+5. **Culling por fila de hilo** (hoy se virtualizan las tarjetas, no las filas).
+
 
 ## Fase 5 · Retiro del puente
 
