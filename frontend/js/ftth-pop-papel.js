@@ -796,6 +796,18 @@ const FTTHPopPapel = (() => {
   function abrir(id, opciones = {}) {
     // Fase 1.4: con el interruptor apagado no se abre ningún diagrama.
     if (window.FTTH_FLAGS && window.FTTH_FLAGS.pop_v25_enabled === false) return;
+    // Fase 5.1: el ARMARIO abre el módulo nativo (sin iframe ni puente).
+    // Con POP_NATIVO_EN_ARMARIO=0 vuelve al puente de abajo, que sigue intacto.
+    const esArmario = String(opciones.categoria || '').toLowerCase() === 'armario';
+    if (esArmario
+        && window.FTTH_FLAGS && window.FTTH_FLAGS.pop_nativo_en_armario !== false
+        && window.POPNativo && typeof window.POPNativo.abrir === 'function') {
+      window.POPNativo.abrir(id, {
+        categoria: opciones.categoria,
+        tipoNombre: opciones.tipoNombre,
+      });
+      return;
+    }
     current = { id, ...opciones };
     nodeData = null;
     activeTab = 'rack';

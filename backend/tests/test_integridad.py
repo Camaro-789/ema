@@ -116,3 +116,44 @@ def test_dos_escrituras_simultaneas():
     assert codigos == [200, 409], [(r.status_code, r.text[:120]) for r in respuestas]
     assert _revision(contenedor) == revision + 1
 
+
+def test_lo_guardado_por_el_puente_se_ve_igual():
+    """Fase 5.2: un empalme creado por el puente (propiedades.origen='pop_gestor_v25')
+    se lee en el módulo nativo SIN reescribirlo ni borrarlo."""
+    contenedor = _primer_armario()
+    with SessionLocal() as db:
+        fibra = db.execute(text(
+            "SELECT f.id FROM ftth_cable_fibras f "
+            "JOIN ftth_elementos c ON c.id = f.elemento_id "
+            "WHERE c.categoria = 'cables' ORDER BY f.hilo_global_no LIMIT 1")).scalar()
+        assert fibra, "falta el cable de la base sintética"
+        ya = db.execute(text(
+            "SELECT id FROM ftth_empalmes WHERE nodo_id = :n AND fibra_a_id = :f"),
+            {"n": contenedor, "f": fibra}).scalar()
+        if ya:
+            empalme_id = int(ya)
+        else:
+            db.execute(text(
+                "INSERT INTO ftth_empalmes (proyecto_id, nodo_id, fibra_a_id, tipo, "
+                "extremo_a, extremo_b, propiedades) "
+                "VALUES (1, :n, :f, 'sangrado', 'entrada', 'salida', "
+                "'{\"origen\": \"pop_gestor_v25\"}')"), {"n": contenedor, "f": fibra})
+            db.commit()
+            empalme_id = int(db.execute(text(
+                "SELECT id FROM ftth_empalmes WHERE nodo_id = :n AND fibra_a_id = :f"),
+                {"n": contenedor, "f": fibra}).scalar())
+
+    diagrama = peticion("GET", f"/api/contenedores/{contenedor}/diagrama").json()
+    conexion = next((c for c in diagrama["conexiones"] if c["id"] == empalme_id), None)
+    assert conexion, "el módulo nativo NO ve la conexión guardada por el puente"
+    assert conexion["propiedades"].get("origen") == "pop_gestor_v25", conexion["propiedades"]
+
+    # Una escritura nativa no debe tocarla
+    peticion("POST", f"/api/contenedores/{contenedor}/posiciones",
+             json={"posiciones": [], "operation_id": "pytest-sin-posiciones",
+                   "base_revision": _revision(contenedor)})
+    despues = peticion("GET", f"/api/contenedores/{contenedor}/diagrama").json()
+    otra = next((c for c in despues["conexiones"] if c["id"] == empalme_id), None)
+    assert otra and otra["propiedades"].get("origen") == "pop_gestor_v25"
+
+

@@ -164,6 +164,35 @@ antes de dar la fase por cerrada.
 5. **Culling por fila de hilo** (hoy se virtualizan las tarjetas, no las filas).
 
 
-## Fase 5 · Retiro del puente
+## Fase 5 · Retiro del puente — **5.1 y 5.2 hechas; 5.3 NO se cumple (puente conservado)**
 
-_(pendiente: el puente sigue CONGELADO y encendido; ver R8)_
+| # | Estado | Evidencia |
+|---|---|---|
+| 5.1 Armario → módulo nativo, por interruptor | hecho | `POP_NATIVO_EN_ARMARIO` (por defecto **encendido**); `ftth-pop-papel.js` deriva al módulo antes del iframe. Verificado: *«el armario abre el módulo nativo (sin iframe del puente)»* |
+| 5.2 Lo guardado por el puente se ve igual | hecho | `test_lo_guardado_por_el_puente_se_ve_igual`: un empalme con `propiedades.origen='pop_gestor_v25'` se lee en `/api/contenedores/{id}/diagrama` con sus propiedades intactas, y una escritura nativa no lo toca |
+| 5.3 Borrar el puente | **NO** | no se cumple la condición: faltan filas esenciales de paridad (P-011) |
+
+**Consecuencia (lo que pide el prompt):** el puente queda **APAGADO por interruptor y
+SIN borrar**. Sigue en el repositorio y se puede reactivar con
+`POP_NATIVO_EN_ARMARIO=0` (vuelve el iframe) sin tocar código.
+
+**Qué falta para poder borrarlo (5.3):**
+1. Mover equipo entre gabinetes **desde la UI** (la API está probada).
+2. Matriz con tarjetas colapsables e iconos ✎ ⇄ ✕ **en el banner**.
+3. Origen de señal / TX en pantalla.
+4. Botones L/R y ventana flotante de la linterna.
+5. Capturas de paridad (P-010) y la Fase 3.3 (energía) —requisito de pruebas—.
+
+Cuando todo eso esté en «hecho» y pytest + Playwright sigan en verde, se crea el
+tag `respaldo-antes-de-retirar-puente` y se borran `pop-v25-mapolt-bridge.js`, el
+iframe y sus listeners en commits separados (reversibles con `git revert`).
+
+## Fase 6 · Preparación para cajas, mangas y postes — **diseño hecho**
+
+- `ARCHITECTURE_CONTAINERS.md` escrito: identificador global de extremo
+  (`owner:cara:puerto`), cable con extremos en contenedores distintos, fusión
+  hilo↔hilo, extensión `splitter OUT → hilo`, terminal de cliente/ONT, recorrido de
+  señal entre contenedores y los cambios de esquema **aditivos** que harían falta
+  (`capacidad_u`, `tamano_u`, `ftth_clientes`, `ftth_onts`, `cliente_id`, un índice).
+- **No se implementó** (la fase es solo diseño, tal como pide el prompt).
+

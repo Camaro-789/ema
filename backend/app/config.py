@@ -30,5 +30,9 @@ def bandera(nombre: str, por_defecto: bool = True) -> bool:
 
 POP_V25_ENABLED = bandera("POP_V25_ENABLED", True)
 
+# Fase 5.1: el armario abre el MÓDULO NATIVO. Apagado vuelve al puente congelado
+# (que sigue en el código, sin borrar, hasta que la paridad esté completa).
+POP_NATIVO_EN_ARMARIO = bandera("POP_NATIVO_EN_ARMARIO", True)
+
 # Version del contrato de lectura del diagrama (GET /api/contenedores/{id}/diagrama).
 VERSION_CONTRATO_DIAGRAMA = 1

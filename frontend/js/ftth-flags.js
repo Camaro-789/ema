@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const POR_DEFECTO = { pop_v25_enabled: true, version_contrato_diagrama: 1 };
+  const POR_DEFECTO = { pop_v25_enabled: true, pop_nativo_en_armario: true, version_contrato_diagrama: 1 };
 
   window.FTTH_FLAGS = Object.assign({}, POR_DEFECTO, window.FTTH_FLAGS || {});
 

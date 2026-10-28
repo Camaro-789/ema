@@ -143,6 +143,16 @@ async def main() -> int:
                   "tras recargar, el diagrama sigue viniendo del servidor")
             check(not [e for e in errores if "pop/" in e], "sin errores de módulos en consola",
                   errores[:3])
+
+            # Fase 5.1: el armario abre el módulo NATIVO (no el iframe del puente)
+            await pagina.evaluate("() => window.POPNativo.cerrar()")
+            await pagina.evaluate(
+                f"() => window.FTTHPopPapel.abrir({armario}, {{ categoria: 'armario' }})")
+            await pagina.wait_for_selector(".pop-modal:not(.is-oculto) .pop-tarjeta", timeout=15000)
+            check(await pagina.locator("iframe.pop-paper-v25-frame").count() == 0,
+                  "el armario abre el módulo nativo (sin iframe del puente)")
+            check(await pagina.locator(".pop-modal .pop-tab").count() == 3,
+                  "el armario muestra RACK · PAPEL · MATRIZ")
             await navegador.close()
     finally:
         proceso.terminate()

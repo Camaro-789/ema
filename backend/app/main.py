@@ -31,7 +31,7 @@ from app.routers import maps, layers, formats, ai, types
 from app.routers import ftth_tipos, ftth_elementos, ftth_carpetas
 from app.routers import ftth_logica
 from app.routers import contenedores
-from app.config import POP_V25_ENABLED, VERSION_CONTRATO_DIAGRAMA
+from app.config import POP_V25_ENABLED, POP_NATIVO_EN_ARMARIO, VERSION_CONTRATO_DIAGRAMA
 from app.domain.errores import ErrorDominio
 
 Base.metadata.create_all(bind=engine)
@@ -83,6 +83,7 @@ async def config_flags():
     """
     return {
         "pop_v25_enabled": POP_V25_ENABLED,
+        "pop_nativo_en_armario": POP_NATIVO_EN_ARMARIO,
         "version_contrato_diagrama": VERSION_CONTRATO_DIAGRAMA,
     }
 
