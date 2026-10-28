@@ -138,3 +138,98 @@
 .pop-aviso--ok { background: #dcfce7; }
 .pop-aviso--error { background: #fee2e2; }
 .pop-aviso--aviso { background: #fef3c7; }
+
+/* ── Layout de TRES zonas (paso 2, como la plantilla) ───────────────────── */
+.pop-layout {
+  display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px;
+  height: 100%; min-height: 0;
+}
+.pop-panel {
+  display: flex; flex-direction: column; background: #fff; min-height: 0;
+  border-right: 1px solid #000;
+}
+.pop-panel--der { border-right: 0; border-left: 1px solid #000; }
+.pop-centro { display: flex; min-width: 0; min-height: 0; }
+.pop-centro .pop-vista { flex: 1; min-width: 0; }
+
+.pop-panel-cabecera {
+  display: flex; align-items: baseline; gap: 8px; padding: 8px 10px;
+  border-bottom: 1px solid #000; background: #f5f5f7;
+}
+.pop-panel-cabecera b { font-size: 11px; letter-spacing: .06em; }
+.pop-panel-cabecera small { color: #555; font-size: 9.5px; }
+.pop-panel-acciones { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; }
+.pop-panel-cuerpo {
+  flex: 1; min-height: 0; overflow: auto; padding: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.pop-panel-vacio {
+  color: #666; font-size: 10.5px; line-height: 1.5;
+  border: 1px dashed #94a3b8; padding: 10px;
+}
+
+.pop-panel-cable { border: 1px solid #000; }
+.pop-panel-cable header {
+  display: flex; justify-content: space-between; gap: 6px; padding: 5px 7px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.pop-panel-cable header b { font-size: 10px; }
+.pop-panel-cable header span { color: #555; font-size: 9px; }
+.pop-panel-cable ul {
+  list-style: none; margin: 0; padding: 4px 7px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.pop-cable-hilo { display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: #333; }
+.pop-cable-hilo i { width: 8px; height: 8px; display: inline-block; border: 1px solid #000; }
+.pop-panel-mas {
+  width: 100%; text-align: left; padding: 3px 7px; border: 0;
+  border-top: 1px solid #e5e7eb; background: #fffbeb;
+  font: 700 9px Arial, sans-serif; cursor: pointer;
+}
+
+.pop-panel-selector {
+  display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
+  border-top: 1px solid #000; background: #fffbeb;
+}
+.pop-panel-selector label { font-size: 9.5px; color: #555; }
+.pop-panel-selector select { padding: 5px; border: 1px solid #000; font-size: 10px; }
+.pop-panel-selector-acciones { display: flex; gap: 6px; justify-content: flex-end; }
+
+/* Rutas y ventana de linterna: copiado de #torchWin del HTML v25 */
+.pop-rutas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pop-ruta {
+  display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; align-items: center;
+  border: 1px solid #000; padding: 4px 6px; background: #fff;
+}
+.pop-ruta.is-on { background: #fffbeb; box-shadow: 3px 3px 0 #f59e0b; }
+.pop-ruta-n { font-weight: 800; color: #555; font-size: 9px; }
+.pop-ruta-txt { font-size: 9.5px; color: #111; word-break: break-word; }
+
+.pop-torch {
+  margin: 8px; border: 1px solid #000; border-top: 4px solid #f59e0b;
+  box-shadow: 5px 5px 0 #000; font-size: 11px;
+}
+.pop-torch.is-oculto { display: none; }
+.pop-torch .tw-h {
+  display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+  background: #111; color: #fff;
+}
+.pop-torch .tw-h b { flex: 1; font-size: 10px; letter-spacing: .04em; }
+.pop-torch .tw-h button {
+  border: 1px solid #fff; background: #f59e0b; color: #000;
+  font-weight: 800; font-size: 9.5px; padding: 3px 8px; cursor: pointer;
+}
+.pop-torch .tw-ic svg { background: #fff; padding: 1px; }
+.pop-torch .tw-b { padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
+.pop-torch .tw-b small {
+  color: #64748b; font-size: 9px; text-transform: uppercase; letter-spacing: .05em;
+}
+.pop-torch .tw-b b { font-size: 11px; word-break: break-word; }
+.pop-torch .tw-b em { font-style: normal; color: #555; font-size: 10px; }
+
+.dirbadge {
+  display: inline-block; width: fit-content; font-size: 10px; font-weight: 800;
+  padding: 2px 8px; color: #fff; background: #1d4ed8;
+}
+.dirbadge.pon { background: #0f766e; }
+

@@ -109,6 +109,27 @@ async def main() -> int:
                   "la matriz lista los equipos")
             await pagina.click('[data-pestana="papel"]')
 
+            # Paso 2: tres zonas (CABLES | RACK·PAPEL·MATRIZ | TRAZABILIDAD)
+            check(await pagina.locator(".pop-panel--izq").count() == 1,
+                  "panel izquierdo de CABLES")
+            check(await pagina.locator(".pop-panel--der").count() == 1,
+                  "panel derecho de TRAZABILIDAD")
+            check(await pagina.locator('[data-accion="nuevo-cable"]').count() == 1,
+                  "botón «+ CABLE» en el panel izquierdo")
+            check(await pagina.locator(".pop-panel-cable").count() >= 1,
+                  "el panel izquierdo lista el cable anclado")
+            rutas = await pagina.locator(".pop-ruta").count()
+            if rutas:
+                await pagina.locator('.pop-ruta [data-ruta]').first.click()
+                await pagina.wait_for_selector(".pop-linterna-pulso", state="attached",
+                                               timeout=5000)
+                check(await pagina.locator(".pop-linterna-pulso").count() > 0,
+                      "ENCENDER pinta el pulso de luz")
+                check(await pagina.locator(".pop-torch:not(.is-oculto)").count() == 1,
+                      "aparece la ventana de rutas copiada del HTML")
+            else:
+                check(False, "había al menos una ruta para encender")
+
             # Conexión inválida: el servidor la rechaza y la UI muestra SU mensaje.
             await pagina.evaluate("""() => {
               window.__fetchOriginal = window.fetch;

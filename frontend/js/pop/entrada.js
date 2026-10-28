@@ -15,6 +15,8 @@ import { cargarReglas } from './reglas.js';
 import { crearVistaPapel } from './vista-papel.js';
 import { renderRack } from './vista-rack.js';
 import { renderMatriz } from './vista-matriz.js';
+import { renderPanelIzquierdo } from './panel-izquierdo.js';
+import { renderPanelDerecho } from './panel-derecho.js';
 import { cadenas } from './trazabilidad.js';
 import { iniciarLinterna, detenerLinterna, linternaActiva, direccionEtiqueta } from './linterna.js';
 
@@ -22,6 +24,7 @@ let modal = null;
 let vistaPapel = null;
 let contenedorId = null;
 let pestana = 'papel';
+let rutaActiva = null;
 
 function cargarCss() {
   if (document.querySelector('link[data-pop-diagrama]')) return;
@@ -57,6 +60,8 @@ function marcarPestana(nombre) {
 
 function pintar(diagrama) {
   if (!modal || !diagrama) return;
+  // El lienzo se reconstruye: se cancela el pulso para no dejar un rAF huérfano.
+  if (linternaActiva()) detenerLinterna();
   const cuerpo = modal.querySelector('.pop-cuerpo');
   const titulo = modal.querySelector('[data-titulo]');
   const revision = modal.querySelector('[data-revision]');
@@ -65,8 +70,31 @@ function pintar(diagrama) {
   }
   if (revision) revision.textContent = `revisión ${diagrama.revision}`;
 
-  cuerpo.innerHTML = '<div class="pop-vista"></div>';
-  const host = cuerpo.querySelector('.pop-vista');
+  // Tres zonas, como la plantilla: CABLES | RACK·PAPEL·MATRIZ | TRAZABILIDAD
+  cuerpo.innerHTML = `
+    <div class="pop-layout">
+      <aside class="pop-panel pop-panel--izq"></aside>
+      <section class="pop-centro"></section>
+      <aside class="pop-panel pop-panel--der"></aside>
+    </div>`;
+  const izquierda = cuerpo.querySelector('.pop-panel--izq');
+  const centro = cuerpo.querySelector('.pop-centro');
+  const derecha = cuerpo.querySelector('.pop-panel--der');
+
+  izquierda.addEventListener('pop-error', (evento) => aviso(evento.detail.message));
+  renderPanelIzquierdo(izquierda, diagrama, {
+    alAnclar: anclarCable,
+    alPedirCables: () => api.cables(contenedorId),
+  });
+
+  renderPanelDerecho(derecha, rutasDe(diagrama), {
+    alEncender: encenderRuta,
+    alDetener: detenerRuta,
+    activa: rutaActiva,
+  });
+
+  centro.innerHTML = '<div class="pop-vista"></div>';
+  const host = centro.querySelector('.pop-vista');
 
   if (pestana === 'rack') { renderRack(host, diagrama); return; }
   if (pestana === 'matriz') {
@@ -87,6 +115,11 @@ function pintar(diagrama) {
     alSoltar: guardarPosicion,
     alEditar: editar,
   });
+  // Si la linterna estaba encendida, se vuelve a encender sobre el lienzo nuevo.
+  if (rutaActiva) {
+    const svg = host.querySelector('.pop-papel-svg');
+    if (svg) iniciarLinterna(svg, rutaActiva.cadena);
+  }
 }
 
 async function recargar() {
@@ -160,24 +193,47 @@ function editar(dispositivoId) {
   );
 }
 
+function rutasDe(diagrama) {
+  return cadenas(diagrama || {}).map((cadena) => ({
+    id: cadena.id,
+    etiqueta: cadena.etiqueta,
+    origen: cadena.puntos.length ? cadena.puntos[0].etiqueta : '—',
+    direccion: direccionEtiqueta(cadena, 'SEÑAL'),
+    pon: String(cadena.etiqueta).toUpperCase().includes('PON'),
+    tramos: Math.max(0, cadena.puntos.length - 1),
+    equipos: cadena.puntos.length,
+    cadena,
+  }));
+}
+
+function encenderRuta(ruta) {
+  if (!ruta) return;
+  rutaActiva = ruta;
+  if (pestana !== 'papel') pestana = 'papel';
+  pintar(store.diagramaActual());
+  aviso(`Luz encendida · ${ruta.etiqueta}`, 'ok');
+}
+
+function detenerRuta() {
+  rutaActiva = null;
+  pintar(store.diagramaActual());
+}
+
 function alternarLinterna() {
-  const svg = modal && modal.querySelector('.pop-papel-svg');
-  const diagrama = store.diagramaActual();
-  if (!svg || !diagrama) return;
-  if (linternaActiva()) {
-    detenerLinterna();
-    aviso('Linterna apagada.', 'aviso');
-    return;
-  }
-  const lista = cadenas(diagrama);
+  if (rutaActiva) { detenerRuta(); return; }
+  const lista = rutasDe(store.diagramaActual());
   if (!lista.length) {
     aviso('No hay trazas: conecta primero dos extremos.', 'aviso');
     return;
   }
-  iniciarLinterna(svg, lista[0]);
-  const insignia = modal.querySelector('[data-direccion]');
-  if (insignia) insignia.textContent = direccionEtiqueta(lista[0], 'SEÑAL');
-  aviso(`Linterna encendida · ${lista[0].etiqueta}`, 'ok');
+  encenderRuta(lista[0]);
+}
+
+async function anclarCable(cableId) {
+  return ejecutar(
+    (revision) => api.anclarCable(contenedorId, cableId, revision),
+    'Cable anclado al POP.',
+  );
 }
 
 function construir() {

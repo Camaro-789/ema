@@ -94,4 +94,15 @@ export const api = {
     'POST', `/api/contenedores/${contenedorId}/posiciones`,
     comando({ posiciones }, revision),
   ),
+
+  cables: (contenedorId) => pedir('GET', `/api/contenedores/${contenedorId}/cables`),
+
+  anclarCable: (contenedorId, cableId, revision, extremo = null) => pedir(
+    'POST', `/api/contenedores/${contenedorId}/cables`,
+    comando({ cable_id: cableId, extremo }, revision),
+  ),
+
+  tipos: (categoria, proyectoId) => pedir(
+    'GET', `/api/tipos/${categoria}?proyecto_id=${proyectoId}`,
+  ),
 };

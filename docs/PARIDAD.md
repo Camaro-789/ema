@@ -9,6 +9,10 @@ cable de 96 hilos abierto en **670 ms**.
 
 | Funcionalidad del HTML | Estado | Dónde / nota |
 |---|---|---|
+| **Panel izquierdo de CABLES** con sus hilos y «+ CABLE» | **hecho** | `panel-izquierdo.js`; el armario vacío muestra el mensaje y el botón |
+| **«+ CABLE» ancla un cable existente** | **hecho** | `GET/POST /api/contenedores/{id}/cables` + selector en el panel |
+| **Panel derecho de TRAZABILIDAD** | **hecho** | `panel-derecho.js`: lista de rutas con ENCENDER |
+| **Ventana de rutas (`#torchWin`)** | **hecho** | copiada del HTML: cabecera negra, PASANDO LUZ · ORIGEN → FINAL, DETENER, `.dirbadge`, resumen de tramos |
 | Rack 19" en solo lectura | **hecho** | `vista-rack.js`; nada se conecta ahí |
 | Papel: arrastrar el fondo (pan) | **hecho** | puntero + `setPointerCapture` |
 | Papel: rueda = zoom 0.25–2.5 | **hecho** | con botones − / + y tope 25 %–250 % |
