@@ -7,7 +7,7 @@
  * CABLE (ver INTEGRATION_AUDIT_2.md, punto a): es el modelo real del esquema.
  */
 export function renderMatriz(host, diagrama, opciones) {
-  const { alEditar, alConectar, alEliminar, alDesconectar } = opciones;
+  const { alEditar, alConectar, alEliminar, alDesconectar, alNuevo } = opciones;
   const contenedor = diagrama.contenedor || {};
   const dispositivos = diagrama.dispositivos || [];
   const conexiones = diagrama.conexiones || [];
@@ -74,7 +74,7 @@ export function renderMatriz(host, diagrama, opciones) {
   host.querySelectorAll('[data-conectar]').forEach((boton) => boton.addEventListener('click',
     () => alConectar()));
   host.querySelectorAll('[data-nuevo]').forEach((boton) => boton.addEventListener('click',
-    () => alConectar()));
+    () => (alNuevo ? alNuevo() : alConectar())));
   host.querySelectorAll('[data-desconectar]').forEach((boton) => boton.addEventListener('click',
     () => alDesconectar(Number(boton.dataset.desconectar))));
 }

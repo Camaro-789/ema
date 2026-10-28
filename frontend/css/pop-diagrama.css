@@ -38,7 +38,7 @@
 .pop-btn:hover { background: #000; color: #fff; }
 .pop-btn--oscuro { background: #000; color: #fff; }
 
-.pop-cuerpo { flex: 1; min-height: 0; overflow: hidden; }
+.pop-cuerpo { flex: 1; min-height: 0; overflow: hidden; position: relative; }
 .pop-vista { width: 100%; height: 100%; }
 
 /* ── Papel dinámico ─────────────────────────────────────────────────────── */
@@ -232,4 +232,32 @@
   padding: 2px 8px; color: #fff; background: #1d4ed8;
 }
 .dirbadge.pon { background: #0f766e; }
+
+/* ── Diálogo «+ EQUIPO» (paso 3) ─────────────────────────────────────────── */
+.pop-dialogo {
+  position: absolute; inset: 0; z-index: 30; display: flex;
+  align-items: center; justify-content: center; background: rgba(0, 0, 0, .35);
+}
+.pop-dialogo-caja { width: 430px; background: #fff; border: 1px solid #000; box-shadow: 6px 6px 0 #000; }
+.pop-dialogo-caja header {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  background: #111; color: #fff;
+}
+.pop-dialogo-caja header b { flex: 1; font-size: 10px; letter-spacing: .05em; }
+.pop-dialogo-caja header button {
+  border: 1px solid #fff; background: #111; color: #fff; cursor: pointer; font-weight: 700;
+}
+.pop-dialogo-cuerpo { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.pop-dialogo-cuerpo label {
+  font-size: 9.5px; color: #555; text-transform: uppercase; letter-spacing: .05em;
+}
+.pop-dialogo-cuerpo select, .pop-dialogo-cuerpo input {
+  padding: 6px; border: 1px solid #000; font-size: 11px;
+}
+.pop-dialogo-nota { color: #555; font-size: 9.5px; margin: 4px 0 0; }
+.pop-dialogo-caja footer {
+  display: flex; justify-content: flex-end; gap: 8px; padding: 8px 10px;
+  border-top: 1px solid #000; background: #f5f5f7;
+}
+
 

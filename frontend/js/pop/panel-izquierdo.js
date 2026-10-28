@@ -6,7 +6,7 @@
  * y el botón «+ CABLE», que **ancla un cable existente** (no crea cables).
  */
 export function renderPanelIzquierdo(host, diagrama, opciones) {
-  const { alAnclar, alPedirCables } = opciones;
+  const { alAnclar, alPedirCables, alNuevoEquipo } = opciones;
   const cables = diagrama.cables || [];
   const equipos = (diagrama.dispositivos || []).length;
   const vacio = cables.length === 0 && equipos === 0;
@@ -37,6 +37,7 @@ export function renderPanelIzquierdo(host, diagrama, opciones) {
     </div>
     <div class="pop-panel-acciones">
       <button type="button" class="pop-btn" data-accion="nuevo-cable">+ CABLE</button>
+      <button type="button" class="pop-btn pop-btn--oscuro" data-accion="nuevo-equipo">+ EQUIPO</button>
     </div>
     <div class="pop-panel-cuerpo">
       ${vacio
@@ -56,6 +57,9 @@ export function renderPanelIzquierdo(host, diagrama, opciones) {
 
   const selector = host.querySelector('.pop-panel-selector');
   const combo = host.querySelector('[data-selector-cable]');
+
+  host.querySelector('[data-accion="nuevo-equipo"]').addEventListener('click',
+    () => { if (alNuevoEquipo) alNuevoEquipo(); });
 
   host.querySelector('[data-accion="nuevo-cable"]').addEventListener('click', async () => {
     try {

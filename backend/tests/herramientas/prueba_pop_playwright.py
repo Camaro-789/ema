@@ -130,6 +130,33 @@ async def main() -> int:
             else:
                 check(False, "había al menos una ruta para encender")
 
+            # Paso 3: «+ EQUIPO» leyendo el catálogo real y reflejándose en las 3 vistas
+            antes = await pagina.locator(".pop-tarjeta").count()
+            await pagina.click('[data-accion="nuevo-equipo"]')
+            await pagina.wait_for_selector(".pop-dialogo [data-tipo]", timeout=8000)
+            tipos = await pagina.evaluate("""() => Array.from(
+                document.querySelectorAll('.pop-dialogo [data-tipo] option'))
+                .map(o => ({ valor: o.value, categoria: o.dataset.categoria,
+                             division: o.dataset.division }))""")
+            check(len(tipos) >= 3, f"el diálogo trae los tipos del catálogo ({len(tipos)})")
+            splitter = next((t for t in tipos if t["categoria"] == "splitter"), None)
+            check(bool(splitter), "hay al menos un splitter en el catálogo")
+            if splitter:
+                await pagina.select_option('.pop-dialogo [data-tipo]', value=str(splitter["valor"]))
+                await pagina.fill('.pop-dialogo [data-nombre]', 'PYTEST-EQUIPO')
+                await pagina.click('.pop-dialogo [data-crear]')
+                await pagina.wait_for_function(
+                    f"() => document.querySelectorAll('.pop-tarjeta').length > {antes}",
+                    timeout=15000)
+                check(True, "el equipo creado aparece en el papel dinámico")
+                await pagina.click('[data-pestana="rack"]')
+                check(await pagina.locator(".pop-rack-fila").count() > 3,
+                      "y también en el rack")
+                await pagina.click('[data-pestana="matriz"]')
+                check("PYTEST-EQUIPO" in (await pagina.locator(".pop-matriz").inner_text()),
+                      "y en la matriz")
+                await pagina.click('[data-pestana="papel"]')
+
             # Conexión inválida: el servidor la rechaza y la UI muestra SU mensaje.
             await pagina.evaluate("""() => {
               window.__fetchOriginal = window.fetch;

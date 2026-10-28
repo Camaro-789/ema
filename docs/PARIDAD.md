@@ -9,6 +9,7 @@ cable de 96 hilos abierto en **670 ms**.
 
 | Funcionalidad del HTML | Estado | Dónde / nota |
 |---|---|---|
+| **«+ EQUIPO» desde el catálogo** (OLT · ODF · Switch · Splitter) | **hecho** | `dialogo-equipo.js` lee `GET /api/tipos/{categoría}` y crea con su `tipo_id`; el equipo aparece en papel, rack y matriz (probado) |
 | **Panel izquierdo de CABLES** con sus hilos y «+ CABLE» | **hecho** | `panel-izquierdo.js`; el armario vacío muestra el mensaje y el botón |
 | **«+ CABLE» ancla un cable existente** | **hecho** | `GET/POST /api/contenedores/{id}/cables` + selector en el panel |
 | **Panel derecho de TRAZABILIDAD** | **hecho** | `panel-derecho.js`: lista de rutas con ENCENDER |

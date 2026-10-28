@@ -229,6 +229,7 @@ def diagrama(
         "revision": servicios.revision(elemento),
         "contenedor": {
             "id": elemento.id, "categoria": elemento.categoria, "tipo_id": elemento.tipo_id,
+            "proyecto_id": elemento.proyecto_id,
             "lat": elemento.lat, "lon": elemento.lon,
             "estado": (elemento.propiedades_instancia or {}).get("estado") or "Activo",
             "propiedades_instancia": elemento.propiedades_instancia or {},

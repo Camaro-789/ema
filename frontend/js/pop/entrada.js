@@ -17,6 +17,7 @@ import { renderRack } from './vista-rack.js';
 import { renderMatriz } from './vista-matriz.js';
 import { renderPanelIzquierdo } from './panel-izquierdo.js';
 import { renderPanelDerecho } from './panel-derecho.js';
+import { abrirDialogoEquipo } from './dialogo-equipo.js';
 import { cadenas } from './trazabilidad.js';
 import { iniciarLinterna, detenerLinterna, linternaActiva, direccionEtiqueta } from './linterna.js';
 
@@ -85,6 +86,7 @@ function pintar(diagrama) {
   renderPanelIzquierdo(izquierda, diagrama, {
     alAnclar: anclarCable,
     alPedirCables: () => api.cables(contenedorId),
+    alNuevoEquipo: nuevoEquipo,
   });
 
   renderPanelDerecho(derecha, rutasDe(diagrama), {
@@ -101,6 +103,7 @@ function pintar(diagrama) {
     renderMatriz(host, diagrama, {
       alEditar: editar,
       alEliminar: eliminar,
+      alNuevo: nuevoEquipo,
       alConectar: () => aviso('Selecciona dos puertos en el papel dinámico para conectar.', 'aviso'),
       alDesconectar: desconectar,
     });
@@ -234,6 +237,23 @@ async function anclarCable(cableId) {
     (revision) => api.anclarCable(contenedorId, cableId, revision),
     'Cable anclado al POP.',
   );
+}
+
+async function nuevoEquipo() {
+  const diagrama = store.diagramaActual();
+  if (!diagrama) return;
+  const host = modal.querySelector('.pop-cuerpo');
+  try {
+    await abrirDialogoEquipo(host, {
+      proyectoId: diagrama.contenedor.proyecto_id,
+      alCrear: (datos) => ejecutar(
+        (revision) => api.crearDispositivo(contenedorId, datos, revision),
+        'Equipo creado: aparece en papel, rack y matriz.',
+      ),
+    });
+  } catch (error) {
+    aviso(error.message);
+  }
 }
 
 function construir() {
