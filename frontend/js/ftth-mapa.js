@@ -1047,6 +1047,7 @@ const FTTHMapa = (() => {
   // Permite abrir el diagrama desde el botón del popup HTML inyectado
   function abrirDiagramaGlobal(id, categoria, tipoNombre) {
     if (_activePopup) _activePopup.remove();
+    if (!diagramaHabilitado()) return;
     if (['cajanap', 'manga', 'armario'].includes(String(categoria || '').toLowerCase())
         && window.FTTHPopPapel && window.FTTHPopPapel.abrir) {
       window.FTTHPopPapel.abrir(id, { categoria, tipoNombre });
@@ -1060,7 +1061,15 @@ const FTTHMapa = (() => {
   // ── Diagrama lógico del nodo (F3) ─────────────────────────────────────────
   const CATEGORIAS_CON_DIAGRAMA = ['cajanap', 'manga', 'odf', 'armario', 'olt', 'splitter', 'fusion'];
 
+  // ── Interruptor POP_V25_ENABLED (Fase 1.4) ───────────────────────────────
+  // Apagado oculta TODO acceso al diagrama (menú, botón y doble clic).
+  // El resto del mapa no cambia. Encendido (por defecto) = comportamiento actual.
+  function diagramaHabilitado() {
+    return !(window.FTTH_FLAGS && window.FTTH_FLAGS.pop_v25_enabled === false);
+  }
+
   function tieneDiagrama(categoria) {
+    if (!diagramaHabilitado()) return false;
     return CATEGORIAS_CON_DIAGRAMA.includes(String(categoria || '').toLowerCase());
   }
 

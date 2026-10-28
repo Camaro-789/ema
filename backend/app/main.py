@@ -30,6 +30,7 @@ import app.models.ftth_logica as _ftth_logica  # noqa: F401 — registra la capa
 from app.routers import maps, layers, formats, ai, types
 from app.routers import ftth_tipos, ftth_elementos, ftth_carpetas
 from app.routers import ftth_logica
+from app.config import POP_V25_ENABLED, VERSION_CONTRATO_DIAGRAMA
 
 Base.metadata.create_all(bind=engine)
 asegurar_migraciones(engine)
@@ -46,6 +47,21 @@ app.include_router(ftth_elementos.router)
 app.include_router(ftth_carpetas.router)
 # Capa lógica FTTH — contención de hilos (tablas nuevas, no afecta al mapa)
 app.include_router(ftth_logica.router)
+
+
+@app.get("/api/config/flags", tags=["config"],
+         summary="Interruptores de la integración del diagrama POP")
+async def config_flags():
+    """Banderas que el frontend lee al arrancar (Fase 1.4).
+
+    Con `pop_v25_enabled = false` la interfaz oculta todo acceso al diagrama;
+    el resto de Map OLT sigue igual.
+    """
+    return {
+        "pop_v25_enabled": POP_V25_ENABLED,
+        "version_contrato_diagrama": VERSION_CONTRATO_DIAGRAMA,
+    }
+
 
 # Buscar frontend
 def find_frontend_path():

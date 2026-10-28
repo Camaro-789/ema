@@ -93,6 +93,26 @@ foreach ($t in $pruebasPy) {
     $resultados += [pscustomobject]@{ Prueba = "backend/$t"; OK = ($code -eq 0) }
 }
 
+# ── 3b. Reglas del proyecto (no tocan la base de datos) ──────────────────────
+Titulo 'Reglas del proyecto'
+$pruebasReglas = @('prueba_plantilla_v25.py')
+foreach ($t in $pruebasReglas) {
+    $ruta = Join-Path $backend (Join-Path 'scripts' $t)
+    if (-not (Test-Path $ruta)) { Write-Host "  [--]  $t (no existe, se omite)" -ForegroundColor DarkGray; continue }
+    Push-Location $backend
+    $salida = & $py "scripts\\$t" 2>&1 | Out-String
+    $code = $LASTEXITCODE
+    Pop-Location
+    $detalle = (($salida -split "`n") | Where-Object { $_ -match '\[OK\]|\[FALLO\]' } | Select-Object -Last 1)
+    $detalle = ($detalle -replace '\s+', ' ').Trim()
+    if ($code -eq 0) {
+        Write-Host "  [OK ] $t -> $detalle" -ForegroundColor Green
+    } else {
+        Write-Host "  [X]   $t -> $detalle" -ForegroundColor Red
+    }
+    $resultados += [pscustomobject]@{ Prueba = "reglas/$t"; OK = ($code -eq 0) }
+}
+
 # ── 4. Pruebas de frontend (Node) ────────────────────────────────────────────
 Titulo 'Pruebas del frontend'
 $node = Get-Command node -ErrorAction SilentlyContinue

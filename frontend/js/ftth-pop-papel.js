@@ -794,6 +794,8 @@ const FTTHPopPapel = (() => {
   }
 
   function abrir(id, opciones = {}) {
+    // Fase 1.4: con el interruptor apagado no se abre ningún diagrama.
+    if (window.FTTH_FLAGS && window.FTTH_FLAGS.pop_v25_enabled === false) return;
     current = { id, ...opciones };
     nodeData = null;
     activeTab = 'rack';
