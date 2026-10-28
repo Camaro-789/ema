@@ -265,7 +265,8 @@ async def main() -> int:
             check(await pagina.locator(".pop-modal .pop-tab").count() == 3,
                   "el armario muestra RACK · PAPEL · MATRIZ")
             # Paso 6 · P-010: capturas lado a lado para docs/paridad/
-            carpeta = os.path.join(BASE, "docs", "paridad")
+            from pathlib import Path
+            carpeta = os.path.join(str(Path(BASE).parent), "docs", "paridad")
             os.makedirs(carpeta, exist_ok=True)
             tamanos = {}
             for nombre_pestana, archivo in (("papel", "nativo-papel.png"),
@@ -280,7 +281,6 @@ async def main() -> int:
                   f"capturas del módulo nativo en docs/paridad ({tamanos})")
 
             # Referencia: el HTML v25 abierto tal cual (solo lectura, no se modifica).
-            from pathlib import Path
             referencia = await navegador.new_page(viewport={"width": 1500, "height": 900})
             await referencia.goto(Path(BASE).parent.joinpath(
                 "frontend", "pop_gestor_v25.html").as_uri())
