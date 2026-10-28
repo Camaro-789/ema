@@ -15,7 +15,12 @@ y 4 (núcleo) completas; 3.3, paridad fina y Fases 5–6 pendientes (ver `PENDIE
 | `e0554a5` | docs: auditoría de integración v25 (a–f) y pendientes |
 | `11fb988` | fix(verificar): el resumen cuenta bien cuando hay un solo fallo |
 | `dbbc16e` | feat(backend): Alembic baseline 0001–0004 (revision, operaciones, conexion_meta) y validador de dominio puro |
-| _(siguiente)_ | feat(backend): servicios de dominio y API /api/contenedores |
+| `7d411db` | feat(backend): servicios de dominio y API /api/contenedores (diagrama + 7 comandos con operation_id y revision) |
+| `6f61334` | docs: resumen final de entregables y paquete app.domain |
+| `efd9882` | feat(reglas): 540 vectores dorados desde el HTML + pytest en verde e integridad con revision atomica |
+| `10df521` | feat(frontend): modulo nativo del POP en modulos ES (rack, papel, matriz, linterna) + endpoints de posiciones y reglas |
+| `a1c9bed` + `daecc12` | feat(fase5): el armario usa el modulo nativo por interruptor (puente apagado, no borrado) + diseno de contenedores |
+| `cb403af` | fix(api): importar List en el router de contenedores (posiciones) |
 
 ## Cifras de `GET /api/elementos/{id}/nodo` (Fase 1.5)
 
@@ -67,6 +72,19 @@ hilos que en otro con 17 equipos.
 
 ## Estado del puente v25
 
-**Congelado y ENCENDIDO.** No se le agregó nada (R8). El armario #21 sigue
-funcionando con el iframe. Se retirará en la Fase 5 solo si la tabla de paridad
-está completa y todas las pruebas (pytest + Playwright) están en verde.
+**APAGADO por interruptor y SIN borrar** (Fase 5.1 + 5.3):
+
+- El armario abre el **módulo nativo** (`POP_NATIVO_EN_ARMARIO`, encendido por
+  defecto) y ya **no** se abre el iframe; verificado en la prueba de interfaz
+  («el armario abre el módulo nativo (sin iframe del puente)»).
+- Lo que el puente guardó (`propiedades.origen = "pop_gestor_v25"`) **se ve igual**
+  y no se reescribe (prueba `test_lo_guardado_por_el_puente_se_ve_igual`).
+- **No se borró** porque la condición de la Fase 5.3 exige paridad completa y aún
+  faltan filas esenciales (P-011: mover desde la UI, matriz colapsable, origen/TX en
+  pantalla, L/R de la linterna, capturas de paridad y la energía de la Fase 3.3).
+- Para volver atrás sin tocar código: `POP_NATIVO_EN_ARMARIO=0` y reiniciar.
+
+## Fases 5 y 6
+
+- **Fase 5**: 5.1 y 5.2 hechas (arriba). 5.3 **no** se cumple → puente conservado.
+- **Fase 6**: `ARCHITECTURE_CONTAINERS.md` (solo diseño, como pide el prompt).
