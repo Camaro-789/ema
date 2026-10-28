@@ -24,7 +24,7 @@ app.add_middleware(
 )
 
 # Import routers
-from app.database import Base, engine, asegurar_migraciones
+from app.database import Base, engine
 import app.models.ftth_models as _ftth_models  # noqa: F401 — registra tablas FTTH en Base.metadata
 import app.models.ftth_logica as _ftth_logica  # noqa: F401 — registra la capa lógica (tubos/hilos/extremos)
 from app.routers import maps, layers, formats, ai, types
@@ -33,7 +33,21 @@ from app.routers import ftth_logica
 from app.config import POP_V25_ENABLED, VERSION_CONTRATO_DIAGRAMA
 
 Base.metadata.create_all(bind=engine)
-asegurar_migraciones(engine)
+
+
+def _migrar_al_arranque() -> None:
+    """Aplica las migraciones pendientes (Fase 2.1, sustituto de asegurar_migraciones)."""
+    from alembic import command
+    from alembic.config import Config
+
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    os.environ.setdefault("DATABASE_URL", engine.url.render_as_string(hide_password=False))
+    configuracion = Config(os.path.join(raiz, "alembic.ini"))
+    configuracion.set_main_option("script_location", os.path.join(raiz, "migrations"))
+    command.upgrade(configuracion, "head")
+
+
+_migrar_al_arranque()
 
 
 app.include_router(maps.router, prefix="/api/v1/maps", tags=["maps"])

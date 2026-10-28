@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "fuente": "frontend/pop_gestor_v25.html (PORT_TABLE ~724, DOMAIN ~735, validateStep ~760-796, LOSS/TX_KIND ~651/~692, computeEnergy ~697)",
+  "nota": "El HTML manda. Si aquí y allí difieren, se corrige este JSON y se anota en el informe (Fase 3).",
+  "dominios": {
+    "ACCESO": { "etiqueta": "ACCESO · PON", "min_dbm": -28.0, "max_dbm": null },
+    "ENLACE": { "etiqueta": "ENLACE · datos", "min_dbm": -14.4, "max_dbm": 0.5 }
+  },
+  "mensaje_dominios": "No se pueden mezclar señales de ACCESO (PON) con ENLACE de datos. Una PON nunca va directo al switch/core: el core solo recibe señal de los SFP de la OLT.",
+  "puertos": [
+    { "tipo_equipo": "OLT", "patron": "^PON", "kind": "PON", "dominio": "ACCESO", "activo": true, "es_origen": true, "medio": "fibra" },
+    { "tipo_equipo": "OLT", "patron": "^SFP", "kind": "SFP", "dominio": "ENLACE", "activo": true, "es_origen": true, "medio": "fibra" },
+    { "tipo_equipo": "OLT", "patron": "^RJ45", "kind": "RJ45", "dominio": "ENLACE", "activo": true, "es_origen": true, "medio": "cobre" },
+    { "tipo_equipo": "SWITCH", "patron": "^SFP", "kind": "SFP", "dominio": "ENLACE", "activo": true, "es_origen": true, "medio": "fibra" },
+    { "tipo_equipo": "SWITCH", "patron": "^RJ45", "kind": "RJ45", "dominio": "ENLACE", "activo": true, "es_origen": true, "medio": "cobre" },
+    { "tipo_equipo": "CABLE", "patron": ".", "kind": "HILO", "dominio": null, "activo": false, "es_origen": true, "requiere_senal": true },
+    { "tipo_equipo": "ODF", "patron": ".", "kind": "ODF", "dominio": null, "activo": false, "es_origen": false },
+    { "tipo_equipo": "SPLITTER", "patron": ".", "kind": "SPLITTER", "dominio": null, "activo": false, "es_origen": false }
+  ],
+  "perdidas_db": {
+    "conector": 0.3,
+    "empalme": 0.1,
+    "odf": 0.1,
+    "splitter_por_defecto": 10.7,
+    "fibra_db_km": 0.35
+  },
+  "tx_por_defecto_dbm": { "PON": 3.0, "SFP": -2.0, "RJ45": 0.0, "HILO": -2.0 },
+  "splitters": {
+    "clases": ["AF", "AC"],
+    "divisiones_balanceadas": {
+      "1x2": 3.7, "1x4": 7.3, "1x8": 10.7, "1x16": 14.0, "1x32": 17.5, "1x64": 21.0
+    },
+    "conecta_con": ["PON", "SPLITTER", "ODF", "HILO"],
+    "nunca_con": ["SFP", "RJ45"]
+  },
+  "reglas": [
+    { "id": "puerto_libre", "mensaje_es": "El puerto ya está conectado. Desconéctalo primero (clic sobre la línea)." },
+    { "id": "combinacion_valida", "pares_ok": ["cable+odfB", "dev+odfA", "cable+dev"], "mensaje_es": "Combinación no válida: usa cable → ODF cara B y ODF cara A → equipo." },
+    { "id": "rj45_solo_rj45", "mensaje_es": "Un puerto RJ45 (cobre) solo se conecta con otro RJ45. No se puede unir con un SFP, un ODF, un hilo ni un splitter." },
+    { "id": "pon_es_origen", "mensaje_es": "Una PON siempre es origen: inicia la edición desde ella." },
+    { "id": "pon_solo_subida", "mensaje_es": "Una PON es origen. Solo puede recibir una conexión en vista de subida: la trazabilidad debe nacer en un hilo marcado como señal de ACCESO." },
+    { "id": "un_solo_origen", "mensaje_es": "Ya existe un origen en esta cadena. Solo un origen inicia la potencia." },
+    { "id": "sin_lazos", "mensaje_es": "Esta conexión cerraría un lazo dentro de la misma cadena." },
+    { "id": "dominios_no_se_mezclan", "mensaje_es": "No se pueden mezclar señales de ACCESO (PON) con ENLACE de datos." },
+    { "id": "splitter_solo_optico", "mensaje_es": "Los splitters solo transportan señal PON (ACCESO). No se pueden usar en una cadena de enlace de datos." },
+    { "id": "splitter_conexiones", "mensaje_es": "Un splitter solo se conecta a puertos PON, a otros splitters y a ODF (o a un cable de calle con señal PON). No se conecta a switches, routers ni a puertos SFP/RJ45." },
+    { "id": "splitter_entrada_in", "mensaje_es": "La PON o el cable de calle entran por la entrada IN del splitter." },
+    { "id": "splitter_af_para_pon", "mensaje_es": "Una PON solo puede conectarse a un splitter AF (primario), no a un AC (cliente)." },
+    { "id": "splitter_out_a_in", "mensaje_es": "Entre splitters conecta una salida OUT con una entrada IN." },
+    { "id": "no_borrar_con_conexiones", "mensaje_es": "No se puede eliminar un equipo con conexiones. Desconéctalas primero." },
+    { "id": "sin_duplicados", "mensaje_es": "Ese puerto o hilo ya tiene una conexión en este contenedor." }
+  ],
+  "reglas_extension": [
+    {
+      "id": "splitter_out_a_hilo",
+      "origen_regla": "extension_v26",
+      "mensaje_es": "En cajas y mangas, la salida OUT del splitter se conecta a un hilo del cable (el HTML v25 solo permite llegar al IN).",
+      "aplica_a": ["cajanap", "manga", "armario"]
+    }
+  ],
+  "estados_equipo": ["Implementado", "En proyecto", "Certificado"],
+  "hilos_cable": [4, 8, 12, 16, 24, 48, 96]
+}

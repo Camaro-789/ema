@@ -32,6 +32,11 @@ class FtthElemento(Base):
     proyecto_id = Column(Integer, ForeignKey("map_projects.id", ondelete="CASCADE"), nullable=False)
     tipo_id = Column(Integer, ForeignKey("ftth_tipos.id", ondelete="CASCADE"), nullable=False)
     categoria = Column(String(50), nullable=False, index=True)
+
+    # Concurrencia optimista por contenedor (Fase 2.4, columna aditiva).
+    # Sube en cada escritura; el cliente manda `base_revision` y recibe 409 si no
+    # coincide con la vigente.
+    revision = Column(Integer, nullable=False, default=0, server_default="0")
     
     # Datos espaciales
     lat = Column(Float, nullable=True)

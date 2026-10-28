@@ -26,8 +26,11 @@ from sqlalchemy import (
     UniqueConstraint,
     Index,
     JSON,
+    Text,
+    DateTime,
     cast,
 )
+from sqlalchemy import func
 from sqlalchemy import update
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -1124,4 +1127,63 @@ class FtthDiagramaPosicion(Base):
     )
     x = Column(Float, nullable=False, default=0.0)
     y = Column(Float, nullable=False, default=0.0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fase 2 — Operaciones idempotentes y metadatos de conexión
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FtthOperacion(Base):
+    """Operación de escritura idempotente (Fase 2.3, tabla aditiva).
+
+    Toda escritura del módulo nativo llega con un `operation_id` (UUID). Si el
+    mismo id vuelve a llegar (reintento del navegador, doble clic, red inestable),
+    se devuelve el `resultado` ya guardado y NO se vuelve a escribir nada.
+
+    `resultado` es el JSON de la respuesta original, para poder replicarla tal cual.
+    """
+
+    __tablename__ = "ftth_operaciones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    operation_id = Column(String(36), nullable=False, unique=True, index=True)
+    contenedor_id = Column(
+        Integer, ForeignKey("ftth_elementos.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    tipo = Column(String(40), nullable=False)
+    resultado = Column(Text, nullable=True)
+    creado_en = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class FtthConexionMeta(Base):
+    """Origen de señal y potencia TX de una conexión (Fase 2.5, tabla aditiva).
+
+    Antes no existía: el HTML v25 calculaba la potencia en memoria y la perdía al
+    recargar. `senal` solo admite ACCESO o ENLACE (lo valida la capa de dominio).
+
+    Una fila puede colgar de un empalme (hilo↔hilo / hilo↔puerto) o directamente de
+    un puerto o de un extremo de hilo cuando el origen es el propio elemento.
+    """
+
+    __tablename__ = "ftth_conexion_meta"
+
+    id = Column(Integer, primary_key=True, index=True)
+    contenedor_id = Column(
+        Integer, ForeignKey("ftth_elementos.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    empalme_id = Column(
+        Integer, ForeignKey("ftth_empalmes.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    puerto_id = Column(
+        Integer, ForeignKey("ftth_puertos.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    fibra_extremo_id = Column(
+        Integer, ForeignKey("ftth_fibra_extremos.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
+    origen_tipo = Column(String(40), nullable=True)   # PON | SFP | RJ45 | HILO
+    senal = Column(String(10), nullable=True)         # ACCESO | ENLACE
+    tx_dbm = Column(Float, nullable=True)
+    nota = Column(String(300), nullable=True)
+    creado_en = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
