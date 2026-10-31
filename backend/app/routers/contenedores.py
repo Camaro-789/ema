@@ -267,6 +267,7 @@ def diagrama(
             {"id": d.id, "tipo": d.tipo, "tipo_id": d.tipo_id, "nombre": d.serie,
              "division": d.division, "puertos_in": d.puertos_in, "puertos_out": d.puertos_out,
              "perdida_db": d.atenuacion_db, "estado": d.estado, "bandeja_id": d.bandeja_id,
+             "tamano": int(((db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == d.tipo_id).first().propiedades if d.tipo_id and db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == d.tipo_id).first() else {}).get("tamano")) or (2 if d.tipo == "olt" and ((db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == d.tipo_id).first().propiedades if d.tipo_id and db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == d.tipo_id).first() else {}).get("formato")) == "modular" else 1)),
              "posicion": posiciones.get(d.id)} for d in dispositivos
         ],
         "puertos": [

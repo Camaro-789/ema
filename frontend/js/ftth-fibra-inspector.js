@@ -171,15 +171,17 @@ const FTTHFibraInspector = (() => {
       acumuladas.push(total);
     });
 
-    // Objetos que caen encima de cada punto (el poste manda: la fibra va en él)
+    // Objetos que caen encima de cada punto (armarios y postes mandan: la fibra va en ellos)
     const puntos = trazado.map((pt, i) => {
       const encima = objetos
         .map(o => ({ objeto: o, distancia_m: calcularDistanciaGeo(pt, o.geometry.coordinates) }))
         .filter(m => m.distancia_m <= TOL_PUNTO_M)
         .sort((a, b) => {
-          const pa = esPoste(a.objeto.properties) ? 0 : 1;
-          const pb = esPoste(b.objeto.properties) ? 0 : 1;
-          if (pa !== pb) return pa - pb;
+          const catA = String(a.objeto.properties && a.objeto.properties.categoria || '').toLowerCase();
+          const catB = String(b.objeto.properties && b.objeto.properties.categoria || '').toLowerCase();
+          const rank = c => (c === 'armario' ? 0 : (esPoste({ categoria: c }) ? 1 : 2));
+          const diff = rank(catA) - rank(catB);
+          if (diff !== 0) return diff;
           return a.distancia_m - b.distancia_m;
         })
         .map(m => {
@@ -192,12 +194,13 @@ const FTTHFibraInspector = (() => {
             distancia_m: m.distancia_m
           };
         });
+      const nodoPrincipal = encima.find(o => o.categoria === 'armario' || o.categoria === 'poste' || esPoste(o)) || encima[0] || null;
       return {
         orden: i + 1,
         coords: pt,
         acumulada_m: acumuladas[i],
         objetos: encima,
-        poste: encima.find(o => o.categoria === 'poste') || null
+        poste: nodoPrincipal
       };
     });
 
@@ -666,22 +669,33 @@ const FTTHFibraInspector = (() => {
       document.getElementById('ffi-longitud').value = distTotal.toFixed(2);
 
       // Primera y última punta: se toman del trazado (con respaldo en los extremos lógicos)
-      const extA = props.extremos && props.extremos.A
+      const idExtA = props.extremo_A_id || instProps.extremo_A_id;
+      const idExtB = props.extremo_B_id || instProps.extremo_B_id;
+      const featExtA = idExtA ? _featureEnInventario(features, idExtA) : null;
+      const featExtB = idExtB ? _featureEnInventario(features, idExtB) : null;
+      const nombreExtA = featExtA ? nombreObjeto(featExtA.properties) : '';
+      const nombreExtB = featExtB ? nombreObjeto(featExtB.properties) : '';
+
+      const extA = (props.extremos && props.extremos.A)
         ? (props.extremos.A.nombre || `Nodo #${props.extremos.A.nodo_id}`)
-        : (instProps.extremo_a || '');
-      const extB = props.extremos && props.extremos.B
+        : (nombreExtA || instProps.extremo_a || '');
+      const extB = (props.extremos && props.extremos.B)
         ? (props.extremos.B.nombre || `Nodo #${props.extremos.B.nodo_id}`)
-        : (instProps.extremo_b || '');
+        : (nombreExtB || instProps.extremo_b || '');
       const puntaA = (recorrido.punta_a && recorrido.punta_a.nombre) || extA || '—';
       const puntaB = (recorrido.punta_b && recorrido.punta_b.nombre) || extB || '—';
       _ponerPunta('ffi-punta-a', puntaA, recorrido.punta_a, 'de origen');
       _ponerPunta('ffi-punta-b', puntaB, recorrido.punta_b, 'final');
 
       // Resumen del recorrido (visible también en «Información»)
-      const nPostes = recorrido.postes.length;
-      document.getElementById('ffi-postes-ruta').value = nPostes
-        ? `${nPostes}${nPostes === 1 ? ' poste' : ' postes'}${recorrido.ruta_trazado ? ' (ruta de trazado)' : ''}`
-        : '— (la fibra no pasa por postes)';
+      const nArmarios = recorrido.postes.filter(p => p.categoria === 'armario').length;
+      const nPostes = recorrido.postes.filter(p => p.categoria === 'poste' || esPoste(p)).length;
+      const itemsRuta = [];
+      if (nArmarios) itemsRuta.push(`${nArmarios} armario${nArmarios > 1 ? 's' : ''}`);
+      if (nPostes) itemsRuta.push(`${nPostes} poste${nPostes > 1 ? 's' : ''}`);
+      document.getElementById('ffi-postes-ruta').value = itemsRuta.length
+        ? `${itemsRuta.join(', ')}${recorrido.ruta_trazado ? ' (ruta de trazado)' : ''}`
+        : '— (la fibra no pasa por postes ni armarios)';
       document.getElementById('ffi-dist-postes').value = nPostes >= 2
         ? `${recorrido.distancia_postes_m.toFixed(1)} m`
         : '—';
@@ -748,16 +762,16 @@ const FTTHFibraInspector = (() => {
       ? recorrido.postes_trazado
       : (recorrido.postes || []);
 
-    // Requisito: sin postes no se arma ruta; sólo la longitud total
+    // Requisito: sin nodos en la ruta, se informa longitud total
     if (!postes.length) {
       summaryEl.innerHTML = `
         <span class="rs-item">${_icono('cables', 14)} ${total.toFixed(1)} m total</span>
         <span class="rs-sep">·</span>
-        <span class="rs-item"><i class="fa-solid fa-ruler-horizontal"></i> sin postes en la ruta</span>
+        <span class="rs-item"><i class="fa-solid fa-ruler-horizontal"></i> sin nodos en la ruta</span>
       `;
       routeListEl.innerHTML = `
         <div class="route-empty">
-          Esta fibra no pasa por postes.<br>
+          Esta fibra no pasa por postes ni armarios.<br>
           Longitud total de la fibra: <b>${total.toFixed(1)} m</b>.
           ${aviso ? `<br><b>⚠ ${escapeHtml(aviso)}</b>` : ''}
         </div>
@@ -765,8 +779,15 @@ const FTTHFibraInspector = (() => {
       return;
     }
 
+    const cantArmarios = postes.filter(p => p.categoria === 'armario').length;
+    const cantPostes = postes.filter(p => p.categoria === 'poste' || esPoste(p)).length;
+    const resumenNodos = [];
+    if (cantArmarios) resumenNodos.push(`${_icono('armario', 14)} <span>${cantArmarios}</span> ${cantArmarios === 1 ? 'armario' : 'armarios'}`);
+    if (cantPostes) resumenNodos.push(`${_icono('poste', 14)} <span>${cantPostes}</span> ${cantPostes === 1 ? 'poste' : 'postes'}`);
+    if (!resumenNodos.length) resumenNodos.push(`${postes.length} paradas`);
+
     summaryEl.innerHTML = `
-      <span class="rs-item">${_icono('poste', 14)} <span>${postes.length}</span> ${postes.length === 1 ? 'poste' : 'postes'}</span>
+      <span class="rs-item">${resumenNodos.join(' · ')}</span>
       <span class="rs-sep">·</span>
       <span class="rs-item"><i class="fa-solid fa-ruler-horizontal"></i> ${total.toFixed(1)} m total</span>
       <span class="rs-sep">·</span>
@@ -781,7 +802,8 @@ const FTTHFibraInspector = (() => {
       const esInicio = idx === 0;
       const esFin = idx === postes.length - 1;
       const claseItem = esInicio ? 'start' : (esFin ? 'end' : '');
-      const etiqueta = esInicio ? 'Inicio' : (esFin ? 'Fin' : 'Punto de paso');
+      const esArm = poste.categoria === 'armario';
+      let etiqueta = esInicio ? (esArm ? 'Armario (Origen)' : 'Inicio') : (esFin ? (esArm ? 'Armario (Destino)' : 'Fin') : (esArm ? 'Armario (Paso)' : 'Punto de paso'));
       const claseTag = esInicio ? 'tag tag-start' : (esFin ? 'tag tag-end' : 'tag');
 
       // Objetos colgados del poste (caja NAP, manga, reserva…) con su ícono

@@ -139,16 +139,14 @@ def actualizar_elemento(elem_id: int, payload: Dict[str, Any], db: Session = Dep
         from app.routers import ftth_logica as logica_router
         logica_router.sincronizar_extremos_cable_a_hilos(db, el)
 
-    # ¿Se movió un POSTE? Entonces los cables que pasan por él se rehacen para que
-    # su línea siga al poste. Cubre los trazados nuevos (con ruta) y los cables que
-    # YA existían (se detectan por sus vértices en la posición vieja). Un trazado
-    # libre, que no toca ningún poste, no se modifica.
+    # ¿Se movió un POSTE o ARMARIO? Entonces los cables que pasan por él o anclan en él
+    # se rehacen para que su línea siga al elemento.
     recalculados: List[Dict[str, Any]] = []
-    if ("lat" in payload or "lon" in payload) and (el.categoria or "").lower() in ("poste", "postes"):
+    if ("lat" in payload or "lon" in payload) and (el.categoria or "").lower() in ("poste", "postes", "armario"):
         db.flush()
         recalculados = logica.recalcular_cables_del_poste(db, el, lon_antes, lat_antes)
         # Log de servidor: deja ver que el recálculo está disparando y a qué cables
-        print(f"[geometria] poste #{nuevo_propiedades.get('numero')} (id {el.id}) movido "
+        print(f"[geometria] {el.categoria} #{nuevo_propiedades.get('numero')} (id {el.id}) movido "
               f"({lon_antes},{lat_antes}) -> ({el.lon},{el.lat}) · "
               f"cables recalculados={[c['cable_id'] for c in recalculados]}", flush=True)
         for c in recalculados:

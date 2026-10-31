@@ -1096,7 +1096,9 @@ def _persistir_dispositivo(elemento, elem_id, tipo, division, entradas, salidas,
     creados = {"IN": 0, "OUT": 0, "BIDI": 0}
     puertos: List[Dict[str, Any]] = []
 
-    def _puerto(direccion: str, numero: int) -> None:
+    def _puerto(direccion: str, numero: int, etiqueta: Optional[str] = None, conector_override: Optional[str] = None) -> None:
+        c = conector_override or conector
+        lbl = etiqueta or f"{direccion}-{numero}"
         db.add(
             logica.FtthPuerto(
                 proyecto_id=elemento.proyecto_id,
@@ -1104,24 +1106,54 @@ def _persistir_dispositivo(elemento, elem_id, tipo, division, entradas, salidas,
                 elemento_id=elem_id,
                 direccion=direccion,
                 puerto_no=numero,
-                tipo_conector=conector,
+                tipo_conector=c,
                 estado="libre",
+                etiqueta=lbl,
             )
         )
         creados[direccion] += 1
         puertos.append({
             "direccion": direccion,
             "puerto_no": numero,
-            "etiqueta": f"{direccion}-{numero}",
-            "tipo_conector": conector,
+            "etiqueta": lbl,
+            "tipo_conector": c,
             "estado": "libre",
         })
 
     if tipo == "splitter":
         for i in range(1, (entradas or 0) + 1):
-            _puerto("IN", i)
+            _puerto("IN", i, f"IN {i}")
         for i in range(1, (salidas or 0) + 1):
-            _puerto("OUT", i)
+            _puerto("OUT", i, f"OUT {i}")
+    elif tipo == "olt":
+        if props and any(k in props for k in ("puertos_pon", "puertos_sfp", "puertos_rj45_datos", "slots_detalle")):
+            cant_pon = int(props.get("puertos_pon") or salidas or 8)
+            cant_sfp = int(props.get("puertos_sfp") if props.get("puertos_sfp") is not None else 2)
+            cant_rj45 = int(props.get("puertos_rj45_datos") if props.get("puertos_rj45_datos") is not None else 0)
+            tiene_mgmt = bool(props.get("puerto_mgmt", True))
+            tiene_console = bool(props.get("puerto_console", True))
+
+            p_no = 1
+            for i in range(1, cant_pon + 1):
+                _puerto("OUT", p_no, f"PON {i}", "SC/UPC")
+                p_no += 1
+            for i in range(1, cant_sfp + 1):
+                _puerto("OUT", p_no, f"SFP {i}", "SFP")
+                p_no += 1
+            for i in range(1, cant_rj45 + 1):
+                _puerto("OUT", p_no, f"RJ45 {i}", "RJ45")
+                p_no += 1
+            if tiene_mgmt:
+                _puerto("OUT", p_no, "RJ45 MGMT", "RJ45")
+                p_no += 1
+            if tiene_console:
+                _puerto("OUT", p_no, "RJ45 CONSOLE", "RJ45")
+                p_no += 1
+        else:
+            for i in range(1, (salidas or 8) + 1):
+                _puerto("OUT", i, f"PON {i}", "SC/UPC")
+            for i in range(1, 3):
+                _puerto("OUT", (salidas or 8) + i, f"SFP {i}", "SFP")
     else:
         for i in range(1, (salidas or 0) + 1):
             _puerto("BIDI", i)
@@ -1614,21 +1646,24 @@ def obtener_nodo(elem_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
             "slot": emp.slot,
             "tipo": emp.tipo,
         }
+        puerto_origen = props_emp.get("puerto_origen_id") or (-emp.fibra_a_id if (emp.fibra_a_id and emp.fibra_a_id < 0) else None)
         empalmes_dto.append({
             "id": emp.id,
             "bandeja_id": emp.bandeja_id,
             "slot": emp.slot,
             "tipo": emp.tipo,
-            "fibra_a_id": emp.fibra_a_id,
+            "fibra_a_id": emp.fibra_a_id if (emp.fibra_a_id and emp.fibra_a_id > 0) else None,
             "fibra_b_id": emp.fibra_b_id,
             "extremo_a": ext_a,
             "extremo_b": ext_b,
             "puerto_id": getattr(emp, "puerto_id", None),
-            "hilo_a": {"fibra_id": emp.fibra_a_id, "nombre": nombre_por_fibra.get(emp.fibra_a_id)},
+            "puerto_origen_id": puerto_origen,
+            "hilo_a": {"fibra_id": emp.fibra_a_id, "nombre": nombre_por_fibra.get(emp.fibra_a_id)} if (emp.fibra_a_id and emp.fibra_a_id > 0) else None,
             "hilo_b": ({"fibra_id": emp.fibra_b_id, "nombre": nombre_por_fibra.get(emp.fibra_b_id)}
                        if emp.fibra_b_id else None),
             "waypoints": props_emp.get("waypoints") or [],
             "etiqueta": emp.etiqueta,
+            "propiedades": props_emp,
         })
         if emp.fibra_a_id:
             empalme_por_extremo[(emp.fibra_a_id, ext_a)] = info_emp
@@ -2596,11 +2631,12 @@ def sangrar_cable(
 # ═════════════════════════════════════════════════════════════════════════════
 
 class EmpalmeCreate(BaseModel):
-    fibra_a_id: int
+    fibra_a_id: Optional[int] = None
     extremo_a: Optional[str] = "entrada"
     fibra_b_id: Optional[int] = None
     extremo_b: Optional[str] = "salida"
     puerto_id: Optional[int] = None
+    puerto_origen_id: Optional[int] = None
     bandeja_id: Optional[int] = None
     slot: Optional[int] = None
     tipo: Optional[str] = "paso"
@@ -2635,6 +2671,30 @@ def crear_empalme_manual(
     elem_id: int, payload: EmpalmeCreate, db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     caja = _nodo_para_conmutar(elem_id, db)
+
+    # Caso Jumper Puerto <-> Puerto
+    if payload.puerto_origen_id and payload.puerto_id:
+        p_origen = int(payload.puerto_origen_id)
+        p_destino = int(payload.puerto_id)
+        nuevo_jumper = logica.FtthEmpalme(
+            proyecto_id=caja.proyecto_id,
+            nodo_id=elem_id,
+            fibra_a_id=-p_origen,
+            puerto_id=p_destino,
+            tipo="jumper",
+            extremo_a="entrada",
+            extremo_b="salida",
+            etiqueta=payload.etiqueta or "Jumper",
+            propiedades=payload.propiedades or {"puerto_origen_id": p_origen, "puerto_destino_id": p_destino, "tipo_enlace": "jumper"}
+        )
+        db.add(nuevo_jumper)
+        db.query(logica.FtthPuerto).filter(logica.FtthPuerto.id.in_([p_origen, p_destino])).update({"estado": "ocupado"}, synchronize_session=False)
+        db.commit()
+        db.refresh(nuevo_jumper)
+        return {"status": "ok", "empalme_id": nuevo_jumper.id, "tipo": "jumper"}
+
+    if payload.fibra_a_id is None:
+        raise HTTPException(400, "Se requiere `fibra_a_id` o `puerto_origen_id` para crear la conexión.")
 
     fibra_a = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == payload.fibra_a_id).first()
     if not fibra_a:
@@ -3016,3 +3076,307 @@ def traza_fibra(fibra_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
         "pasos": pasos,
         "ramifica_a": ramifica_a if ramifica_a else None,
     }
+
+@router.post("/elementos/{elem_id}/conexiones-sincronizar", summary="Sincronizar en bloque todas las conexiones de un contenedor/armario")
+def sincronizar_conexiones_nodo(elem_id: int, payload: Dict[str, Any], db: Session = Depends(get_db)):
+    caja = _nodo_para_conmutar(elem_id, db)
+    lista = payload.get("conexiones") or []
+
+    # Resolución de extremos (el frontend manda IDs reales y, si no, la
+    # etiqueta que pinta el HTML v25: «PON 1», «SFP+ 1», «OUT 2», «Hilo 7»…).
+    def _digits(valor: Any) -> int:
+        digitos = "".join([c for c in str(valor or "") if c.isdigit()])
+        return int(digitos) if digitos else 0
+
+    def _resolver_puerto(equipo_id: int, texto: Any):
+        """Puerto real del equipo a partir de la etiqueta que pinta el v25."""
+        consulta = db.query(logica.FtthPuerto).filter(
+            logica.FtthPuerto.dispositivo_id == int(equipo_id)
+        )
+        etiqueta = str(texto or "").strip()
+        if etiqueta:
+            fila = consulta.filter(logica.FtthPuerto.etiqueta == etiqueta).first()
+            if fila:
+                return fila
+            partes = etiqueta.upper().replace("-", " ").replace("_", " ").split()
+            if len(partes) == 2 and partes[1].isdigit():
+                fila = consulta.filter(
+                    logica.FtthPuerto.direccion == partes[0],
+                    logica.FtthPuerto.puerto_no == int(partes[1]),
+                ).first()
+                if fila:
+                    return fila
+        numero = _digits(texto)
+        if numero and not any(caracter.isalpha() for caracter in etiqueta):
+            return consulta.filter(logica.FtthPuerto.puerto_no == numero).first()
+        return None
+
+    def _resolver_fibra(cable_id: int, texto: Any):
+        """Hilo real del cable a partir de «Hilo N» (por número global o posición)."""
+        numero = _digits(texto)
+        if not numero:
+            return None
+        filas = (
+            db.query(logica.FtthCableFibra)
+            .filter(logica.FtthCableFibra.elemento_id == int(cable_id))
+            .order_by(logica.FtthCableFibra.hilo_global_no, logica.FtthCableFibra.id)
+            .all()
+        )
+        if not filas:
+            return None
+        for fila in filas:
+            if fila.hilo_global_no == numero:
+                return fila
+        if 1 <= numero <= len(filas):
+            return filas[numero - 1]
+        return next((f for f in filas if f.hilo_no_en_tubo == numero), None)
+
+    # 0. Resolver TODAS las conexiones antes de tocar nada: si alguna no existe
+    #    en Map OLT se rechaza el guardado SIN borrar las conexiones anteriores.
+    #    (Antes se borraban primero y las que no se resolvían se perdían en
+    #    silencio: el frontend mostraba «guardado» con guardadas = 0.)
+    resueltas: List[Dict[str, Any]] = []
+    omitidas: List[str] = []
+
+    for indice, item in enumerate(lista, start=1):
+        f = item.get("from") or {}
+        t = item.get("to") or {}
+        from_type = str(item.get("fromType") or f.get("type") or "").upper()
+        to_type = str(item.get("toType") or t.get("type") or "").upper()
+        from_eq = item.get("fromEqId") or f.get("eqId")
+        to_eq = item.get("toEqId") or t.get("eqId")
+        from_port = item.get("fromPort") if item.get("fromPort") is not None else f.get("port")
+        to_port = item.get("toPort") if item.get("toPort") is not None else t.get("port")
+
+        port_a = f.get("mapoltPortId") or item.get("fromPortId")
+        port_b = t.get("mapoltPortId") or item.get("toPortId")
+        fibra_a = f.get("mapoltFibraId") or item.get("fromFibraId")
+        fibra_b = t.get("mapoltFibraId") or item.get("toFibraId")
+
+        # Fallbacks por etiqueta cuando el cliente no mandó el ID directo.
+        if not port_a and from_eq and from_type != "CABLE":
+            fila = _resolver_puerto(int(from_eq), from_port)
+            port_a = fila.id if fila else None
+        if not port_b and to_eq and to_type != "CABLE":
+            fila = _resolver_puerto(int(to_eq), to_port)
+            port_b = fila.id if fila else None
+        if not fibra_a and from_eq and from_type == "CABLE":
+            fila = _resolver_fibra(int(from_eq), from_port)
+            fibra_a = fila.id if fila else None
+        if not fibra_b and to_eq and to_type == "CABLE":
+            fila = _resolver_fibra(int(to_eq), to_port)
+            fibra_b = fila.id if fila else None
+
+        # Los IDs recibidos tienen que existir de verdad en la base.
+        puerto_a = db.query(logica.FtthPuerto).filter(logica.FtthPuerto.id == int(port_a)).first() if port_a else None
+        puerto_b = db.query(logica.FtthPuerto).filter(logica.FtthPuerto.id == int(port_b)).first() if port_b else None
+        fibra_a_fila = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == int(fibra_a)).first() if fibra_a else None
+        fibra_b_fila = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == int(fibra_b)).first() if fibra_b else None
+
+        if port_a and not puerto_a:
+            omitidas.append(f"#{indice}: el puerto {from_port or port_a} no existe en Map OLT.")
+            continue
+        if port_b and not puerto_b:
+            omitidas.append(f"#{indice}: el puerto {to_port or port_b} no existe en Map OLT.")
+            continue
+        if fibra_a and not fibra_a_fila:
+            omitidas.append(f"#{indice}: el hilo {from_port or fibra_a} no existe en Map OLT.")
+            continue
+        if fibra_b and not fibra_b_fila:
+            omitidas.append(f"#{indice}: el hilo {to_port or fibra_b} no existe en Map OLT.")
+            continue
+
+        origen = bool(item.get("origin"))
+        senal = item.get("signal") or None
+        cara_a = item.get("fromFace") or f.get("face")
+        cara_b = item.get("toFace") or t.get("face")
+
+        if puerto_a and puerto_b:
+            resueltas.append({
+                "tipo": "jumper",
+                "puerto_a": int(puerto_a.id),
+                "puerto_b": int(puerto_b.id),
+                "cara_a": cara_a,
+                "cara_b": cara_b,
+                "from_type": from_type,
+                "to_type": to_type,
+                "origen": origen,
+                "senal": senal,
+            })
+        elif (fibra_a_fila and puerto_b) or (fibra_b_fila and puerto_a):
+            desde_fibra = fibra_a_fila is not None
+            fibra_fila = fibra_a_fila or fibra_b_fila
+            puerto_fila = puerto_b or puerto_a
+            resueltas.append({
+                "tipo": "conector",
+                "fibra": int(fibra_fila.id),
+                "puerto": int(puerto_fila.id),
+                "extremo": ((f.get("mapoltExtremo") if desde_fibra else t.get("mapoltExtremo"))
+                            or "B"),
+                "desde_fibra": desde_fibra,
+                "cara_a": cara_a,
+                "cara_b": cara_b,
+                "from_type": from_type,
+                "to_type": to_type,
+                "origen": origen,
+                "senal": senal,
+            })
+        elif fibra_a_fila and fibra_b_fila:
+            resueltas.append({
+                "tipo": "fusion",
+                "fibra_a": int(fibra_a_fila.id),
+                "fibra_b": int(fibra_b_fila.id),
+                "extremo_a": f.get("mapoltExtremo") or "entrada",
+                "extremo_b": t.get("mapoltExtremo") or "salida",
+                "origen": origen,
+                "senal": senal,
+            })
+        else:
+            omitidas.append(
+                f"#{indice}: no se pudo identificar el extremo "
+                f"({from_type or '?'} {from_port or '?'} → {to_type or '?'} {to_port or '?'})."
+            )
+
+    if omitidas:
+        detalle = " | ".join(omitidas[:8])
+        if len(omitidas) > 8:
+            detalle += f" | (+{len(omitidas) - 8} más)"
+        raise HTTPException(
+            400,
+            f"No se guardó nada: {len(omitidas)} conexión(es) no existen en Map OLT. {detalle}",
+        )
+
+    # 1. Liberar las conexiones y las fibras previas del nodo (ya está todo
+    #    resuelto: aquí no se puede perder ninguna conexión).
+    empalmes_previos = db.query(logica.FtthEmpalme).filter(logica.FtthEmpalme.nodo_id == elem_id).all()
+    fibras_previas = set()
+    for emp in empalmes_previos:
+        if emp.fibra_a_id and emp.fibra_a_id > 0:
+            fibras_previas.add(emp.fibra_a_id)
+        if emp.fibra_b_id and emp.fibra_b_id > 0:
+            fibras_previas.add(emp.fibra_b_id)
+        db.delete(emp)
+    db.flush()
+
+    for fid in fibras_previas:
+        f_rec = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == fid).first()
+        if f_rec and f_rec.estado == "ocupado":
+            f_rec.estado = "libre"
+
+    # 2. Crear las conexiones resueltas
+    guardados = []
+    puertos_ocupados = set()
+    fibras_ocupadas = set()
+
+    for resuelta in resueltas:
+        if resuelta["tipo"] == "jumper":
+            p_origen = resuelta["puerto_a"]
+            p_destino = resuelta["puerto_b"]
+            emp = logica.FtthEmpalme(
+                proyecto_id=caja.proyecto_id,
+                nodo_id=elem_id,
+                fibra_a_id=-p_origen,
+                puerto_id=p_destino,
+                tipo="jumper",
+                extremo_a="entrada",
+                extremo_b="salida",
+                etiqueta="Jumper OLT-ODF" if resuelta["origen"] else "Jumper",
+                propiedades={
+                    "origen": "pop_gestor_v25",
+                    "tipo_enlace": "jumper",
+                    "puerto_origen_id": p_origen,
+                    "puerto_destino_id": p_destino,
+                    "fromFace": resuelta["cara_a"],
+                    "toFace": resuelta["cara_b"],
+                    "fromType": resuelta["from_type"],
+                    "toType": resuelta["to_type"],
+                    "isOrigin": resuelta["origen"],
+                    "signal": resuelta["senal"],
+                }
+            )
+            db.add(emp)
+            puertos_ocupados.update({p_origen, p_destino})
+            guardados.append(emp)
+
+        elif resuelta["tipo"] == "conector":
+            fid = resuelta["fibra"]
+            pid = resuelta["puerto"]
+            emp = logica.FtthEmpalme(
+                proyecto_id=caja.proyecto_id,
+                nodo_id=elem_id,
+                fibra_a_id=fid,
+                puerto_id=pid,
+                tipo="conector",
+                extremo_a=resuelta["extremo"],
+                extremo_b="salida",
+                etiqueta="Conector ODF-Fibra",
+                propiedades={
+                    "origen": "pop_gestor_v25",
+                    "tipo_enlace": "conector",
+                    "puerto_id": pid,
+                    "fibra_id": fid,
+                    # Orientación real del tramo: sin ella la trazabilidad
+                    # reaparecía invertida al recargar el armario.
+                    "desde_fibra": resuelta["desde_fibra"],
+                    "fromFace": resuelta["cara_a"],
+                    "toFace": resuelta["cara_b"],
+                    "fromType": resuelta["from_type"],
+                    "toType": resuelta["to_type"],
+                    "isOrigin": resuelta["origen"],
+                    "signal": resuelta["senal"],
+                }
+            )
+            db.add(emp)
+            puertos_ocupados.add(pid)
+            fibras_ocupadas.add(fid)
+            guardados.append(emp)
+
+            f_rec = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == fid).first()
+            if f_rec:
+                f_rec.estado = "ocupado"
+
+        elif resuelta["tipo"] == "fusion":
+            fa = resuelta["fibra_a"]
+            fb = resuelta["fibra_b"]
+            emp = logica.FtthEmpalme(
+                proyecto_id=caja.proyecto_id,
+                nodo_id=elem_id,
+                fibra_a_id=fa,
+                fibra_b_id=fb,
+                tipo="paso",
+                extremo_a=resuelta["extremo_a"],
+                extremo_b=resuelta["extremo_b"],
+                etiqueta="Fusión Fibra-Fibra",
+                propiedades={
+                    "origen": "pop_gestor_v25",
+                    "tipo_enlace": "fusion",
+                    "isOrigin": resuelta["origen"],
+                    "signal": resuelta["senal"],
+                }
+            )
+            db.add(emp)
+            fibras_ocupadas.update({fa, fb})
+            guardados.append(emp)
+
+            for fid in (fa, fb):
+                f_rec = db.query(logica.FtthCableFibra).filter(logica.FtthCableFibra.id == fid).first()
+                if f_rec:
+                    f_rec.estado = "ocupado"
+
+    db.flush()
+
+    # 3. Actualizar estados de puertos del nodo
+    todos_puertos = db.query(logica.FtthPuerto).filter(logica.FtthPuerto.elemento_id == elem_id).all()
+    for p in todos_puertos:
+        nuevo_estado = "ocupado" if p.id in puertos_ocupados else "libre"
+        if p.estado != nuevo_estado:
+            p.estado = nuevo_estado
+
+    # 4. Actualizar estados de fibras
+    if fibras_ocupadas:
+        db.query(logica.FtthCableFibra).filter(
+            logica.FtthCableFibra.id.in_(list(fibras_ocupadas))
+        ).update({"estado": "ocupado"}, synchronize_session=False)
+
+    db.commit()
+    return {"status": "ok", "guardadas": len(guardados), "total": len(lista)}

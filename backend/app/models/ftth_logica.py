@@ -628,10 +628,24 @@ def recalcular_cables_del_poste(db, poste, lon_antes=None, lat_antes=None):
                           for p in ruta)
 
         # La prueba definitiva: vértices del cable EN la posición vieja del poste
+        es_extremo_a = _to_int(cable.extremo_A_id) == objetivo
+        es_extremo_b = _to_int(cable.extremo_B_id) == objetivo
+        en_extremo = es_extremo_a or es_extremo_b
+
+        # La prueba definitiva: vertices del cable EN la posicion vieja del elemento
         nuevas, movidos = mover_vertices_del_poste(
             coords, lon_antes, lat_antes, poste.lon, poste.lat)
-        if not en_ruta and not movidos:
-            continue   # este cable no pasa por este poste
+        if not en_ruta and not en_extremo and not movidos:
+            continue   # este cable no pasa por este elemento
+
+        if not movidos and en_extremo and coords:
+            nuevas = [list(c) for c in coords]
+            if es_extremo_a and len(nuevas) > 0:
+                nuevas[0] = [poste.lon, poste.lat]
+                movidos += 1
+            if es_extremo_b and len(nuevas) > 0:
+                nuevas[-1] = [poste.lon, poste.lat]
+                movidos += 1
 
         if ruta:
             # (a) Ruta explicita: se rearma completa con los postes EN VIVO

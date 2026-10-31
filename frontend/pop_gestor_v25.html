@@ -601,6 +601,10 @@ body.torchlock .conn:not(.lit){opacity:.25}
     <div class="bd">
       <div><label>Gabinete</label><select id="eqCab"></select></div>
       <div><label>Tipo de equipo</label><select id="eqTipo"><option value="OLT">OLT</option><option value="ODF">ODF</option><option value="SWITCH">Switch</option><option value="SPLITTER">Splitter</option></select></div>
+      <div id="eqCatalogoGroup" style="display:none;margin-top:2px;">
+        <label>Modelo / Plantilla (Tipos de Objetos)</label>
+        <select id="eqCatalogoTipo" onchange="onCatalogoTipoChange()"></select>
+      </div>
       <div id="eqSplit" style="display:none;gap:10px;flex-direction:column"><div><label>Clase de splitter</label><select id="eqClase"><option value="AF">AF · Primario (feeder): recibe de PON o calle</option><option value="AC">AC · Cliente: cuelga de un AF</option></select></div><div><label>Modelo (balanceado)</label><select id="eqRatio"></select></div></div>
       <div><label>Nombre</label><input id="eqNombre" required placeholder="Ej. OLT 2"></div>
       <div><label>Etiqueta (opcional)</label><input id="eqEtiqueta" placeholder="Ej. Nodo Norte"></div>
@@ -1708,18 +1712,76 @@ function openModal(){
   $('equipmentModal').classList.remove('hidden');
 }
 const closeModal=()=>$('equipmentModal').classList.add('hidden');
+function onCatalogoTipoChange(){
+  const sel=$('eqCatalogoTipo');
+  if(!sel||!sel.value)return;
+  const t=$('eqTipo').value, catKey=t==='SWITCH'?'switches':t.toLowerCase();
+  const list=(window.catalogTypes&&window.catalogTypes[catKey])||[];
+  const el=list.find(x=>String(x.id)===String(sel.value));
+  if(!el)return;
+  const p=el.propiedades||{};
+  $('eqNombre').value=el.nombre_id||p.codigo||`${t} 1`;
+  if(p.tamano&&$('eqTamano'))$('eqTamano').value=String(p.tamano);
+  if(t==='SPLITTER'){
+    const div=p.relacion_division||p.division||'1x8';
+    const r=parseInt(div.split('x')[1])||8;
+    if($('eqRatio'))$('eqRatio').value=String(r);
+    if(p.clase&&$('eqClase'))$('eqClase').value=p.clase;
+  }
+}
+
+async function cargarCatalogoParaTipo(catKey){
+  if(window.catalogTypes&&window.catalogTypes[catKey]&&window.catalogTypes[catKey].length)return window.catalogTypes[catKey];
+  try{
+    const res=await fetch('/api/tipos/'+catKey+'?proyecto_id=1');
+    if(res.ok){
+      const data=await res.json();
+      window.catalogTypes=window.catalogTypes||{};
+      window.catalogTypes[catKey]=data;
+      return data;
+    }
+  }catch(_){}
+  return (window.catalogTypes&&window.catalogTypes[catKey])||[];
+}
+
 function syncAddModal(){
   const t=$('eqTipo').value,sp=t==='SPLITTER';
   $('eqSplit').style.display=sp?'flex':'none';
   if(!$('eqRatio').options.length)$('eqRatio').innerHTML=SPLIT_MODELS.map(n=>`<option value="${n}" ${n===8?'selected':''}>1:${n} · ${SPLIT_LOSS[n].toFixed(1)} dB</option>`).join('');
   if(!$('eqEstado').options.length)$('eqEstado').innerHTML=ESTADOS.map(x=>`<option>${x}</option>`).join('');
   if(sp&&(!$('eqNombre').value||/^Splitter (AF|AC) 1:\d+$/.test($('eqNombre').value)))$('eqNombre').value=splitName($('eqClase').value,$('eqRatio').value);
+
+  const catKey=t==='SWITCH'?'switches':t.toLowerCase();
+  cargarCatalogoParaTipo(catKey).then(list=>{
+    const sel=$('eqCatalogoTipo');
+    if(!sel)return;
+    if(list&&list.length){
+      sel.innerHTML='<option value="">-- Seleccionar plantilla de ' + t + ' (' + list.length + ') --</option>'
+        + list.map(item=>{
+          const p=item.propiedades||{};
+          let det='';
+          if(t==='OLT'){
+            det=` (${p.puertos_pon||8} PON, ${p.puertos_sfp||2} SFP · ${p.tamano||1}U)`;
+          } else if(t==='SWITCH'||t==='ODF'){
+            det=` (${p.puertos||24}P · ${p.tamano||1}U)`;
+          } else if(t==='SPLITTER'){
+            det=` (${p.relacion_division||p.division||'1x8'})`;
+          }
+          return `<option value="${item.id}">${escapeMatrixText(item.nombre_id||p.codigo||`Tipo #${item.id}`)}${det}</option>`;
+        }).join('');
+      $('eqCatalogoGroup').style.display='block';
+    } else {
+      sel.innerHTML='<option value="">(No hay plantillas de ' + t + ' en Tipos de Objetos)</option>';
+      $('eqCatalogoGroup').style.display='block';
+    }
+  });
 }
 function handleSaveEquipment(e){
   e.preventDefault();
   const cabId=$('eqCab').value,cab=cabById(cabId),size=parseInt($('eqTamano').value);
   if(cabUsed(cabId)+size>cab.u){toast(`${cab.nombre} no tiene espacio: ${cab.u-cabUsed(cabId)}U libres y el equipo necesita ${size}U. Elige otro gabinete.`,'err');return;}
-  const tipo=$('eqTipo').value,ne={id:Date.now(),cabId,tipo,nombre:$('eqNombre').value,tamano:size,faceBExpanded:false,etiqueta:$('eqEtiqueta').value.trim(),estado:$('eqEstado').value};
+  const catTipoId = $('eqCatalogoTipo') && $('eqCatalogoTipo').value ? Number($('eqCatalogoTipo').value) : null;
+  const tipo=$('eqTipo').value,ne={id:Date.now(),cabId,tipo,tipo_id:catTipoId,nombre:$('eqNombre').value,tamano:size,faceBExpanded:false,etiqueta:$('eqEtiqueta').value.trim(),estado:$('eqEstado').value};
   if(tipo==='SPLITTER'){ne.clase=$('eqClase').value;ne.ratio=parseInt($('eqRatio').value);ne.loss=null;ne.nota='';}
   equipmentData.push(ne);
   currentCabId=cabId;updateUI();closeModal();$('equipmentForm').reset();

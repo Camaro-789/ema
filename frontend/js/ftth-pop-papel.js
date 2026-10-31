@@ -16,6 +16,37 @@ const FTTHPopPapel = (() => {
   let splitterTypes = [];
   let catalogTypes = {};
   let cablePositions = {};
+  let devicePositions = {};
+  let openBuffers = new Set();
+
+  function storageKeyCaja() {
+    return current && current.id ? `mapolt_pop_caja_state_${current.id}` : null;
+  }
+
+  function guardarEstadoCaja() {
+    const key = storageKeyCaja();
+    if (!key) return;
+    try {
+      const state = {
+        cablePositions,
+        devicePositions,
+        openBuffers: Array.from(openBuffers),
+        activeTab,
+        zoom
+      };
+      localStorage.setItem(key, JSON.stringify(state));
+    } catch (e) {
+      console.warn('Error guardando estado de caja/manga:', e);
+    }
+  }
+
+  function cargarEstadoCaja(id) {
+    try {
+      const raw = localStorage.getItem(`mapolt_pop_caja_state_${id}`);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+  }
   let connectionSelection = null;
   let v25Frame = null;
   let v25MessageBound = false;
@@ -54,9 +85,16 @@ const FTTHPopPapel = (() => {
     if (esArmario) {
       root.innerHTML = `
         <div class="pop-paper-v25-host" role="dialog" aria-modal="true" aria-label="POP HTML v25">
+          <button type="button" class="pop-paper-v25-save" id="pop-v25-host-save" style="position:absolute;top:10px;right:96px;z-index:100;height:30px;padding:0 14px;background:#16a34a;color:#fff;border:1px solid #15803d;font-weight:700;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;letter-spacing:0.04em;">💾 GUARDAR</button>
           <button type="button" class="pop-paper-v25-close" data-action="close">CERRAR</button>
           <iframe class="pop-paper-v25-frame" src="pop_gestor_v25.html?armario=${encodeURIComponent(current.id)}" title="POP gestor v25"></iframe>
         </div>`;
+      root.querySelector('#pop-v25-host-save')?.addEventListener('click', () => {
+        const frame = root.querySelector('.pop-paper-v25-frame');
+        if (frame && frame.contentWindow) {
+          frame.contentWindow.postMessage({ source: 'mapolt-pop-v25-parent', type: 'trigger-save' }, window.location.origin);
+        }
+      });
       root.querySelector('[data-action="close"]').addEventListener('click', cerrar);
       conectarV25(root.querySelector('.pop-paper-v25-frame'));
       return;
@@ -68,11 +106,22 @@ const FTTHPopPapel = (() => {
         window.addEventListener('message', recibirMensajeV25);
         v25MessageBound = true;
       }
-      frame.addEventListener('load', () => {
-        const script = frame.contentDocument.createElement('script');
-        script.src = `js/pop-v25-mapolt-bridge.js?v=202610271946`;
-        frame.contentDocument.body.appendChild(script);
-      }, { once: true });
+      const inyectarPuente = () => {
+        const doc = frame.contentDocument;
+        if (!doc || !doc.body) return;
+        if (doc.getElementById('pop-v25-bridge-mapolt')) return;
+        const script = doc.createElement('script');
+        script.id = 'pop-v25-bridge-mapolt';
+        // v202610281200: resuelve los IDs reales de Map OLT de cada extremo y
+        // autoguarda también la trazabilidad (origen/quitar origen).
+        script.src = 'js/pop-v25-mapolt-bridge.js?v=202610282130';
+        doc.body.appendChild(script);
+      };
+      frame.addEventListener('load', inyectarPuente, { once: true });
+      // Si el iframe ya estaba cargado (caché), el evento `load` no vuelve.
+      if (frame.contentDocument && frame.contentDocument.readyState === 'complete') {
+        inyectarPuente();
+      }
     }
 
     async function prepararDatosV25() {
@@ -96,6 +145,17 @@ const FTTHPopPapel = (() => {
       v25Frame.contentWindow.postMessage({ source: 'mapolt-pop-v25-parent', type: 'init', payload: datos }, window.location.origin);
     }
 
+    /** Devuelve al HTML v25 el resultado REAL del guardado (ok / error). */
+    function responderV25(requestId, payload) {
+      if (!v25Frame || !v25Frame.contentWindow) return;
+      v25Frame.contentWindow.postMessage({
+        source: 'mapolt-pop-v25-parent',
+        type: 'save-result',
+        requestId: requestId || null,
+        payload: payload || {},
+      }, window.location.origin);
+    }
+
     async function recibirMensajeV25(event) {
       if (!v25Frame || event.source !== v25Frame.contentWindow || event.origin !== window.location.origin) return;
       const message = event.data || {};
@@ -113,6 +173,22 @@ const FTTHPopPapel = (() => {
         if (message.type === 'connection-add') {
           await guardarConexionV25(message.payload || {});
           await enviarDatosV25();
+          return;
+        }
+        if (message.type === 'sync-connections') {
+          const payload = message.payload || {};
+          try {
+            const data = await sincronizarConexionesV25(payload);
+            responderV25(message.requestId, {
+              ok: true,
+              guardadas: Number(data.guardadas) || 0,
+              total: (payload.conexiones || []).length,
+            });
+          } catch (error) {
+            responderV25(message.requestId, { ok: false, error: error.message });
+            mostrarAviso(error.message, 'error');
+          }
+          return;
         }
       } catch (error) {
         mostrarAviso(error.message, 'error');
@@ -124,21 +200,32 @@ const FTTHPopPapel = (() => {
       const categoria = tipo === 'SWITCH' ? 'switches' : tipo.toLowerCase();
       const tipos = catalogTypes[categoria] || [];
       const ratio = Number(payload.ratio) || 8;
-      const plantilla = tipos.find(item => {
-        const props = item.propiedades || {};
-        const clase = String(props.clase || '').toUpperCase();
-        const salidas = Number(props.salidas) || Number(String(props.relacion_division || '').split('x')[1]);
-        return tipo !== 'SPLITTER' || (clase === String(payload.clase || '').toUpperCase() && salidas === ratio);
-      }) || tipos[0];
+      let plantilla = null;
+      if (payload.tipo_id) {
+        plantilla = tipos.find(item => Number(item.id) === Number(payload.tipo_id)) || null;
+      }
+      if (!plantilla) {
+        plantilla = tipos.find(item => {
+          const props = item.propiedades || {};
+          const clase = String(props.clase || '').toUpperCase();
+          const salidas = Number(props.salidas) || Number(String(props.relacion_division || '').split('x')[1]);
+          return tipo !== 'SPLITTER' || (clase === String(payload.clase || '').toUpperCase() && salidas === ratio);
+        }) || tipos[0];
+      }
+      const tipoId = payload.tipo_id ? Number(payload.tipo_id) : (plantilla ? Number(plantilla.id) : null);
+      const propsPlantilla = (plantilla && plantilla.propiedades) || {};
+      const puertosOut = tipo === 'SPLITTER'
+        ? ratio
+        : (propsPlantilla.puertos_pon ? Number(propsPlantilla.puertos_pon) : null)
+          || Number(propsPlantilla.cantidad_puertos)
+          || Number(propsPlantilla.puertos)
+          || (tipo === 'OLT' ? 8 : 24);
+
       const body = {
         tipo: tipo === 'SWITCH' ? 'switch' : tipo.toLowerCase(),
-        tipo_id: plantilla ? Number(plantilla.id) : null,
+        tipo_id: tipoId,
         division: tipo === 'SPLITTER' ? `1x${ratio}` : null,
-        puertos_out: tipo === 'SPLITTER'
-          ? ratio
-          : Number((plantilla && plantilla.propiedades || {}).cantidad_puertos)
-            || Number((plantilla && plantilla.propiedades || {}).puertos)
-            || (tipo === 'OLT' ? 8 : 24),
+        puertos_out: puertosOut,
         serie: payload.nombre || undefined,
         estado: payload.estado || 'Implementado',
       };
@@ -153,23 +240,72 @@ const FTTHPopPapel = (() => {
       return data;
     }
 
+    async function sincronizarConexionesV25(payload) {
+      const total = (payload.conexiones || []).length;
+      const response = await fetch(apiUrl(`/api/elementos/${current.id}/conexiones-sincronizar`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detalle = typeof data.detail === 'string' ? data.detail : '';
+        throw new Error(detalle || 'No se pudieron sincronizar las conexiones.');
+      }
+      const guardadas = Number(data.guardadas) || 0;
+      if (guardadas < total) {
+        throw new Error(`Map OLT guardó ${guardadas} de ${total} conexión(es). `
+          + 'Revisa que los puertos e hilos existan en el armario.');
+      }
+      console.log('[v25-bridge] Conexiones sincronizadas:', data);
+      return data;
+    }
+
     async function guardarConexionV25(payload) {
       const from = payload.from || {};
       const to = payload.to || {};
-      const cable = from.mapoltFibraId ? from : to.mapoltFibraId ? to : null;
-      const other = cable === from ? to : from;
-      if (!cable || (!other.mapoltPortId && !other.mapoltFibraId)) {
-        throw new Error('La conexión v25 no corresponde a un hilo y un puerto/hilo real de Map OLT.');
+      const portA = from.mapoltPortId ? Number(from.mapoltPortId) : null;
+      const portB = to.mapoltPortId ? Number(to.mapoltPortId) : null;
+      const fiberA = from.mapoltFibraId ? Number(from.mapoltFibraId) : null;
+      const fiberB = to.mapoltFibraId ? Number(to.mapoltFibraId) : null;
+
+      let body;
+      if (portA && portB) {
+        body = {
+          puerto_origen_id: portA,
+          puerto_id: portB,
+          tipo: 'jumper',
+          propiedades: {
+            origen: 'pop_gestor_v25',
+            tipo_enlace: 'jumper',
+            puerto_origen_id: portA,
+            puerto_destino_id: portB,
+          }
+        };
+      } else if ((fiberA && portB) || (fiberB && portA)) {
+        const fid = fiberA || fiberB;
+        const pid = portB || portA;
+        const ext = fiberA ? (from.mapoltExtremo || 'A') : (to.mapoltExtremo || 'B');
+        body = {
+          fibra_a_id: fid,
+          extremo_a: ext,
+          puerto_id: pid,
+          tipo: 'conector',
+          propiedades: { origen: 'pop_gestor_v25', puerto_id: pid, fibra_id: fid }
+        };
+      } else if (fiberA && fiberB) {
+        body = {
+          fibra_a_id: fiberA,
+          extremo_a: from.mapoltExtremo || 'A',
+          fibra_b_id: fiberB,
+          extremo_b: to.mapoltExtremo || 'B',
+          tipo: 'paso',
+          propiedades: { origen: 'pop_gestor_v25' }
+        };
+      } else {
+        throw new Error('La conexión v25 no corresponde a puertos o fibras válidas de Map OLT.');
       }
-      const body = {
-        fibra_a_id: Number(cable.mapoltFibraId),
-        extremo_a: cable.mapoltExtremo || 'A',
-        puerto_id: other.mapoltPortId ? Number(other.mapoltPortId) : null,
-        fibra_b_id: other.mapoltFibraId ? Number(other.mapoltFibraId) : null,
-        extremo_b: other.mapoltExtremo || 'B',
-        tipo: other.mapoltPortId ? 'conector' : 'paso',
-        propiedades: { origen: 'pop_gestor_v25' },
-      };
+
       const response = await fetch(apiUrl(`/api/elementos/${current.id}/empalmes`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -177,7 +313,7 @@ const FTTHPopPapel = (() => {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'No se pudo guardar la conexión del HTML v25.');
-      mostrarAviso('Conexión guardada en Map OLT.', 'success');
+      mostrarAviso('✓ Conexión guardada en Map OLT.', 'success');
       return data;
     }
     root.innerHTML = `
@@ -273,9 +409,10 @@ const FTTHPopPapel = (() => {
         const outputs = ports.filter(port => port.direccion === 'OUT');
         const rows = outputs.length || Number(device.puertos_out) || (visualType === 'OLT' ? 8 : visualType === 'SWITCH' ? 12 : visualType === 'ODF' ? 24 : 1);
         const input = inputs[0] || { direccion: 'IN', puerto_no: 1, estado: 'libre' };
-        const position = nodeData.posiciones && nodeData.posiciones[device.id]
+        const savedDevPos = devicePositions[device.id];
+        const position = savedDevPos || (nodeData.posiciones && nodeData.posiciones[device.id]
           ? nodeData.posiciones[device.id]
-          : { x: 470 + (index % 2) * 290, y: 120 + Math.floor(index / 2) * 360 };
+          : { x: 470 + (index % 2) * 290, y: 120 + Math.floor(index / 2) * 360 });
         const portRows = visualType === 'SPLITTER'
           ? Array.from({ length: rows }, (_, row) => `<div class="pop-paper-port-row">
               ${row === 0 ? `<span class="pop-paper-input-cell"><span>IN</span>${renderPort(input, 'left')}</span>` : '<span class="pop-paper-port-spacer"></span>'}
@@ -327,22 +464,84 @@ const FTTHPopPapel = (() => {
       const x = saved ? saved.x : (side === 'entrada' ? 45 : 920);
       const y = saved ? saved.y : 110 + index * 190;
       const fibers = cable.fibras || [];
-      const rows = fibers.slice(0, 24).map((fiber, row) => {
-        const color = fiber.color_hex || '#94a3b8';
-        const port = `${side === 'entrada' ? 'OUT' : 'IN'}-${fiber.global || row + 1}`;
-        return `<div class="pop-paper-cable-row">
-          <span class="pop-paper-cable-color" style="background:${esc(color)}"></span>
-          <span>${esc(fiber.nombre || `Hilo ${fiber.global || row + 1}`)}</span>
-          <span class="pop-paper-cable-port" data-port-type="cable" data-cable-id="${cable.id}" data-fibra-id="${fiber.fibra_id}" title="Punto de conexión ${esc(port)}"></span>
-        </div>`;
-      }).join('');
-      const extra = fibers.length > 24 ? `<div class="pop-paper-cable-more">+${fibers.length - 24} hilos</div>` : '';
-      return `<article class="pop-paper-cable pop-paper-cable--${side}" data-drag-item="cable" data-item-id="${cable.id}" style="left:${x}px;top:${y}px">
+
+      const EIA598_BUFFERS = [
+        { num: 1, name: 'Azul', hex: '#2563eb' },
+        { num: 2, name: 'Naranja', hex: '#ea580c' },
+        { num: 3, name: 'Verde', hex: '#16a34a' },
+        { num: 4, name: 'Marrón', hex: '#854d0e' },
+        { num: 5, name: 'Gris', hex: '#64748b' },
+        { num: 6, name: 'Blanco', hex: '#f8fafc', border: '#cbd5e1' },
+        { num: 7, name: 'Rojo', hex: '#dc2626' },
+        { num: 8, name: 'Negro', hex: '#09090b' },
+        { num: 9, name: 'Amarillo', hex: '#eab308' },
+        { num: 10, name: 'Violeta', hex: '#9333ea' },
+        { num: 11, name: 'Rosa', hex: '#ec4899' },
+        { num: 12, name: 'Aqua', hex: '#06b6d4' }
+      ];
+
+      let bodyContent = '';
+      if (fibers.length >= 12 || (cable.cable_tipo && cable.cable_tipo.estructura === "con_buffer")) {
+        const bufferSize = 12;
+        const numBuffers = Math.ceil(fibers.length / bufferSize);
+        for (let b = 0; b < numBuffers; b++) {
+          const bufInfo = EIA598_BUFFERS[b % 12];
+          const bNum = b + 1;
+          const bFibers = fibers.slice(b * bufferSize, (b + 1) * bufferSize);
+          const startHilo = b * bufferSize + 1;
+          const endHilo = Math.min((b + 1) * bufferSize, fibers.length);
+          const bKey = `${cable.id}-${bNum}`;
+          const isCollapsed = !openBuffers.has(bKey);
+
+          const rows = bFibers.map((fiber, idx) => {
+            const color = fiber.color_hex || EIA598_BUFFERS[idx % 12].hex;
+            const globalNum = startHilo + idx;
+            const padB = String(bNum).padStart(2, '0');
+            const padH = String(idx + 1).padStart(2, '0');
+            const port = `${side === 'entrada' ? 'OUT' : 'IN'}-${globalNum}`;
+            const label = `H${globalNum} (B${padB}-H${padH}) · ${esc(fiber.color || EIA598_BUFFERS[idx % 12].name)}`;
+            return `<div class="pop-paper-cable-row">
+              <span class="pop-paper-cable-color" style="background:${esc(color)}"></span>
+              <span>${label}</span>
+              <span class="pop-paper-cable-port" data-port-type="cable" data-cable-id="${cable.id}" data-fibra-id="${fiber.fibra_id}" title="Punto de conexión ${esc(port)}"></span>
+            </div>`;
+          }).join('');
+
+          // Franja continua de 6px en el borde izquierdo de todo el bloque del buffer
+          bodyContent += `
+            <div class="pop-paper-buffer-block" data-cable-id="${cable.id}" data-buffer="${bNum}" style="border-left: 6px solid ${bufInfo.hex}; border-top: 1.5px solid #0f172a; border-bottom: 1.5px solid #0f172a; margin-bottom: -1.5px; background: #fff;">
+              <div class="pop-paper-buffer-head ${isCollapsed ? 'collapsed' : ''}" style="border-bottom: ${isCollapsed ? 'none' : '1px solid #e2e8f0'};" onclick="FTTHPopPapel.toggleBufferUI(this)">
+                <div class="pop-paper-buffer-title">
+                  <span class="buffer-arrow">${isCollapsed ? '▶' : '▼'}</span>
+                  <span>BUFFER ${bNum} · ${bufInfo.name.toUpperCase()}</span>
+                </div>
+                <span class="pop-paper-buffer-tag">H${startHilo}–H${endHilo}</span>
+              </div>
+              <div class="pop-paper-buffer-rows" style="${isCollapsed ? 'display:none;' : ''}">
+                ${rows}
+              </div>
+            </div>
+          `;
+        }
+      } else {
+        const rows = fibers.map((fiber, row) => {
+          const color = fiber.color_hex || '#94a3b8';
+          const port = `${side === 'entrada' ? 'OUT' : 'IN'}-${fiber.global || row + 1}`;
+          return `<div class="pop-paper-cable-row">
+            <span class="pop-paper-cable-color" style="background:${esc(color)}"></span>
+            <span>${esc((fiber.nombre || "").replace(/^T(\\d+)-H(\\d+)/, "B$1-H$2") || `Hilo ${fiber.global || row + 1}`)}</span>
+            <span class="pop-paper-cable-port" data-port-type="cable" data-cable-id="${cable.id}" data-fibra-id="${fiber.fibra_id}" title="Punto de conexión ${esc(port)}"></span>
+          </div>`;
+        }).join('');
+        bodyContent = rows || '<span class="pop-paper-cable-empty">Sin hilos declarados</span>';
+      }
+
+      return `<article class="pop-paper-cable pop-paper-cable--${side}" data-drag-item="cable" data-item-id="${cable.id}" style="left:${x}px;top:${y}px;width:260px">
         <div class="pop-paper-cable-head">
           <b>▰ ${esc(cable.nombre)}</b>
           <small>CABLE REAL · ${fibers.length} HILOS · ${side.toUpperCase()}</small>
         </div>
-        <div class="pop-paper-cable-body">${rows || '<span class="pop-paper-cable-empty">Sin hilos declarados</span>'}${extra}</div>
+        <div class="pop-paper-cable-body" style="max-height:none; overflow:visible;">${bodyContent}</div>
       </article>`;
     }
 
@@ -432,6 +631,7 @@ const FTTHPopPapel = (() => {
     modal.querySelectorAll('[data-tab]').forEach(button => {
       button.addEventListener('click', () => {
         activeTab = button.dataset.tab;
+        guardarEstadoCaja();
         render();
       });
     });
@@ -536,7 +736,11 @@ const FTTHPopPapel = (() => {
           const top = dragging.top + dy;
           dragging.element.style.left = `${left}px`;
           dragging.element.style.top = `${top}px`;
-          if (dragging.kind === 'cable') cablePositions[dragging.id] = { x: left, y: top };
+          if (dragging.kind === 'cable') {
+            cablePositions[dragging.id] = { x: left, y: top };
+          } else if (dragging.kind === 'device') {
+            devicePositions[dragging.id] = { x: left, y: top };
+          }
           event.preventDefault();
           return;
         }
@@ -544,7 +748,21 @@ const FTTHPopPapel = (() => {
         world.parentElement.scrollTop = dragging.top - (event.clientY - dragging.y);
       });
       world.addEventListener('pointerup', () => {
-        if (dragging && dragging.element) dragging.element.classList.remove('is-dragging');
+        if (dragging && dragging.element) {
+          dragging.element.classList.remove('is-dragging');
+          if (dragging.kind === 'cable') {
+            cablePositions[dragging.id] = {
+              x: Number.parseFloat(dragging.element.style.left) || 0,
+              y: Number.parseFloat(dragging.element.style.top) || 0
+            };
+          } else if (dragging.kind === 'device') {
+            devicePositions[dragging.id] = {
+              x: Number.parseFloat(dragging.element.style.left) || 0,
+              y: Number.parseFloat(dragging.element.style.top) || 0
+            };
+          }
+          guardarEstadoCaja();
+        }
         dragging = null;
       });
       world.addEventListener('pointercancel', () => {
@@ -749,6 +967,7 @@ const FTTHPopPapel = (() => {
     zoom = Math.min(2.5, Math.max(0.25, value));
     applyZoom();
     dibujarConexiones();
+    guardarEstadoCaja();
   }
 
   function dibujarConexiones() {
@@ -793,27 +1012,44 @@ const FTTHPopPapel = (() => {
     if (world) world.style.transform = `scale(${zoom})`;
   }
 
+  function toggleBufferUI(headerEl) {
+    const block = headerEl.closest('.pop-paper-buffer-block');
+    if (!block) return;
+    const cableId = block.dataset.cableId;
+    const bNum = block.dataset.buffer;
+    const bKey = `${cableId}-${bNum}`;
+    const rows = block.querySelector('.pop-paper-buffer-rows');
+    const arrow = block.querySelector('.buffer-arrow');
+    if (openBuffers.has(bKey)) {
+      openBuffers.delete(bKey);
+      headerEl.classList.add('collapsed');
+      if (rows) rows.style.display = 'none';
+      if (arrow) arrow.textContent = '▶';
+      headerEl.style.borderBottom = 'none';
+    } else {
+      openBuffers.add(bKey);
+      headerEl.classList.remove('collapsed');
+      if (rows) rows.style.display = '';
+      if (arrow) arrow.textContent = '▼';
+      headerEl.style.borderBottom = '1px solid #e2e8f0';
+    }
+    guardarEstadoCaja();
+    dibujarConexiones();
+  }
+
   function abrir(id, opciones = {}) {
     // Fase 1.4: con el interruptor apagado no se abre ningún diagrama.
     if (window.FTTH_FLAGS && window.FTTH_FLAGS.pop_v25_enabled === false) return;
-    // Fase 5.1: el ARMARIO abre el módulo nativo (sin iframe ni puente).
-    // Con POP_NATIVO_EN_ARMARIO=0 vuelve al puente de abajo, que sigue intacto.
     const esArmario = String(opciones.categoria || '').toLowerCase() === 'armario';
-    if (esArmario
-        && window.FTTH_FLAGS && window.FTTH_FLAGS.pop_nativo_en_armario !== false
-        && window.POPNativo && typeof window.POPNativo.abrir === 'function') {
-      window.POPNativo.abrir(id, {
-        categoria: opciones.categoria,
-        tipoNombre: opciones.tipoNombre,
-      });
-      return;
-    }
     current = { id, ...opciones };
+    const saved = cargarEstadoCaja(id);
     nodeData = null;
-    activeTab = 'rack';
-    zoom = 1;
+    activeTab = (saved && saved.activeTab) ? saved.activeTab : 'rack';
+    zoom = (saved && saved.zoom) ? saved.zoom : 1;
     torchDirection = null;
-    cablePositions = {};
+    cablePositions = (saved && saved.cablePositions) ? saved.cablePositions : {};
+    devicePositions = (saved && saved.devicePositions) ? saved.devicePositions : {};
+    openBuffers = new Set((saved && saved.openBuffers) ? saved.openBuffers : []);
     connectionSelection = null;
     ensureModal().classList.remove('hidden');
     render();
@@ -825,7 +1061,7 @@ const FTTHPopPapel = (() => {
     dragging = null;
   }
 
-  return { abrir, cerrar };
+  return { abrir, cerrar, toggleBufferUI };
 })();
 
 window.FTTHPopPapel = FTTHPopPapel;

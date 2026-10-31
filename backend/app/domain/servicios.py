@@ -104,9 +104,11 @@ def _dto_equipo(equipo) -> Dict[str, Any]:
     }
 
 
-def _generar_puertos(db, elemento, equipo, tipo: str, salidas: int) -> List[Dict[str, Any]]:
+def _generar_puertos(db, elemento, equipo, tipo: str, salidas: int,
+                     props_tipo: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Puertos con la etiqueta que espera PORT_TABLE (PON/SFP/RJ45/OUT/ODF)."""
     creados = []
+    props = props_tipo or {}
 
     def anadir(direccion: str, numero: int, etiqueta: str, conector: Optional[str] = None):
         puerto = logica.FtthPuerto(
@@ -125,10 +127,35 @@ def _generar_puertos(db, elemento, equipo, tipo: str, salidas: int) -> List[Dict
         for numero in range(1, salidas + 1):
             anadir("BIDI", numero, f"ODF-{numero:02d}", "SC/APC")
     elif tipo == "olt":
-        for numero in range(1, salidas + 1):
-            anadir("OUT", numero, f"PON {numero}")
-        for numero in range(1, 3):
-            anadir("OUT", salidas + numero, f"SFP {numero}", "SFP")
+        if props and any(k in props for k in ("puertos_pon", "puertos_sfp", "puertos_rj45_datos", "slots_detalle")):
+            # Modelo enriquecido desde la plantilla de Tipos de Objetos
+            cant_pon = int(props.get("puertos_pon") or salidas or 8)
+            cant_sfp = int(props.get("puertos_sfp") if props.get("puertos_sfp") is not None else 2)
+            cant_rj45 = int(props.get("puertos_rj45_datos") if props.get("puertos_rj45_datos") is not None else 0)
+            tiene_mgmt = bool(props.get("puerto_mgmt", True))
+            tiene_console = bool(props.get("puerto_console", True))
+
+            p_no = 1
+            for i in range(1, cant_pon + 1):
+                anadir("OUT", p_no, f"PON {i}", "SC/UPC")
+                p_no += 1
+            for i in range(1, cant_sfp + 1):
+                anadir("OUT", p_no, f"SFP {i}", "SFP")
+                p_no += 1
+            for i in range(1, cant_rj45 + 1):
+                anadir("OUT", p_no, f"RJ45 {i}", "RJ45")
+                p_no += 1
+            if tiene_mgmt:
+                anadir("OUT", p_no, "RJ45 MGMT", "RJ45")
+                p_no += 1
+            if tiene_console:
+                anadir("OUT", p_no, "RJ45 CONSOLE", "RJ45")
+                p_no += 1
+        else:
+            for numero in range(1, salidas + 1):
+                anadir("OUT", numero, f"PON {numero}")
+            for numero in range(1, 3):
+                anadir("OUT", salidas + numero, f"SFP {numero}", "SFP")
     else:  # switch
         for numero in range(1, min(4, salidas) + 1):
             anadir("OUT", numero, f"SFP {numero}", "SFP")
@@ -316,11 +343,15 @@ def crear_dispositivo(db: Session, contenedor_id: int, datos: Dict[str, Any]) ->
     # El catálogo manda: si viene `tipo_id`, tiene que existir, ser del proyecto
     # y de la categoría correcta (así «+ EQUIPO» solo ofrece lo que hay en Tipos).
     _validar_tipo_equipo(db, elemento, datos.get("tipo_id"), tipo)
+    tipo_id = datos.get("tipo_id")
+    tipo_obj = db.query(fisicos.FtthTipo).filter(fisicos.FtthTipo.id == tipo_id).first() if tipo_id else None
+    props_tipo = (tipo_obj.propiedades or {}) if tipo_obj else {}
+
     division = _division(datos.get("division")) if tipo == "splitter" else None
     if tipo == "splitter" and not division:
         # El catálogo manda: si el tipo declara la división (propiedades o nombre),
         # no hace falta que el usuario la escriba otra vez.
-        division = _division_de_tipo(db, datos.get("tipo_id"))
+        division = _division_de_tipo(db, tipo_id)
     if tipo == "splitter" and not division:
         raise ErrorRegla("El splitter necesita su división (1x8, 1x16…).",
                          codigo="division_requerida")
@@ -331,9 +362,17 @@ def crear_dispositivo(db: Session, contenedor_id: int, datos: Dict[str, Any]) ->
             codigo="division_no_soportada",
         )
     salidas = _salidas(division, tipo, datos.get("puertos_out"))
+    if tipo == "olt" and props_tipo:
+        if props_tipo.get("puertos_pon"):
+            salidas = int(props_tipo["puertos_pon"])
+        elif props_tipo.get("slots_detalle"):
+            suma_pon = sum(int(s.get("puertos", 0)) for s in props_tipo.get("slots_detalle", []))
+            if suma_pon > 0:
+                salidas = suma_pon
+
     equipo = logica.FtthDispositivo(
         proyecto_id=elemento.proyecto_id, elemento_id=elemento.id,
-        bandeja_id=datos.get("bandeja_id"), tipo_id=datos.get("tipo_id"), tipo=tipo,
+        bandeja_id=datos.get("bandeja_id"), tipo_id=tipo_id, tipo=tipo,
         serie=datos.get("nombre") or datos.get("serie"), division=division,
         puertos_in=1 if tipo == "splitter" else 0, puertos_out=salidas,
         atenuacion_db=(datos.get("perdida_db") if datos.get("perdida_db") is not None
@@ -342,7 +381,7 @@ def crear_dispositivo(db: Session, contenedor_id: int, datos: Dict[str, Any]) ->
     )
     db.add(equipo)
     db.flush()
-    puertos = _generar_puertos(db, elemento, equipo, tipo, salidas)
+    puertos = _generar_puertos(db, elemento, equipo, tipo, salidas, props_tipo=props_tipo)
     return {"dispositivo": _dto_equipo(equipo), "puertos": puertos,
             "revision": revision(elemento)}
 

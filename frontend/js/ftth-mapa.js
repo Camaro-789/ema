@@ -749,10 +749,11 @@ const FTTHMapa = (() => {
             return;
           }
 
-          // ── Caso B: Poste — ofrecer opciones de paso o reserva ─────────
-          if (cat === 'poste') {
+          // ── Caso B: Poste o Armario — ofrecer opciones de paso o reserva ─────────
+          if (cat === 'poste' || cat === 'armario') {
+            const esArmario = cat === 'armario';
             const posteId = _ctxFeature.properties.id;
-            const posteNombre = _ctxFeature.properties.tipo_nombre || `Poste #${posteId}`;
+            const posteNombre = _ctxFeature.properties.tipo_nombre || (esArmario ? `Armario #${posteId}` : `Poste #${posteId}`);
             const ptLng = _ctxFeature.geometry.coordinates[0];
             const ptLat = _ctxFeature.geometry.coordinates[1];
 
@@ -774,7 +775,7 @@ const FTTHMapa = (() => {
               <div style="padding:6px 11px;font-size:11px;font-weight:700;color:#86868b;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(posteNombre)}</div>
               <hr style="border:none;border-top:1px solid #f0f0f2;margin:4px 0;">
               <button id="pm-anclar" style="width:100%;display:flex;align-items:center;gap:9px;padding:8px 11px;border:none;background:none;cursor:pointer;border-radius:6px;text-align:left;font-size:13px;color:#1d1d1f;font-weight:500;">
-                <i class="fa-solid fa-anchor" style="width:14px;text-align:center;color:#0071e3;"></i> Anclar al poste (con reserva)
+                <i class="fa-solid fa-anchor" style="width:14px;text-align:center;color:#0071e3;"></i> ${esArmario ? 'Anclar al armario (con reserva)' : 'Anclar al poste (con reserva)'}
               </button>
               <button id="pm-paso" style="width:100%;display:flex;align-items:center;gap:9px;padding:8px 11px;border:none;background:none;cursor:pointer;border-radius:6px;text-align:left;font-size:13px;color:#1d1d1f;font-weight:500;">
                 <i class="fa-solid fa-circle-dot" style="width:14px;text-align:center;color:#86868b;"></i> Solo marcar como punto de paso
@@ -800,8 +801,8 @@ const FTTHMapa = (() => {
             posteMenu.querySelector('#pm-anclar').addEventListener('click', () => {
               cerrarPosteMenu();
               _pulsarElemento(posteId);          // confirmación visual del clic
-              // El poste donde se ancla es el último vértice del trazado
-              finishCableTraceAtPoint([ptLng, ptLat], posteId, { poste: posteId }, 'poste');
+              // El elemento donde se ancla es el último vértice del trazado
+              finishCableTraceAtPoint([ptLng, ptLat], posteId, { poste: posteId }, cat);
             });
 
             posteMenu.querySelector('#pm-paso').addEventListener('click', () => {
@@ -1713,14 +1714,14 @@ const FTTHMapa = (() => {
             const nearby = map.queryRenderedFeatures(bbox, {
               layers: ['ftth-puntos-layer', 'ftth-postes-layer', 'ftth-labels-layer']
             });
-            // Si hay varias, se prefiere un poste (es lo que ata el trazado)
-            feat = nearby.find((f) => String((f.properties || {}).categoria).toLowerCase() === 'poste')
+            // Si hay varias, se prefiere un poste o armario (es lo que ata el trazado)
+            feat = nearby.find((f) => ['poste', 'armario'].includes(String((f.properties || {}).categoria).toLowerCase()))
                 || nearby[0] || null;
           }
 
           if (feat && feat.properties) {
             const catClic = (feat.properties.categoria || '').toLowerCase();
-            if (['poste', 'cajanap', 'manga', 'odf', 'olt'].includes(catClic)) {
+            if (['poste', 'cajanap', 'manga', 'odf', 'olt', 'armario'].includes(catClic)) {
               if (feat.geometry && feat.geometry.type === 'Point') {
                 ptLng = feat.geometry.coordinates[0];
                 ptLat = feat.geometry.coordinates[1];
@@ -1728,18 +1729,17 @@ const FTTHMapa = (() => {
               if (_pendingLine.length === 0) {
                 // Primer clic: este objeto es el ORIGEN del cable
                 _modoActivo.nodoInicioId = feat.properties.id;
-                // Su categoría decide si el cable se ancla solo (poste/ODF) o queda
+                // Su categoría decide si el cable se ancla solo (poste/ODF/armario) o queda
                 // pendiente (caja): ver CATS_CAJA_TRAZO.
                 _modoActivo.nodoInicioCategoria = catClic;
-              } else if (catClic === 'poste') {
-                // El trazado YA venía andando: este poste es un punto de paso
+              } else if (catClic === 'poste' || catClic === 'armario') {
+                // El trazado YA venía andando: este objeto es un punto de paso
                 _recordarPoste(feat.properties.id);
               }
               // Confirmación visual: el objeto «recibe» el trazado
               _pulsarElemento(feat.properties.id);
-              // El vértice es el POSTE (si es poste), así la geometría del cable
-              // seguirá su lat/lon cuando el poste se mueva
-              if (catClic === 'poste') pasoVertice = { poste: feat.properties.id };
+              // El vértice es el elemento (poste o armario)
+              if (catClic === 'poste' || catClic === 'armario') pasoVertice = { poste: feat.properties.id };
             }
           }
         }
@@ -1799,12 +1799,12 @@ const FTTHMapa = (() => {
         [e.point.x - 14, e.point.y - 14],
         [e.point.x + 14, e.point.y + 14]
       ];
-      const nearby = map.queryRenderedFeatures(bbox, { layers: ['ftth-labels-layer', 'ftth-postes-layer'] });
+      const nearby = map.queryRenderedFeatures(bbox, { layers: ['ftth-labels-layer', 'ftth-postes-layer', 'ftth-puntos-layer'] });
       const feat = nearby.length ? nearby[0] : null;
 
       if (feat && feat.properties) {
         const cat = String(feat.properties.categoria || '').toLowerCase();
-        if (['cajanap', 'manga', 'odf', 'olt', 'poste'].includes(cat)) {
+        if (['cajanap', 'manga', 'odf', 'olt', 'poste', 'armario'].includes(cat)) {
           const fid = feat.id || feat.properties.id;
           if (_hoveredNodeId !== fid) {
             if (_hoveredNodeId !== null) {

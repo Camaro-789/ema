@@ -71,8 +71,188 @@ const FTTHTipos = (() => {
       { v: '1x16', t: '1x16 - 16 salidas - 13.7 dB' },
       { v: '1x32', t: '1x32 - 32 salidas - 16.9 dB' },
       { v: '1x64', t: '1x64 - 64 salidas - 20.5 dB' }
+    ],
+    tecnologiaOlt: [
+      { v: 'GPON', t: 'GPON (ITU-T G.984 - 1:128)' },
+      { v: 'EPON', t: 'EPON (IEEE 802.3ah - 1:64)' },
+      { v: 'XG-PON', t: 'XG-PON (10G/2.5G)' },
+      { v: 'XGS-PON', t: 'XGS-PON (10G/10G simétrico)' }
+    ],
+    formatoOlt: [
+      { v: 'compacto', t: 'Compacto / Pizza-box (1U)' },
+      { v: 'modular', t: 'Modular con Slots (2U o más)' }
     ]
   };
+
+  const PRESETS_OLT = [
+    {
+      id: 'custom',
+      nombre: 'Personalizado / Manual',
+      marca: '',
+      modelo: '',
+      codigo: '',
+      tecnologia: 'GPON',
+      formato: 'compacto',
+      puertos_pon: 8,
+      puertos_sfp: 4,
+      puertos_rj45_datos: 4,
+      puerto_mgmt: true,
+      puerto_console: true,
+      maxClientes: 128,
+      potencia: 6,
+      tamano: 1,
+      numSlots: 1,
+      slots_detalle: [{ slot: 1, puertos: 8, indice: 1 }],
+      descripcion: ''
+    },
+    {
+      id: 'vsol_1600g0b',
+      nombre: 'V-SOL V1600G0-B (4P GPON, 1U)',
+      marca: 'V-SOL',
+      modelo: 'V1600G0-B',
+      codigo: 'VSOL-V1600G0-B',
+      tecnologia: 'GPON',
+      formato: 'compacto',
+      puertos_pon: 4,
+      puertos_sfp: 4,
+      puertos_rj45_datos: 2,
+      puerto_mgmt: true,
+      puerto_console: true,
+      maxClientes: 128,
+      potencia: 6,
+      tamano: 1,
+      numSlots: 1,
+      slots_detalle: [{ slot: 1, puertos: 4, indice: 1 }],
+      descripcion: 'OLT Pizza-box 1U GPON 4 puertos PON (hasta 512 ONUs), 4 SFP (2 GE + 2 10GE SFP+), 2 GE RJ45, 1 CONSOLE + 1 MGMT'
+    },
+    {
+      id: 'vsol_1600g1b',
+      nombre: 'V-SOL V1600G1-B (8P GPON, 1U)',
+      marca: 'V-SOL',
+      modelo: 'V1600G1-B',
+      codigo: 'VSOL-V1600G1-B',
+      tecnologia: 'GPON',
+      formato: 'compacto',
+      puertos_pon: 8,
+      puertos_sfp: 4,
+      puertos_rj45_datos: 4,
+      puerto_mgmt: true,
+      puerto_console: true,
+      maxClientes: 128,
+      potencia: 6,
+      tamano: 1,
+      numSlots: 1,
+      slots_detalle: [{ slot: 1, puertos: 8, indice: 1 }],
+      descripcion: 'OLT Pizza-box 1U GPON 8 puertos PON (hasta 1024 ONUs), 4 SFP/SFP+, 4 GE RJ45, 1 CONSOLE + 1 MGMT'
+    },
+    {
+      id: 'vsol_1600g2b',
+      nombre: 'V-SOL V1600G2-B (16P GPON, 1U)',
+      marca: 'V-SOL',
+      modelo: 'V1600G2-B',
+      codigo: 'VSOL-V1600G2-B',
+      tecnologia: 'GPON',
+      formato: 'compacto',
+      puertos_pon: 16,
+      puertos_sfp: 4,
+      puertos_rj45_datos: 4,
+      puerto_mgmt: true,
+      puerto_console: true,
+      maxClientes: 128,
+      potencia: 6,
+      tamano: 1,
+      numSlots: 1,
+      slots_detalle: [{ slot: 1, puertos: 16, indice: 1 }],
+      descripcion: 'OLT Pizza-box 1U GPON 16 puertos PON (hasta 2048 ONUs), 4 10GE SFP+, 4 GE RJ45, 1 CONSOLE + 1 MGMT'
+    },
+    {
+      id: 'vsol_1600d4',
+      nombre: 'V-SOL V1600D4-DP (4P EPON, 1U)',
+      marca: 'V-SOL',
+      modelo: 'V1600D4-DP',
+      codigo: 'VSOL-V1600D4-DP',
+      tecnologia: 'EPON',
+      formato: 'compacto',
+      puertos_pon: 4,
+      puertos_sfp: 4,
+      puertos_rj45_datos: 4,
+      puerto_mgmt: true,
+      puerto_console: true,
+      maxClientes: 64,
+      potencia: 4,
+      tamano: 1,
+      numSlots: 1,
+      slots_detalle: [{ slot: 1, puertos: 4, indice: 1 }],
+      descripcion: 'OLT Pizza-box 1U EPON 4 puertos PON (hasta 256 ONUs), 4 GE SFP, 4 GE RJ45, 1 CONSOLE + 1 MGMT'
+    },
+    {
+      id: 'vsol_1600d8',
+      nombre: 'V-SOL V1600D8 (8P EPON, 1U)',
+      marca: 'V-SOL',
+      modelo: 'V1600D8',
+      codigo: 'VSOL-V1600D8',
+      tecnologia: 'EPON',
+      formato: 'compacto',
+      puertos_pon: 8,
+      puertos_sfp: 4,
+      puertos_rj45_datos: 4,
+      puerto_mgmt: true,
+      puerto_console: true,
+      maxClientes: 64,
+      potencia: 4,
+      tamano: 1,
+      numSlots: 1,
+      slots_detalle: [{ slot: 1, puertos: 8, indice: 1 }],
+      descripcion: 'OLT Pizza-box 1U EPON 8 puertos PON (hasta 512 ONUs), 4 GE SFP, 4 GE RJ45, 1 CONSOLE + 1 MGMT'
+    },
+    {
+      id: 'zte_c320',
+      nombre: 'ZTE C320 (Chasis Modular 2 Slots, 2U)',
+      marca: 'ZTE',
+      modelo: 'ZTE C320',
+      codigo: 'ZTE C320',
+      tecnologia: 'GPON',
+      formato: 'modular',
+      puertos_pon: 32,
+      puertos_sfp: 4,
+      puertos_rj45_datos: 2,
+      puerto_mgmt: true,
+      puerto_console: true,
+      maxClientes: 128,
+      potencia: 6,
+      tamano: 2,
+      numSlots: 2,
+      slots_detalle: [
+        { slot: 1, puertos: 16, indice: 1 },
+        { slot: 2, puertos: 16, indice: 1 }
+      ],
+      descripcion: 'Chasis OLT 2U modular ZTE C320 con 2 slots de servicio (hasta 32 PON GPON)'
+    },
+    {
+      id: 'huawei_ma5608t',
+      nombre: 'Huawei SmartAX MA5608T (Chasis Modular 2 Slots, 2U)',
+      marca: 'Huawei',
+      modelo: 'MA5608T',
+      codigo: 'HUAWEI-MA5608T',
+      tecnologia: 'GPON',
+      formato: 'modular',
+      puertos_pon: 32,
+      puertos_sfp: 4,
+      puertos_rj45_datos: 2,
+      puerto_mgmt: true,
+      puerto_console: true,
+      maxClientes: 128,
+      potencia: 6,
+      tamano: 2,
+      numSlots: 2,
+      slots_detalle: [
+        { slot: 1, puertos: 16, indice: 1 },
+        { slot: 2, puertos: 16, indice: 1 }
+      ],
+      descripcion: 'Chasis OLT Mini 2U Huawei MA5608T con 2 slots de servicio para tarjetas GPBD/GPFD (16/32 PON)'
+    }
+  ];
+  OP.presetsOlt = PRESETS_OLT.map(p => ({ v: p.id, t: p.nombre }));
 
   // Atenuacion nominal (dB) por division: es la MISMA tabla del backend
   // (ATENUACION_SPLITTER en backend/app/routers/ftth_logica.py). Una prueba
@@ -156,11 +336,11 @@ const FTTHTipos = (() => {
         //   con buffer → looses + total de fibras; «fibras por loose» es CALCULADO
         //   drop       → solo el total de hilos (1, 2, 4, 6 u 8), sin buffers
         { id: 'estructura', label: 'Estructura', type: 'select', options: OP.estructuraCable, def: 'con_buffer', w: 'full' },
-        { id: 'looses', label: 'Número de looses (buffers)', type: 'number', ph: '12', w: 'half', min: 1, max: 96, soloSi: 'conBuffer' },
+        { id: 'looses', label: 'Número de buffers', type: 'number', ph: '12', w: 'half', min: 1, max: 96, soloSi: 'conBuffer' },
         { id: 'fibras', label: 'Número total de fibras', type: 'number', ph: '144', w: 'half', soloSi: 'conBuffer' },
         {
-          id: 'fibrasLoose', label: 'Fibras por loose (calculado)', type: 'calculo', w: 'half', soloSi: 'conBuffer',
-          titulo: 'Se calcula solo: total de fibras ÷ número de looses. No se edita a mano.'
+          id: 'fibrasLoose', label: 'Fibras por buffer (calculado)', type: 'calculo', w: 'half', soloSi: 'conBuffer',
+          titulo: 'Se calcula solo: total de fibras ÷ número de buffers. No se edita a mano.'
         },
         { id: 'perfil', label: 'Perfil de fibra', type: 'select', options: OP.perfilFibra, w: 'half', soloSi: 'conBuffer' },
         { id: 'total_hilos', label: 'Número total de hilos', type: 'select', options: OP.hilosDrop, w: 'half', soloSi: 'drop' },
@@ -223,14 +403,22 @@ const FTTHTipos = (() => {
       clave: 'olt', titulo: 'OLT', color: '#ef4444', campoClave: 'codigo', campoDesc: 'descripcion', singular: 'OLT',
       slots: { def: 2 },
       campos: [
-        { id: 'codigo', label: 'Código', type: 'text', ph: 'Ej: ZTE C320', w: 'full' },
-        { id: 'marca', label: 'Marca', type: 'text', ph: 'Ej: ZTE', w: 'half' },
-        { id: 'modelo', label: 'Modelo', type: 'text', ph: 'Ej: ZTE C320', w: 'half' },
-        { id: 'maxClientes', label: 'Máximo de clientes estándar por puerto', type: 'number', ph: 'Ej: 128', w: 'half' },
-        { id: 'potencia', label: 'Potencia estándar por puerto', type: 'number', ph: 'Ej: 6', w: 'half' },
-        { id: 'descripcion', label: 'Descripción', type: 'textarea', ph: 'Descripción...', w: 'full' },
-        { id: 'numSlots', label: 'Número de Slots', type: 'number', ph: 'Ej: 2', def: '2', min: 1, max: 32, step: '1', oninput: 'FTTHTipos.updateSlotsTable(this.value)', w: 'half' },
-        { id: 'tamano', label: 'Tamaño (U)', type: 'number', ph: 'Ej: 2', def: '2', min: 1, max: 16, step: '1', w: 'half' }
+        { id: 'preset_olt', label: 'Plantilla predeterminada (Preset)', type: 'select', options: OP.presetsOlt, def: 'custom', onchange: 'FTTHTipos.cargarPresetOlt(this.value)', w: 'full' },
+        { id: 'codigo', label: 'Código', type: 'text', ph: 'Ej: VSOL-V1600G1-B o ZTE C320', w: 'full' },
+        { id: 'marca', label: 'Marca', type: 'text', ph: 'Ej: V-SOL', w: 'half' },
+        { id: 'modelo', label: 'Modelo', type: 'text', ph: 'Ej: V1600G1-B', w: 'half' },
+        { id: 'tecnologia', label: 'Tecnología', type: 'select', options: OP.tecnologiaOlt, def: 'GPON', w: 'half' },
+        { id: 'formato', label: 'Formato de chasis', type: 'select', options: OP.formatoOlt, def: 'compacto', onchange: 'FTTHTipos.cambiarFormatoOlt(this.value)', w: 'half' },
+        { id: 'puertos_pon', label: 'Puertos PON (Total)', type: 'number', ph: '8', def: '8', min: 1, max: 128, w: 'half' },
+        { id: 'maxClientes', label: 'Máx. clientes por puerto PON', type: 'number', ph: '128', def: '128', min: 1, max: 256, w: 'half' },
+        { id: 'potencia', label: 'Potencia estándar TX (dBm)', type: 'number', ph: '6', def: '6', step: '0.1', w: 'half' },
+        { id: 'tamano', label: 'Tamaño en Rack (U)', type: 'number', ph: '1', def: '1', min: 1, max: 16, step: '1', w: 'half' },
+        { id: 'puertos_sfp', label: 'Puertos Uplink Ópticos (SFP / SFP+)', type: 'number', ph: '4', def: '4', min: 0, max: 32, w: 'half' },
+        { id: 'puertos_rj45_datos', label: 'Puertos Uplink Cobre (RJ45 GE Datos)', type: 'number', ph: '4', def: '4', min: 0, max: 32, w: 'half' },
+        { id: 'puerto_mgmt', label: 'Incluir puerto RJ45 MGMT (Gestión Out-of-band)', type: 'checkbox', def: true, w: 'half' },
+        { id: 'puerto_console', label: 'Incluir puerto RJ45 CONSOLE (Terminal CLI)', type: 'checkbox', def: true, w: 'half' },
+        { id: 'numSlots', label: 'Número de Slots (para modulares)', type: 'number', ph: '2', def: '2', min: 1, max: 32, step: '1', oninput: 'FTTHTipos.updateSlotsTable(this.value)', w: 'half' },
+        { id: 'descripcion', label: 'Descripción', type: 'textarea', ph: 'Descripción...', w: 'full' }
       ]
     },
     {
@@ -720,7 +908,7 @@ const FTTHTipos = (() => {
     if (campo) {
       campo.value = r.ok ? String(r.props.fibrasLoose) : '';
       campo.title = r.ok
-        ? 'Se calcula solo: total de fibras ÷ número de looses.'
+        ? 'Se calcula solo: total de fibras ÷ número de buffers.'
         : r.error;
     }
     if (vista) {
@@ -761,6 +949,52 @@ const FTTHTipos = (() => {
         <td><input type="number" value="${d.indice !== undefined ? d.indice : 1}" placeholder="1"></td>`;
       tbody.appendChild(row);
     }
+  }
+
+  function cargarPresetOlt(presetId) {
+    const preset = PRESETS_OLT.find(p => p.id === presetId);
+    if (!preset) return;
+    const cont = document.getElementById('dynamic-form');
+    if (!cont) return;
+
+    const setVal = (id, val) => {
+      const el = cont.querySelector('#f_' + id);
+      if (el) {
+        if (el.type === 'checkbox') el.checked = !!val;
+        else el.value = (val !== undefined && val !== null) ? val : '';
+      }
+    };
+
+    setVal('codigo', preset.codigo);
+    setVal('marca', preset.marca);
+    setVal('modelo', preset.modelo);
+    setVal('tecnologia', preset.tecnologia);
+    setVal('formato', preset.formato);
+    setVal('puertos_pon', preset.puertos_pon);
+    setVal('maxClientes', preset.maxClientes);
+    setVal('potencia', preset.potencia);
+    setVal('tamano', preset.tamano);
+    setVal('puertos_sfp', preset.puertos_sfp);
+    setVal('puertos_rj45_datos', preset.puertos_rj45_datos);
+    setVal('puerto_mgmt', preset.puerto_mgmt);
+    setVal('puerto_console', preset.puerto_console);
+    setVal('numSlots', preset.numSlots);
+    setVal('descripcion', preset.descripcion);
+
+    cambiarFormatoOlt(preset.formato);
+    updateSlotsTable(preset.numSlots, preset.slots_detalle);
+  }
+
+  function cambiarFormatoOlt(formato) {
+    const cont = document.getElementById('dynamic-form');
+    if (!cont) return;
+    const esModular = (formato === 'modular');
+    const wrapSlots = cont.querySelector('#olt-slots-container');
+    if (wrapSlots) wrapSlots.style.display = esModular ? '' : 'none';
+
+    const numSlotsEl = cont.querySelector('#f_numSlots');
+    const numSlotsGroup = numSlotsEl ? numSlotsEl.closest('.form-group') : null;
+    if (numSlotsGroup) numSlotsGroup.style.display = esModular ? '' : 'none';
   }
 
   // ── Selector del color del objeto (el que se usa en el mapa) ─────────────
@@ -837,16 +1071,19 @@ const FTTHTipos = (() => {
 
     if (cfg.slots) {
       html += `
-        <table class="slots-table">
-          <thead>
-            <tr>
-              <th>Número de Slot</th>
-              <th>Número de puertos</th>
-              <th>Índice inicial de puertos</th>
-            </tr>
-          </thead>
-          <tbody id="slots-table-body"></tbody>
-        </table>`;
+        <div id="olt-slots-container" class="olt-slots-wrapper">
+          <label style="font-weight:600; font-size:12px; margin-top:10px; display:block;">Distribución de Slots (Equipos Modulares):</label>
+          <table class="slots-table">
+            <thead>
+              <tr>
+                <th>Número de Slot</th>
+                <th>Número de puertos</th>
+                <th>Índice inicial de puertos</th>
+              </tr>
+            </thead>
+            <tbody id="slots-table-body"></tbody>
+          </table>
+        </div>`;
     }
 
     html += '<button class="btn-submit" type="button" onclick="FTTHTipos.handleSave()">'
@@ -855,6 +1092,11 @@ const FTTHTipos = (() => {
 
     // El cable decide qué campos manda cada estructura (con buffer / drop)
     if (clave === 'cables') engancharEstructuraCable(cont);
+
+    if (clave === 'olt') {
+      const formato = (datos && datos.formato) || 'compacto';
+      cambiarFormatoOlt(formato);
+    }
 
     if (cfg.slots) {
       const inp = cont.querySelector('#f_numSlots');
@@ -1291,6 +1533,9 @@ const FTTHTipos = (() => {
     handleSave,
     resetFormToCreateMode,
     updateSlotsTable,
+    cargarPresetOlt,
+    cambiarFormatoOlt,
+    PRESETS_OLT,
     getCategorias,
     getTipos,
     showToast,
